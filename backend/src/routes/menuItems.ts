@@ -3,60 +3,32 @@ import mongoose from 'mongoose';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import { MenuItem } from '../models/MenuItem';
 import { MenuCategory } from '../models/MenuCategory';
 import { authMiddleware, requirePermission } from '../middleware/auth';
 import { createAppError } from '../middleware/errorHandler';
+import { uploadFile } from '../storage';
 
 const router = Router();
 
-// --- Multer configuration for file uploads ---
+// --- Multer: upload to temp directory first, then move to GCS or local ---
 
 const UPLOAD_BASE = path.resolve(__dirname, '../../uploads');
 const PHOTO_DIR = path.join(UPLOAD_BASE, 'photos');
 const AR_DIR = path.join(UPLOAD_BASE, 'ar');
 
-// Ensure upload directories exist
+// Ensure local directories exist (for local fallback)
 fs.mkdirSync(PHOTO_DIR, { recursive: true });
 fs.mkdirSync(AR_DIR, { recursive: true });
 
 const ALLOWED_IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
 
-const photoStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    fs.mkdirSync(PHOTO_DIR, { recursive: true });
-    cb(null, PHOTO_DIR);
-  },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
-  },
+// Use temp dir for initial upload, then move to GCS or local
+const tempUpload = multer({
+  dest: os.tmpdir(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
-
-const photoUpload = multer({
-  storage: photoStorage,
-  fileFilter: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (ALLOWED_IMAGE_EXTS.includes(ext)) {
-      cb(null, true);
-    } else {
-      cb(null, false);
-    }
-  },
-});
-
-const arStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    fs.mkdirSync(AR_DIR, { recursive: true });
-    cb(null, AR_DIR);
-  },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
-  },
-});
-
-const arUpload = multer({ storage: arStorage });
 
 /**
  * GET /api/menu/items
@@ -309,7 +281,7 @@ function cleanupFile(file: Express.Multer.File | undefined): void {
  */
 router.post(
   '/:id/photo',
-  photoUpload.single('photo'),
+  tempUpload.single('photo'),
   authMiddleware,
   requirePermission('menu:write'),
   async (req: Request, res: Response, next: NextFunction) => {
@@ -325,7 +297,19 @@ router.post(
         throw createAppError('VALIDATION_ERROR', 'No valid image file provided. Accepted formats: jpg, jpeg, png, gif, webp');
       }
 
-      const photoUrl = `/uploads/photos/${req.file.filename}`;
+      const ext = path.extname(req.file.originalname).toLowerCase();
+      if (!ALLOWED_IMAGE_EXTS.includes(ext)) {
+        cleanupFile(req.file);
+        throw createAppError('VALIDATION_ERROR', 'Invalid image format');
+      }
+
+      const filename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+
+      // For local fallback: copy temp file to local uploads dir
+      const localDest = path.join(PHOTO_DIR, filename);
+      fs.copyFileSync(req.file.path, localDest);
+
+      const photoUrl = await uploadFile(localDest, 'photos', filename);
 
       const updated = await MenuItem.findByIdAndUpdate(
         id,
@@ -337,6 +321,9 @@ router.post(
         cleanupFile(req.file);
         throw createAppError('NOT_FOUND', 'Menu item not found');
       }
+
+      // Clean up temp file
+      fs.unlink(req.file.path, () => {});
 
       res.json(updated);
     } catch (err) {
@@ -352,7 +339,7 @@ router.post(
  */
 router.post(
   '/:id/ar',
-  arUpload.single('ar'),
+  tempUpload.single('ar'),
   authMiddleware,
   requirePermission('menu:write'),
   async (req: Request, res: Response, next: NextFunction) => {
@@ -374,7 +361,13 @@ router.post(
         throw createAppError('INVALID_FILE_FORMAT', 'Only USDZ format is accepted for AR files');
       }
 
-      const arFileUrl = `/uploads/ar/${req.file.filename}`;
+      const filename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+
+      // For local fallback: copy temp file to local uploads dir
+      const localDest = path.join(AR_DIR, filename);
+      fs.copyFileSync(req.file.path, localDest);
+
+      const arFileUrl = await uploadFile(localDest, 'ar', filename);
 
       const updated = await MenuItem.findByIdAndUpdate(
         id,
@@ -386,6 +379,9 @@ router.post(
         cleanupFile(req.file);
         throw createAppError('NOT_FOUND', 'Menu item not found');
       }
+
+      // Clean up temp file
+      fs.unlink(req.file.path, () => {});
 
       res.json(updated);
     } catch (err) {

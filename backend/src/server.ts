@@ -6,6 +6,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import dotenv from 'dotenv';
 import { connectDB } from './db';
 import { errorHandler } from './middleware/errorHandler';
+import { getFileStream, USE_GCS } from './storage';
 import authRouter from './routes/auth';
 import menuCategoriesRouter from './routes/menuCategories';
 import menuItemsRouter from './routes/menuItems';
@@ -30,9 +31,28 @@ const io = new SocketIOServer(server, {
 app.use(cors());
 app.use(express.json());
 
-// Serve uploaded files (photos, AR)
+// Serve uploaded files: GCS proxy or local static
 const uploadsPath = path.join(__dirname, '..', 'uploads');
-app.use('/uploads', express.static(uploadsPath));
+if (USE_GCS) {
+  // Proxy /uploads/* to GCS
+  app.get('/uploads/:folder/:filename', async (req, res) => {
+    try {
+      const filePath = `${req.params.folder}/${req.params.filename}`;
+      const result = await getFileStream(filePath);
+      if (!result) {
+        res.status(404).json({ error: { code: 'NOT_FOUND', message: 'File not found' } });
+        return;
+      }
+      res.setHeader('Content-Type', result.contentType);
+      res.setHeader('Cache-Control', 'public, max-age=31536000');
+      result.stream.pipe(res);
+    } catch {
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch file' } });
+    }
+  });
+} else {
+  app.use('/uploads', express.static(uploadsPath));
+}
 
 // Serve frontend static files in production
 const publicPath = path.join(__dirname, '..', 'public');
