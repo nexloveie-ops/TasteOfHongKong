@@ -9,7 +9,6 @@ interface HistoryOrder {
   items: OrderItem[]; createdAt: string;
   checkout?: { totalAmount: number; paymentMethod: string } | null;
 }
-
 export default function OrderHistory() {
   const { t } = useTranslation();
   const { token } = useAuth();
@@ -129,7 +128,7 @@ export default function OrderHistory() {
             </thead>
             <tbody>
               {orders.map(o => {
-                const orderNum = (o as Record<string, unknown>).dineInOrderNumber as string | undefined
+                const orderNum = o.dineInOrderNumber
                   || (o.dailyOrderNumber ? `#${o.dailyOrderNumber}` : o._id.slice(-6).toUpperCase());
                 return (
                   <tr key={o._id} style={{ borderBottom: '1px solid #f0f0f0' }}>

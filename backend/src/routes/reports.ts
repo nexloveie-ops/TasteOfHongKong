@@ -18,12 +18,10 @@ router.get('/orders', authMiddleware, requirePermission('report:view'), async (r
     if (startDate || endDate) {
       const dateFilter: Record<string, Date> = {};
       if (startDate) {
-        dateFilter.$gte = new Date(startDate as string);
+        dateFilter.$gte = new Date((startDate as string) + 'T00:00:00.000');
       }
       if (endDate) {
-        const end = new Date(endDate as string);
-        end.setHours(23, 59, 59, 999);
-        dateFilter.$lte = end;
+        dateFilter.$lte = new Date((endDate as string) + 'T23:59:59.999');
       }
       filter.createdAt = dateFilter;
     }
@@ -75,12 +73,10 @@ router.get('/summary', authMiddleware, requirePermission('report:view'), async (
     if (startDate || endDate) {
       const dateFilter: Record<string, Date> = {};
       if (startDate) {
-        dateFilter.$gte = new Date(startDate as string);
+        dateFilter.$gte = new Date((startDate as string) + 'T00:00:00.000');
       }
       if (endDate) {
-        const end = new Date(endDate as string);
-        end.setHours(23, 59, 59, 999);
-        dateFilter.$lte = end;
+        dateFilter.$lte = new Date((endDate as string) + 'T23:59:59.999');
       }
       filter.checkedOutAt = dateFilter;
     }
