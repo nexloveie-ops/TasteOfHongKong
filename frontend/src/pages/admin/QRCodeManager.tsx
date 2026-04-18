@@ -23,14 +23,14 @@ export default function QRCodeManager() {
       for (let seat = 1; seat <= seatsPerTable; seat++) {
         const url = `${baseUrl}/customer?table=${table}&seat=${seat}`;
         const dataUrl = await QRCode.toDataURL(url, { width: 200, margin: 1 });
-        items.push({ label: `${t('cashier.table')} ${table} · ${t('cashier.seat')} ${seat}`, url, dataUrl });
+        items.push({ label: `Table ${table} · Seat ${seat}`, url, dataUrl });
       }
     }
 
     // Takeout QR code
     const takeoutUrl = `${baseUrl}/customer?type=takeout`;
     const takeoutDataUrl = await QRCode.toDataURL(takeoutUrl, { width: 200, margin: 1 });
-    items.push({ label: t('cashier.takeout'), url: takeoutUrl, dataUrl: takeoutDataUrl });
+    items.push({ label: 'Take Away', url: takeoutUrl, dataUrl: takeoutDataUrl });
 
     setQrItems(items);
     setGenerating(false);
@@ -47,11 +47,11 @@ export default function QRCodeManager() {
       .qr-card { text-align: center; border: 1px solid #ddd; padding: 16px; border-radius: 8px; page-break-inside: avoid; }
       .qr-card img { width: 160px; height: 160px; }
       .qr-card .label { font-weight: 600; margin-top: 8px; font-size: 14px; }
-      .qr-card .url { font-size: 10px; color: #999; word-break: break-all; }
+      .qr-card .url { font-size: 13px; color: #333; font-weight: 700; letter-spacing: 1px; }
       @media print { .grid { gap: 12px; } }
     </style></head><body><div class="grid">`);
     for (const item of qrItems) {
-      w.document.write(`<div class="qr-card"><img src="${item.dataUrl}" /><div class="label">${item.label}</div><div class="url">${item.url}</div></div>`);
+      w.document.write(`<div class="qr-card"><img src="${item.dataUrl}" /><div class="label">${item.label}</div><div class="url">SCAN TO ORDER</div></div>`);
     }
     w.document.write('</div></body></html>');
     w.document.close();
@@ -65,9 +65,9 @@ export default function QRCodeManager() {
       body { font-family: 'Noto Sans SC', sans-serif; text-align: center; padding: 40px; }
       img { width: 240px; height: 240px; }
       .label { font-weight: 700; font-size: 20px; margin-top: 12px; }
-      .url { font-size: 11px; color: #999; margin-top: 8px; }
+      .url { font-size: 14px; color: #333; margin-top: 8px; font-weight: 700; letter-spacing: 1px; }
     </style></head><body>
-      <img src="${item.dataUrl}" /><div class="label">${item.label}</div><div class="url">${item.url}</div>
+      <img src="${item.dataUrl}" /><div class="label">${item.label}</div><div class="url">SCAN TO ORDER</div>
     </body></html>`);
     w.document.close();
     setTimeout(() => { w.print(); }, 300);
@@ -104,7 +104,7 @@ export default function QRCodeManager() {
             onClick={() => printSingle(item)}>
             <img src={item.dataUrl} alt={item.label} style={{ width: 140, height: 140 }} />
             <div style={{ fontWeight: 600, fontSize: 13, marginTop: 8 }}>{item.label}</div>
-            <div style={{ fontSize: 10, color: 'var(--text-light)', marginTop: 4, wordBreak: 'break-all' }}>{item.url}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, fontWeight: 700, letterSpacing: 1 }}>SCAN TO ORDER</div>
           </div>
         ))}
       </div>

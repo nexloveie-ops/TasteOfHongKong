@@ -139,6 +139,10 @@ export default function MenuView() {
           <h1 style={{ fontFamily: "'Noto Serif SC', serif", fontSize: 24, fontWeight: 700, letterSpacing: 3, marginBottom: 2 }}>港知味</h1>
           <div style={{ fontSize: 11, fontWeight: 300, letterSpacing: 5, color: '#F0D68A' }}>TASTE OF HONG KONG</div>
         </div>
+        <div style={{ position: 'absolute', top: 8, right: 12, zIndex: 1, textAlign: 'right', color: 'rgba(255,255,255,0.7)', fontSize: 9, lineHeight: 1.5 }}>
+          <div>Powered By <span style={{ fontWeight: 600, color: '#F0D68A' }}>L&amp;Z TECHSERVE LTD</span></div>
+          <div>info@lztechserve.com</div>
+        </div>
       </div>
 
       {/* Sticky Category Tabs */}
@@ -217,7 +221,7 @@ export default function MenuView() {
           );
         })}
 
-        {/* Bottom spacer for floating cart */}
+        {/* Footer */}
         <div style={{ height: 100 }} />
       </div>
 
