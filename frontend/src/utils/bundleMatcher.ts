@@ -20,6 +20,8 @@ export interface OfferData {
   _id: string;
   name: string;
   nameEn: string;
+  description?: string;
+  descriptionEn?: string;
   bundlePrice: number;
   slots: OfferSlot[];
   excludedItemIds?: string[];
