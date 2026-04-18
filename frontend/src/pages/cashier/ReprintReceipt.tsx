@@ -19,7 +19,7 @@ interface SearchResult {
     seatNumber?: number;
     dailyOrderNumber?: number;
     dineInOrderNumber?: string;
-    items: { _id: string; itemName: string; itemNameEn?: string; quantity: number; unitPrice: number; selectedOptions?: { groupName: string; choiceName: string; extraPrice: number }[] }[];
+    items: { _id: string; menuItemId: string; itemName: string; itemNameEn?: string; quantity: number; unitPrice: number; selectedOptions?: { groupName: string; choiceName: string; extraPrice: number }[] }[];
   }[];
 }
 

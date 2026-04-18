@@ -5,7 +5,9 @@ import { useAuth } from '../../context/AuthContext';
 interface OrderItem { _id: string; quantity: number; unitPrice: number; itemName: string; }
 interface HistoryOrder {
   _id: string; type: string; tableNumber?: number; seatNumber?: number;
-  dailyOrderNumber?: number; status: string; items: OrderItem[]; createdAt: string;
+  dailyOrderNumber?: number; dineInOrderNumber?: string; status: string;
+  items: OrderItem[]; createdAt: string;
+  checkout?: { totalAmount: number; paymentMethod: string } | null;
 }
 
 export default function OrderHistory() {
@@ -17,12 +19,29 @@ export default function OrderHistory() {
   const [typeFilter, setTypeFilter] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Password protection
+  const [unlocked, setUnlocked] = useState(false);
+  const [pwdInput, setPwdInput] = useState('');
+  const [pwdError, setPwdError] = useState(false);
+
+  const checkPassword = () => {
+    const now = new Date();
+    const expected = String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
+    if (pwdInput === expected) {
+      setUnlocked(true);
+      setPwdError(false);
+    } else {
+      setPwdError(true);
+    }
+  };
+
   const fetchOrders = useCallback(async () => {
+    if (!startDate || !endDate) return;
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (startDate) params.set('startDate', startDate);
-      if (endDate) params.set('endDate', endDate);
+      params.set('startDate', startDate);
+      params.set('endDate', endDate);
       if (typeFilter) params.set('type', typeFilter);
       const res = await fetch(`/api/reports/orders?${params}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) setOrders(await res.json());
@@ -30,7 +49,36 @@ export default function OrderHistory() {
     finally { setLoading(false); }
   }, [token, startDate, endDate, typeFilter]);
 
-  const orderTotal = (o: HistoryOrder) => o.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+  const orderTotal = (o: HistoryOrder) => o.checkout?.totalAmount ?? o.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+
+  // Password gate
+  if (!unlocked) {
+    return (
+      <div>
+        <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>{t('admin.orderHistory')}</h2>
+        <div className="card" style={{ padding: 40, maxWidth: 360, margin: '40px auto', textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
+          <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16 }}>请输入访问密码</p>
+          <input
+            className="input"
+            type="password"
+            maxLength={4}
+            value={pwdInput}
+            onChange={e => { setPwdInput(e.target.value.replace(/\D/g, '').slice(0, 4)); setPwdError(false); }}
+            onKeyDown={e => e.key === 'Enter' && checkPassword()}
+            placeholder="4位数字"
+            style={{ width: 120, fontSize: 24, textAlign: 'center', letterSpacing: 8, fontFamily: 'monospace' }}
+          />
+          {pwdError && <div style={{ color: 'var(--red-primary)', fontSize: 13, marginTop: 8 }}>密码错误</div>}
+          <div style={{ marginTop: 16 }}>
+            <button className="btn btn-primary" onClick={checkPassword} style={{ padding: '8px 24px' }}>
+              {t('common.confirm')}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -39,11 +87,11 @@ export default function OrderHistory() {
       {/* Filters */}
       <div className="card" style={{ padding: 16, marginBottom: 16, display: 'flex', gap: 12, alignItems: 'end', flexWrap: 'wrap' }}>
         <div>
-          <label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>开始日期</label>
+          <label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>开始日期 *</label>
           <input className="input" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
         </div>
         <div>
-          <label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>结束日期</label>
+          <label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>结束日期 *</label>
           <input className="input" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
         </div>
         <div>
@@ -54,52 +102,57 @@ export default function OrderHistory() {
             <option value="takeout">外卖</option>
           </select>
         </div>
-        <button className="btn btn-primary" onClick={fetchOrders} disabled={loading}>
+        <button className="btn btn-primary" onClick={fetchOrders} disabled={loading || !startDate || !endDate}>
           {loading ? t('common.loading') : t('common.search')}
         </button>
+        {(!startDate || !endDate) && (
+          <span style={{ fontSize: 12, color: 'var(--text-light)' }}>请选择日期范围</span>
+        )}
       </div>
 
       {/* Results */}
-      <div className="card" style={{ overflow: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 700 }}>
-          <thead>
-            <tr style={{ background: 'var(--bg)', borderBottom: '2px solid var(--border)' }}>
-              <th style={{ padding: '10px 12px', textAlign: 'left' }}>订单号</th>
-              <th style={{ padding: '10px 12px', textAlign: 'left' }}>类型</th>
-              <th style={{ padding: '10px 12px', textAlign: 'left' }}>桌号/单号</th>
-              <th style={{ padding: '10px 12px', textAlign: 'left' }}>菜品</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>金额</th>
-              <th style={{ padding: '10px 12px', textAlign: 'left' }}>状态</th>
-              <th style={{ padding: '10px 12px', textAlign: 'left' }}>时间</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.map(o => (
-              <tr key={o._id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 11 }}>{o._id.slice(-8)}</td>
-                <td style={{ padding: '8px 12px' }}>
-                  <span className="badge" style={{
-                    background: o.type === 'dine_in' ? 'var(--blue-light)' : 'var(--gold-light)',
-                    color: o.type === 'dine_in' ? 'var(--blue)' : 'var(--gold-dark)',
-                  }}>{o.type === 'dine_in' ? '堂食' : '外卖'}</span>
-                </td>
-                <td style={{ padding: '8px 12px' }}>
-                  {o.type === 'dine_in' ? `桌${o.tableNumber} 座${o.seatNumber}` : `#${o.dailyOrderNumber}`}
-                </td>
-                <td style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-secondary)' }}>
-                  {o.items.map(i => `${i.itemName}×${i.quantity}`).join(', ')}
-                </td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--red-primary)' }}>€{orderTotal(o)}</td>
-                <td style={{ padding: '8px 12px' }}>{o.status}</td>
-                <td style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-light)' }}>{new Date(o.createdAt).toLocaleString()}</td>
+      {orders.length > 0 && (
+        <div className="card" style={{ overflow: 'auto' }}>
+          <div style={{ padding: '10px 12px', fontSize: 13, color: 'var(--text-secondary)' }}>
+            共 {orders.length} 条记录
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 600 }}>
+            <thead>
+              <tr style={{ background: 'var(--bg)', borderBottom: '2px solid var(--border)' }}>
+                <th style={{ padding: '10px 12px', textAlign: 'left' }}>订单号</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left' }}>类型</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left' }}>菜品</th>
+                <th style={{ padding: '10px 12px', textAlign: 'right' }}>金额</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left' }}>支付</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left' }}>时间</th>
               </tr>
-            ))}
-            {orders.length === 0 && (
-              <tr><td colSpan={7} style={{ padding: 40, textAlign: 'center', color: 'var(--text-light)' }}>暂无数据</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {orders.map(o => {
+                const orderNum = (o as Record<string, unknown>).dineInOrderNumber as string | undefined
+                  || (o.dailyOrderNumber ? `#${o.dailyOrderNumber}` : o._id.slice(-6).toUpperCase());
+                return (
+                  <tr key={o._id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                    <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontWeight: 600 }}>{orderNum}</td>
+                    <td style={{ padding: '8px 12px' }}>
+                      <span className="badge" style={{
+                        background: o.type === 'dine_in' ? 'var(--red-light)' : '#E3F2FD',
+                        color: o.type === 'dine_in' ? 'var(--red-primary)' : 'var(--blue)',
+                      }}>{o.type === 'dine_in' ? '堂食' : '外卖'}</span>
+                    </td>
+                    <td style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-secondary)', maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {o.items.map(i => `${i.itemName}×${i.quantity}`).join(', ')}
+                    </td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--red-primary)' }}>€{orderTotal(o).toFixed(2)}</td>
+                    <td style={{ padding: '8px 12px', fontSize: 12 }}>{o.checkout?.paymentMethod || '-'}</td>
+                    <td style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-light)' }}>{new Date(o.createdAt).toLocaleString()}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
