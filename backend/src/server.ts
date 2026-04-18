@@ -15,6 +15,7 @@ import { createOrdersRouter } from './routes/orders';
 import { createCheckoutRouter } from './routes/checkout';
 import adminRouter from './routes/admin';
 import reportsRouter from './routes/reports';
+import offersRouter from './routes/offers';
 
 dotenv.config();
 
@@ -86,6 +87,9 @@ app.use('/api/admin', adminRouter);
 
 // Reports routes
 app.use('/api/reports', reportsRouter);
+
+// Offers routes
+app.use('/api/offers', offersRouter);
 
 // SPA fallback: serve index.html for non-API routes (Express 5 syntax)
 app.get('/{*splat}', (_req, res) => {

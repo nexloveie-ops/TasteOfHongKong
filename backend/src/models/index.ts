@@ -6,3 +6,4 @@ export { Order, OrderSchema, OrderItemSubdocSchema } from './Order';
 export { Checkout, CheckoutSchema } from './Checkout';
 export { SystemConfig, SystemConfigSchema } from './SystemConfig';
 export { DailyOrderCounter, DailyOrderCounterSchema } from './DailyOrderCounter';
+export { Offer, OfferSchema, OfferSlotSchema } from './Offer';

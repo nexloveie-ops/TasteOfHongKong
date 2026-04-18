@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useCart } from '../../context/CartContext';
+import { matchBundles, calcBundleTotal, type OfferData, type MatchedBundle } from '../../utils/bundleMatcher';
 
 export default function CartPage() {
   const { items, increaseQuantity, decreaseQuantity, removeItem, clearCart, totalAmount, totalItems, getItemKey, editOrderId, setEditOrderId } = useCart();
@@ -12,11 +13,57 @@ export default function CartPage() {
   const getItemName = (names: Record<string, string>) => names[lang] || Object.values(names)[0] || '';
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [offers, setOffers] = useState<OfferData[]>([]);
+  const [menuItemCategories, setMenuItemCategories] = useState<Record<string, string>>({});
 
   const table = searchParams.get('table');
   const seat = searchParams.get('seat');
   const orderType = searchParams.get('type');
   const qs = searchParams.toString();
+
+  // Fetch offers and menu item category mapping
+  useEffect(() => {
+    fetch('/api/offers').then(r => r.ok ? r.json() : []).then(setOffers).catch(() => {});
+    fetch('/api/menu/items').then(r => r.ok ? r.json() : []).then((data: { _id: string; categoryId: string }[]) => {
+      const map: Record<string, string> = {};
+      for (const item of data) map[item._id] = item.categoryId;
+      setMenuItemCategories(map);
+    }).catch(() => {});
+  }, []);
+
+  // Bundle matching
+  const matchedBundles: MatchedBundle[] = useMemo(() => {
+    if (offers.length === 0 || items.length === 0) return [];
+    const cartEntries = items.map(item => {
+      const optExtra = (item.options || []).reduce((s, o) => s + o.extraPrice, 0);
+      return {
+        key: getItemKey(item),
+        menuItemId: item.menuItemId,
+        categoryId: menuItemCategories[item.menuItemId] || '',
+        basePrice: item.price,
+        optionExtra: optExtra,
+        quantity: item.quantity,
+      };
+    });
+    return matchBundles(cartEntries, offers);
+  }, [items, offers, menuItemCategories, getItemKey]);
+
+  const bundleTotals = useMemo(() => {
+    const cartEntries = items.map(item => {
+      const optExtra = (item.options || []).reduce((s, o) => s + o.extraPrice, 0);
+      return {
+        key: getItemKey(item),
+        menuItemId: item.menuItemId,
+        categoryId: menuItemCategories[item.menuItemId] || '',
+        basePrice: item.price,
+        optionExtra: optExtra,
+        quantity: item.quantity,
+      };
+    });
+    return calcBundleTotal(cartEntries, matchedBundles);
+  }, [items, matchedBundles, menuItemCategories, getItemKey]);
+
+  const finalTotal = bundleTotals.finalTotal;
 
   const handleSubmit = async () => {
     if (items.length === 0) return;
@@ -143,6 +190,19 @@ export default function CartPage() {
 
       {error && <div style={{ color: 'var(--red-primary)', marginTop: 12, fontSize: 13 }}>{error}</div>}
 
+      {/* Bundle discount display */}
+      {matchedBundles.length > 0 && (
+        <div style={{ marginTop: 12, padding: '10px 14px', background: '#E8F5E9', borderRadius: 10, border: '1px solid #C8E6C9' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#2E7D32', marginBottom: 4 }}>🎁 {lang === 'zh-CN' ? '套餐优惠已匹配' : 'Bundle Offer Applied'}</div>
+          {matchedBundles.map((b, i) => (
+            <div key={i} style={{ fontSize: 12, color: '#388E3C', display: 'flex', justifyContent: 'space-between' }}>
+              <span>{b.offer.name}{b.offer.nameEn ? ` ${b.offer.nameEn}` : ''}</span>
+              <span style={{ fontWeight: 600 }}>-€{b.savings.toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Fixed bottom bar */}
       <div style={{
         position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)',
@@ -152,7 +212,10 @@ export default function CartPage() {
       }}>
         <div>
           <div style={{ fontSize: 12, color: 'var(--text-light)' }}>{t('customer.totalAmount')} · {totalItems} {t('customer.quantity')}</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--red-primary)', fontFamily: "'Noto Serif SC', serif" }}>€{totalAmount.toFixed(2)}</div>
+          {bundleTotals.bundleDiscount > 0 && (
+            <div style={{ fontSize: 12, color: 'var(--text-light)', textDecoration: 'line-through' }}>€{totalAmount.toFixed(2)}</div>
+          )}
+          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--red-primary)', fontFamily: "'Noto Serif SC', serif" }}>€{finalTotal.toFixed(2)}</div>
         </div>
         <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting}
           style={{ padding: '12px 28px', fontSize: 15, letterSpacing: 1 }}>

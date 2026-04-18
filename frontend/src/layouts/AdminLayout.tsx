@@ -10,6 +10,7 @@ const sidebarItems = [
   { path: '/admin/allergens', icon: '⚠️', key: 'admin.allergens' },
   { path: '/admin/i18n', icon: '🌐', key: 'admin.i18nEditor' },
   { path: '/admin/qr-codes', icon: '📱', key: 'admin.qrCodes' },
+  { path: '/admin/offers', icon: '🎁', key: 'admin.offers' },
   { path: '/admin/orders', icon: '📋', key: 'admin.orderHistory' },
   { path: '/admin/reports', icon: '📊', key: 'admin.reports' },
   { path: '/admin/users', icon: '👥', key: 'admin.users' },

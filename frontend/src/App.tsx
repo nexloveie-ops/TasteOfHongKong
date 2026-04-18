@@ -26,6 +26,7 @@ import ReportDashboard from './pages/admin/ReportDashboard';
 import UserManager from './pages/admin/UserManager';
 import SystemConfig from './pages/admin/SystemConfig';
 import RestaurantInfo from './pages/admin/RestaurantInfo';
+import OfferManager from './pages/admin/OfferManager';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -74,6 +75,7 @@ export default function App() {
             <Route path="reports" element={<ReportDashboard />} />
             <Route path="users" element={<UserManager />} />
             <Route path="config" element={<SystemConfig />} />
+            <Route path="offers" element={<OfferManager />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/login" replace />} />

@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import OptionSelectModal, { type OptionGroup } from '../../components/customer/OptionSelectModal';
 import type { CartItemOption } from '../../context/CartContext';
 import ReceiptPrint from '../../components/cashier/ReceiptPrint';
+import { matchBundles, calcBundleTotal, type OfferData, type MatchedBundle } from '../../utils/bundleMatcher';
 
 interface Translation { locale: string; name: string; description?: string; }
 interface Category { _id: string; sortOrder: number; translations: Translation[]; }
@@ -55,11 +56,13 @@ export default function CashierOrder() {
   // Receipt state
   const [checkoutId, setCheckoutId] = useState<string | null>(null);
   const [checkoutMeta, setCheckoutMeta] = useState<{ total: number; cashReceived: number; change: number } | null>(null);
+  const [offers, setOffers] = useState<OfferData[]>([]);
 
   const fetchData = useCallback(async () => {
-    const [catRes, itemRes] = await Promise.all([
+    const [catRes, itemRes, offersRes] = await Promise.all([
       fetch(`/api/menu/categories?lang=${lang}`),
       fetch('/api/menu/items'),
+      fetch('/api/offers'),
     ]);
     if (catRes.ok) {
       const cats: Category[] = await catRes.json();
@@ -67,6 +70,7 @@ export default function CashierOrder() {
       if (cats.length > 0 && !activeCat) setActiveCat(cats[0]._id);
     }
     if (itemRes.ok) setMenuItems(await itemRes.json());
+    if (offersRes.ok) setOffers(await offersRes.json());
   }, [lang]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -97,17 +101,69 @@ export default function CashierOrder() {
     setOptionModal(null);
   };
 
-  const removeLine = (lineId: string) => { setOrder(prev => prev.filter(o => o.id !== lineId)); };
+  const [editingLineId, setEditingLineId] = useState<string | null>(null);
+  const [editPrice, setEditPrice] = useState('');
+
+  const startEditPrice = (lineId: string, currentPrice: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingLineId(lineId);
+    setEditPrice(currentPrice.toFixed(2));
+  };
+
+  const confirmEditPrice = (lineId: string) => {
+    const newPrice = parseFloat(editPrice);
+    if (!isNaN(newPrice) && newPrice >= 0) {
+      setOrder(prev => prev.map(o => o.id === lineId ? { ...o, price: newPrice } : o));
+    }
+    setEditingLineId(null);
+  };
+
+  const removeLine = (lineId: string) => { if (editingLineId) return; setOrder(prev => prev.filter(o => o.id !== lineId)); };
   const clearOrder = () => setOrder([]);
 
   const totalAmount = order.reduce((s, o) => s + o.price + (o.options || []).reduce((sum, opt) => sum + opt.extraPrice, 0), 0);
   const getItemCount = (menuItemId: string) => order.filter(o => o.menuItemId === menuItemId).length;
 
+  // Bundle matching
+  const matchedBundles: MatchedBundle[] = useMemo(() => {
+    if (offers.length === 0 || order.length === 0) return [];
+    const cartEntries = order.map(line => {
+      const mi = menuItems.find(m => m._id === line.menuItemId);
+      const optExtra = (line.options || []).reduce((s, o) => s + o.extraPrice, 0);
+      return {
+        key: line.id,
+        menuItemId: line.menuItemId,
+        categoryId: mi?.categoryId || '',
+        basePrice: line.price,
+        optionExtra: optExtra,
+        quantity: 1,
+      };
+    });
+    return matchBundles(cartEntries, offers);
+  }, [order, offers, menuItems]);
+
+  const bundleTotals = useMemo(() => {
+    const cartEntries = order.map(line => {
+      const optExtra = (line.options || []).reduce((s, o) => s + o.extraPrice, 0);
+      return {
+        key: line.id,
+        menuItemId: line.menuItemId,
+        categoryId: menuItems.find(m => m._id === line.menuItemId)?.categoryId || '',
+        basePrice: line.price,
+        optionExtra: optExtra,
+        quantity: 1,
+      };
+    });
+    return calcBundleTotal(cartEntries, matchedBundles);
+  }, [order, matchedBundles, menuItems]);
+
+  const finalTotal = bundleTotals.finalTotal;
+
   // Open payment modal (no API call yet)
   const handleOpenPayment = () => {
     if (order.length === 0) return;
-    setPayingTotal(totalAmount);
-    setCashReceived(totalAmount.toFixed(2));
+    setPayingTotal(finalTotal);
+    setCashReceived(finalTotal.toFixed(2));
     setPaymentMethod('cash');
     setError('');
     setShowPayment(true);
@@ -268,6 +324,7 @@ export default function CashierOrder() {
             </div>
           ) : order.map((line, idx) => {
             const optExtra = (line.options || []).reduce((sum, opt) => sum + opt.extraPrice, 0);
+            const isEditing = editingLineId === line.id;
             return (
               <div key={line.id} onClick={() => removeLine(line.id)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 16px', borderBottom: '1px solid #f0f0f0', cursor: 'pointer', transition: 'background 0.1s' }}
                 onMouseEnter={e => (e.currentTarget.style.background = '#FFEBEE')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
@@ -280,7 +337,27 @@ export default function CashierOrder() {
                     </div>
                   )}
                 </div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--red-primary)', minWidth: 45, textAlign: 'right' }}>€{(line.price + optExtra).toFixed(2)}</span>
+                {isEditing ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} onClick={e => e.stopPropagation()}>
+                    <span style={{ fontSize: 12, color: 'var(--text-light)' }}>€</span>
+                    <input
+                      className="input"
+                      type="number"
+                      step="0.01"
+                      value={editPrice}
+                      onChange={e => setEditPrice(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') confirmEditPrice(line.id); if (e.key === 'Escape') setEditingLineId(null); }}
+                      onBlur={() => confirmEditPrice(line.id)}
+                      autoFocus
+                      style={{ width: 60, fontSize: 13, fontWeight: 700, padding: '2px 4px', textAlign: 'right' }}
+                    />
+                  </div>
+                ) : (
+                  <span
+                    onClick={(e) => startEditPrice(line.id, line.price + optExtra, e)}
+                    style={{ fontSize: 13, fontWeight: 700, color: 'var(--red-primary)', minWidth: 45, textAlign: 'right', cursor: 'text', borderBottom: '1px dashed var(--red-primary)' }}
+                  >€{(line.price + optExtra).toFixed(2)}</span>
+                )}
                 <span style={{ fontSize: 14, color: 'var(--text-light)', marginLeft: 4 }}>✕</span>
               </div>
             );
@@ -289,9 +366,25 @@ export default function CashierOrder() {
 
         <div style={{ borderTop: '2px solid var(--border)', padding: '12px 16px', flexShrink: 0 }}>
           {error && <div style={{ color: 'var(--red-primary)', fontSize: 13, marginBottom: 8 }}>{error}</div>}
+          {/* Bundle discount display */}
+          {matchedBundles.length > 0 && (
+            <div style={{ marginBottom: 8, padding: '8px 10px', background: '#E8F5E9', borderRadius: 8 }}>
+              {matchedBundles.map((b, i) => (
+                <div key={i} style={{ fontSize: 12, color: '#2E7D32', display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                  <span>🎁 {b.offer.name}</span>
+                  <span style={{ fontWeight: 600 }}>-€{b.savings.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>合计 · {order.length} 件</span>
-            <span style={{ fontSize: 22, fontWeight: 700, color: 'var(--red-primary)', fontFamily: "'Noto Serif SC', serif" }}>€{totalAmount.toFixed(2)}</span>
+            <div style={{ textAlign: 'right' }}>
+              {bundleTotals.bundleDiscount > 0 && (
+                <div style={{ fontSize: 12, color: 'var(--text-light)', textDecoration: 'line-through' }}>€{totalAmount.toFixed(2)}</div>
+              )}
+              <span style={{ fontSize: 22, fontWeight: 700, color: 'var(--red-primary)', fontFamily: "'Noto Serif SC', serif" }}>€{finalTotal.toFixed(2)}</span>
+            </div>
           </div>
           <button className="btn btn-primary" onClick={handleOpenPayment} disabled={order.length === 0} style={{ width: '100%', fontSize: 15, padding: '12px 0', letterSpacing: 1 }}>
             下单结账

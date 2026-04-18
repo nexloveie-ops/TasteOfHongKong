@@ -29,6 +29,10 @@ export default function MenuView() {
   const [activeCategory, setActiveCategory] = useState<string>('');
   const lang = i18n.language;
 
+  // Active offers for banner
+  interface ActiveOffer { _id: string; name: string; nameEn: string; description: string; descriptionEn: string; bundlePrice: number; }
+  const [activeOffers, setActiveOffers] = useState<ActiveOffer[]>([]);
+
   // Refs for scroll-based category tracking
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -45,6 +49,7 @@ export default function MenuView() {
   useEffect(() => {
     fetch(`/api/menu/items?lang=${lang}`).then(r => r.json()).then(setItems).catch(() => {});
     fetch('/api/allergens').then(r => r.json()).then(setAllergens).catch(() => {});
+    fetch('/api/offers').then(r => r.ok ? r.json() : []).then(setActiveOffers).catch(() => {});
   }, [lang]);
 
   const getName = (translations: { locale: string; name: string }[]) => {
@@ -130,19 +135,49 @@ export default function MenuView() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Hero — hides on scroll down, shows on scroll up */}
       <div style={{
-        position: 'relative', height: heroHidden ? 0 : 140, flexShrink: 0,
+        position: 'relative', height: heroHidden ? 0 : (activeOffers.length > 0 ? 'auto' : 140), minHeight: heroHidden ? 0 : 140, flexShrink: 0,
         background: 'linear-gradient(135deg, #8B1A1A 0%, #C41E24 50%, #D4342A 100%)',
-        display: 'flex', alignItems: 'flex-end', padding: heroHidden ? 0 : 20, overflow: 'hidden',
-        transition: 'height 0.3s ease, padding 0.3s ease',
+        display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: heroHidden ? 0 : 20, overflow: 'hidden',
+        transition: 'min-height 0.3s ease, padding 0.3s ease',
       }}>
-        <div style={{ position: 'relative', zIndex: 1, color: '#fff' }}>
-          <h1 style={{ fontFamily: "'Noto Serif SC', serif", fontSize: 24, fontWeight: 700, letterSpacing: 3, marginBottom: 2 }}>港知味</h1>
-          <div style={{ fontSize: 11, fontWeight: 300, letterSpacing: 5, color: '#F0D68A' }}>TASTE OF HONG KONG</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          <div style={{ position: 'relative', zIndex: 1, color: '#fff' }}>
+            <h1 style={{ fontFamily: "'Noto Serif SC', serif", fontSize: 24, fontWeight: 700, letterSpacing: 3, marginBottom: 2 }}>港知味</h1>
+            <div style={{ fontSize: 11, fontWeight: 300, letterSpacing: 5, color: '#F0D68A' }}>TASTE OF HONG KONG</div>
+          </div>
+          <div style={{ position: 'absolute', top: 8, right: 12, zIndex: 1, textAlign: 'right', color: 'rgba(255,255,255,0.7)', fontSize: 9, lineHeight: 1.5 }}>
+            <div>Powered By <span style={{ fontWeight: 600, color: '#F0D68A' }}>L&amp;Z TECHSERVE LTD</span></div>
+            <div>info@lztechserve.com</div>
+          </div>
         </div>
-        <div style={{ position: 'absolute', top: 8, right: 12, zIndex: 1, textAlign: 'right', color: 'rgba(255,255,255,0.7)', fontSize: 9, lineHeight: 1.5 }}>
-          <div>Powered By <span style={{ fontWeight: 600, color: '#F0D68A' }}>L&amp;Z TECHSERVE LTD</span></div>
-          <div>info@lztechserve.com</div>
-        </div>
+        {/* Active offers */}
+        {activeOffers.length > 0 && !heroHidden && (
+          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {activeOffers.map(offer => (
+              <div key={offer._id} style={{
+                background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(4px)',
+                borderRadius: 10, padding: '10px 14px',
+                border: '1px solid rgba(240,214,138,0.3)',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ color: '#F0D68A', fontSize: 13, fontWeight: 700 }}>
+                      🎁 {lang === 'zh-CN' ? offer.name : (offer.nameEn || offer.name)}
+                    </div>
+                    {(offer.description || offer.descriptionEn) && (
+                      <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: 11, marginTop: 2 }}>
+                        {lang === 'zh-CN' ? offer.description : (offer.descriptionEn || offer.description)}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ color: '#fff', fontSize: 18, fontWeight: 700, fontFamily: "'Noto Serif SC', serif", flexShrink: 0, marginLeft: 12 }}>
+                    €{offer.bundlePrice.toFixed(2)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Sticky Category Tabs */}
