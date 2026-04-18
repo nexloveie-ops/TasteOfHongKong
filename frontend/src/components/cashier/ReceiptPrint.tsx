@@ -44,10 +44,17 @@ interface RestaurantConfig {
   receipt_print_copies?: string;
 }
 
+export interface BundleDiscountInfo {
+  name: string;
+  nameEn: string;
+  discount: number;
+}
+
 interface ReceiptPrintProps {
   checkoutId: string;
   cashReceived?: number;
   changeAmount?: number;
+  bundleDiscounts?: BundleDiscountInfo[];
 }
 
 function parseQRCodes(text: string): Array<{ type: 'text' | 'qr'; value: string }> {
@@ -70,6 +77,7 @@ function buildReceiptHTML(
   config: RestaurantConfig,
   cashReceived?: number,
   changeAmount?: number,
+  bundleDiscounts?: BundleDiscountInfo[],
 ): string {
   const isDineIn = receipt.orders.some(o => o.type === 'dine_in');
   const checkedOutAt = new Date(receipt.checkedOutAt);
@@ -129,7 +137,17 @@ function buildReceiptHTML(
   html += `</table><div class="divider"></div>`;
 
   // Total
-  html += `<div class="row" style="font-size:16px"><span>Total</span><span>€${receipt.totalAmount.toFixed(2)}</span></div>`;
+  const totalBundleDiscount = (bundleDiscounts || []).reduce((s, b) => s + b.discount, 0);
+  if (totalBundleDiscount > 0) {
+    const subtotal = receipt.totalAmount + totalBundleDiscount;
+    html += `<div class="row"><span>Subtotal</span><span>€${subtotal.toFixed(2)}</span></div>`;
+    for (const bd of bundleDiscounts || []) {
+      html += `<div class="row" style="color:#666"><span>🎁 ${bd.nameEn || bd.name}</span><span>-€${bd.discount.toFixed(2)}</span></div>`;
+    }
+    html += `<div class="row" style="font-size:16px;margin-top:4px"><span>Total</span><span>€${receipt.totalAmount.toFixed(2)}</span></div>`;
+  } else {
+    html += `<div class="row" style="font-size:16px"><span>Total</span><span>€${receipt.totalAmount.toFixed(2)}</span></div>`;
+  }
   html += `<div class="row" style="margin-top:4px"><span>Payment</span><span>${paymentLabel}</span></div>`;
 
   if (receipt.paymentMethod === 'mixed') {
@@ -197,7 +215,7 @@ function printViaIframe(html: string, copies: number) {
   };
 }
 
-export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount }: ReceiptPrintProps) {
+export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, bundleDiscounts }: ReceiptPrintProps) {
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [config, setConfig] = useState<RestaurantConfig>({});
   const [copies, setCopies] = useState(2);
@@ -232,17 +250,17 @@ export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount }:
   useEffect(() => {
     if (receipt && !autoPrintDone.current) {
       autoPrintDone.current = true;
-      const html = buildReceiptHTML(receipt, config, cashReceived, changeAmount);
+      const html = buildReceiptHTML(receipt, config, cashReceived, changeAmount, bundleDiscounts);
       printViaIframe(html, copies);
     }
-  }, [receipt, config, copies, cashReceived, changeAmount]);
+  }, [receipt, config, copies, cashReceived, changeAmount, bundleDiscounts]);
 
   // Manual print function exposed via window.print override
   const handleManualPrint = useCallback(() => {
     if (!receipt) return;
-    const html = buildReceiptHTML(receipt, config, cashReceived, changeAmount);
+    const html = buildReceiptHTML(receipt, config, cashReceived, changeAmount, bundleDiscounts);
     printViaIframe(html, 1);
-  }, [receipt, config, cashReceived, changeAmount]);
+  }, [receipt, config, cashReceived, changeAmount, bundleDiscounts]);
 
   // Expose manual print globally so parent buttons can use window.print()
   useEffect(() => {
@@ -299,7 +317,22 @@ export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount }:
       )))}
 
       <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15 }}><span>Total</span><span>€{receipt.totalAmount.toFixed(2)}</span></div>
+      {(() => {
+        const totalBD = (bundleDiscounts || []).reduce((s, b) => s + b.discount, 0);
+        if (totalBD > 0) {
+          const subtotal = receipt.totalAmount + totalBD;
+          return (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Subtotal</span><span>€{subtotal.toFixed(2)}</span></div>
+              {(bundleDiscounts || []).map((bd, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: '#666', fontSize: 12 }}><span>🎁 {bd.nameEn || bd.name}</span><span>-€{bd.discount.toFixed(2)}</span></div>
+              ))}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, marginTop: 4 }}><span>Total</span><span>€{receipt.totalAmount.toFixed(2)}</span></div>
+            </>
+          );
+        }
+        return <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15 }}><span>Total</span><span>€{receipt.totalAmount.toFixed(2)}</span></div>;
+      })()}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}><span>Payment</span><span>{paymentLabel}</span></div>
 
       {receipt.paymentMethod === 'cash' && cashReceived != null && cashReceived > 0 && (

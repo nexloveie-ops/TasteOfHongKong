@@ -56,6 +56,7 @@ export default function CashierOrder() {
   // Receipt state
   const [checkoutId, setCheckoutId] = useState<string | null>(null);
   const [checkoutMeta, setCheckoutMeta] = useState<{ total: number; cashReceived: number; change: number } | null>(null);
+  const [receiptBundleDiscounts, setReceiptBundleDiscounts] = useState<{ name: string; nameEn: string; discount: number }[]>([]);
   const [offers, setOffers] = useState<OfferData[]>([]);
 
   const fetchData = useCallback(async () => {
@@ -212,6 +213,9 @@ export default function CashierOrder() {
 
       // Step 2: Checkout immediately
       const checkoutBody: Record<string, unknown> = { paymentMethod };
+      if (bundleTotals.bundleDiscount > 0) {
+        checkoutBody.totalAmountOverride = payingTotal;
+      }
       if (paymentMethod === 'cash') checkoutBody.cashAmount = payingTotal;
       else if (paymentMethod === 'card') checkoutBody.cardAmount = payingTotal;
       else { checkoutBody.cashAmount = Number(mixedCash); checkoutBody.cardAmount = Number(mixedCard); }
@@ -225,6 +229,7 @@ export default function CashierOrder() {
       const checkoutData = await checkoutRes.json();
       setCheckoutId(checkoutData._id);
       setCheckoutMeta({ total: payingTotal, cashReceived: cashReceivedNum, change: changeAmount });
+      setReceiptBundleDiscounts(matchedBundles.map(b => ({ name: b.offer.name, nameEn: b.offer.nameEn, discount: b.savings })));
       setShowPayment(false);
       setOrder([]);
     } catch (e) {
@@ -237,6 +242,7 @@ export default function CashierOrder() {
   const handleCloseReceipt = () => {
     setCheckoutId(null);
     setCheckoutMeta(null);
+    setReceiptBundleDiscounts([]);
   };
 
   // Receipt screen
@@ -258,7 +264,7 @@ export default function CashierOrder() {
             🖨️ 打印小票
           </button>
         </div>
-        <ReceiptPrint checkoutId={checkoutId} cashReceived={checkoutMeta?.cashReceived} changeAmount={checkoutMeta?.change} />
+        <ReceiptPrint checkoutId={checkoutId} cashReceived={checkoutMeta?.cashReceived} changeAmount={checkoutMeta?.change} bundleDiscounts={receiptBundleDiscounts} />
       </div>
     );
   }

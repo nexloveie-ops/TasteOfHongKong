@@ -92,7 +92,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
         throw createAppError('VALIDATION_ERROR', 'Invalid order ID');
       }
 
-      const { paymentMethod, cashAmount, cardAmount } = req.body;
+      const { paymentMethod, cashAmount, cardAmount, totalAmountOverride } = req.body;
 
       if (!paymentMethod || !['cash', 'card', 'mixed'].includes(paymentMethod)) {
         throw createAppError('VALIDATION_ERROR', 'paymentMethod must be "cash", "card", or "mixed"');
@@ -109,10 +109,13 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
         });
       }
 
-      // Calculate total amount
-      const totalAmount = order.items.reduce((sum, item) => {
+      // Calculate total amount from items, allow override for bundle discounts
+      const itemTotal = order.items.reduce((sum, item) => {
         return sum + item.unitPrice * item.quantity;
       }, 0);
+      const totalAmount = (totalAmountOverride != null && typeof totalAmountOverride === 'number' && totalAmountOverride >= 0)
+        ? totalAmountOverride
+        : itemTotal;
 
       // Validate mixed payment
       if (paymentMethod === 'mixed') {
