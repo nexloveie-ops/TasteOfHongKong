@@ -13,8 +13,8 @@ export default function OrderHistory() {
   const { t } = useTranslation();
   const { token } = useAuth();
   const [orders, setOrders] = useState<HistoryOrder[]>([]);
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [typeFilter, setTypeFilter] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -65,7 +65,7 @@ export default function OrderHistory() {
             value={pwdInput}
             onChange={e => { setPwdInput(e.target.value.replace(/\D/g, '').slice(0, 4)); setPwdError(false); }}
             onKeyDown={e => e.key === 'Enter' && checkPassword()}
-            placeholder="4位数字"
+            placeholder=""
             style={{ width: 120, fontSize: 24, textAlign: 'center', letterSpacing: 8, fontFamily: 'monospace' }}
           />
           {pwdError && <div style={{ color: 'var(--red-primary)', fontSize: 13, marginTop: 8 }}>密码错误</div>}

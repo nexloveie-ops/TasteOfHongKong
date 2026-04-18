@@ -11,6 +11,7 @@ const OrderItemSubdocSchema = new mongoose.Schema({
     choiceName: { type: String },
     extraPrice: { type: Number, default: 0 },
   }],
+  refunded: { type: Boolean, default: false },
 }, { _id: true });
 
 const OrderSchema = new mongoose.Schema({
@@ -19,7 +20,7 @@ const OrderSchema = new mongoose.Schema({
   seatNumber: { type: Number },
   dailyOrderNumber: { type: Number },
   dineInOrderNumber: { type: String },
-  status: { type: String, enum: ['pending', 'checked_out', 'completed'], default: 'pending' },
+  status: { type: String, enum: ['pending', 'checked_out', 'completed', 'refunded'], default: 'pending' },
   items: [OrderItemSubdocSchema],
   completedAt: { type: Date },
 }, { timestamps: true });

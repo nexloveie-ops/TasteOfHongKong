@@ -208,8 +208,8 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
       const { orderNumber, date } = req.query;
 
       const dateStr = (date as string) || new Date().toISOString().slice(0, 10);
-      const startOfDay = new Date(dateStr + 'T00:00:00.000Z');
-      const endOfDay = new Date(dateStr + 'T23:59:59.999Z');
+      const startOfDay = new Date(dateStr + 'T00:00:00.000');
+      const endOfDay = new Date(dateStr + 'T23:59:59.999');
 
       let orderFilter: Record<string, unknown>;
 
@@ -217,7 +217,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
         // Search by order number
         const num = Number(orderNumber);
         orderFilter = {
-          status: { $in: ['checked_out', 'completed'] },
+          status: { $in: ['checked_out', 'completed', 'refunded'] },
           createdAt: { $gte: startOfDay, $lte: endOfDay },
           $or: [
             { dineInOrderNumber: String(orderNumber).trim() },
@@ -227,7 +227,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
       } else {
         // No order number: return all checked-out orders for the date
         orderFilter = {
-          status: { $in: ['checked_out', 'completed'] },
+          status: { $in: ['checked_out', 'completed', 'refunded'] },
           createdAt: { $gte: startOfDay, $lte: endOfDay },
         };
       }
@@ -241,29 +241,131 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
       const orderIds = orders.map(o => o._id);
       const checkouts = await Checkout.find({ orderIds: { $in: orderIds } }).sort({ checkedOutAt: -1 }).lean();
 
-      const results = checkouts.map(c => ({
-        checkoutId: c._id,
-        type: c.type,
-        tableNumber: c.tableNumber,
-        totalAmount: c.totalAmount,
-        paymentMethod: c.paymentMethod,
-        cashAmount: c.cashAmount,
-        cardAmount: c.cardAmount,
-        checkedOutAt: c.checkedOutAt,
-        orders: orders
-          .filter(o => c.orderIds.some((cid: mongoose.Types.ObjectId) => cid.toString() === o._id.toString()))
-          .map(o => ({
+      const results = checkouts.map(c => {
+        const checkoutOrders = orders
+          .filter(o => c.orderIds.some((cid: mongoose.Types.ObjectId) => cid.toString() === o._id.toString()));
+        const allItems = checkoutOrders.flatMap(o => o.items);
+        const allRefunded = allItems.length > 0 && allItems.every((i: { refunded?: boolean }) => i.refunded);
+        const hasRefund = allItems.some((i: { refunded?: boolean }) => i.refunded);
+        return {
+          checkoutId: c._id,
+          type: c.type,
+          tableNumber: c.tableNumber,
+          totalAmount: c.totalAmount,
+          paymentMethod: c.paymentMethod,
+          cashAmount: c.cashAmount,
+          cardAmount: c.cardAmount,
+          checkedOutAt: c.checkedOutAt,
+          refunded: allRefunded,
+          partialRefund: hasRefund && !allRefunded,
+          orders: checkoutOrders.map(o => ({
             _id: o._id,
             type: o.type,
             tableNumber: o.tableNumber,
             seatNumber: o.seatNumber,
             dailyOrderNumber: o.dailyOrderNumber,
             dineInOrderNumber: (o as Record<string, unknown>).dineInOrderNumber,
+            status: o.status,
             items: o.items,
           })),
-      }));
+        };
+      });
 
       res.json(results);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // POST /api/checkout/:checkoutId/refund — Refund specific items from a checkout
+  // Body: { itemIds: string[] } — array of order item _id values to refund
+  // If itemIds is empty or not provided, refund ALL items (full refund)
+  router.post('/:checkoutId/refund', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { checkoutId } = req.params;
+      if (!mongoose.Types.ObjectId.isValid(checkoutId as string)) {
+        throw createAppError('VALIDATION_ERROR', 'Invalid checkout ID');
+      }
+
+      const { itemIds } = req.body as { itemIds?: string[] };
+
+      const checkout = await Checkout.findById(checkoutId);
+      if (!checkout) {
+        throw createAppError('NOT_FOUND', 'Checkout not found');
+      }
+
+      const orders = await Order.find({ _id: { $in: checkout.orderIds } });
+      if (orders.length === 0) {
+        throw createAppError('NOT_FOUND', 'No orders found for this checkout');
+      }
+
+      // Collect all items across all orders
+      const allItems = orders.flatMap(o => o.items);
+
+      let refundAmount = 0;
+      const refundedItemDetails: { itemId: string; itemName: string; quantity: number; unitPrice: number }[] = [];
+
+      if (itemIds && itemIds.length > 0) {
+        // Partial refund: mark specific items as refunded
+        for (const order of orders) {
+          for (const item of order.items) {
+            if (itemIds.includes(item._id.toString()) && !item.refunded) {
+              item.refunded = true;
+              const optExtra = (item.selectedOptions || []).reduce((s: number, o: { extraPrice?: number }) => s + (o.extraPrice || 0), 0);
+              refundAmount += (item.unitPrice + optExtra) * item.quantity;
+              refundedItemDetails.push({
+                itemId: item._id.toString(),
+                itemName: item.itemName,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+              });
+            }
+          }
+          // Check if all items in this order are refunded
+          const allRefunded = order.items.every((i: { refunded?: boolean }) => i.refunded);
+          if (allRefunded) {
+            order.status = 'refunded';
+          }
+          await order.save();
+        }
+      } else {
+        // Full refund: mark all non-refunded items
+        for (const order of orders) {
+          for (const item of order.items) {
+            if (!item.refunded) {
+              item.refunded = true;
+              const optExtra = (item.selectedOptions || []).reduce((s: number, o: { extraPrice?: number }) => s + (o.extraPrice || 0), 0);
+              refundAmount += (item.unitPrice + optExtra) * item.quantity;
+              refundedItemDetails.push({
+                itemId: item._id.toString(),
+                itemName: item.itemName,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+              });
+            }
+          }
+          order.status = 'refunded';
+          await order.save();
+        }
+      }
+
+      if (refundedItemDetails.length === 0) {
+        throw createAppError('VALIDATION_ERROR', 'No items to refund (already refunded or invalid item IDs)');
+      }
+
+      // Emit Socket.IO event
+      io.emit('order:refunded', {
+        checkoutId,
+        refundedItems: refundedItemDetails,
+        refundAmount: Math.round(refundAmount * 100) / 100,
+      });
+
+      res.json({
+        message: 'Refund successful',
+        checkoutId,
+        refundedAmount: Math.round(refundAmount * 100) / 100,
+        refundedItems: refundedItemDetails,
+      });
     } catch (err) {
       next(err);
     }

@@ -1,77 +1,380 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 
-interface Summary {
+interface TopItem {
+  itemName: string;
+  itemNameEn: string;
+  quantity: number;
+  revenue: number;
+}
+
+interface DetailedStats {
   totalRevenue: number;
+  grossRevenue: number;
   orderCount: number;
   cashTotal: number;
   cardTotal: number;
   mixedTotal: number;
+  dineInCount: number;
+  takeoutCount: number;
+  dineInScanCount: number;
+  dineInCashierCount: number;
+  takeoutScanCount: number;
+  takeoutCashierCount: number;
+  refundedCount: number;
+  refundedAmount: number;
+  topItems: TopItem[];
+}
+
+interface OrderItem {
+  _id: string;
+  quantity: number;
+  unitPrice: number;
+  itemName: string;
+  itemNameEn?: string;
+  refunded?: boolean;
+}
+
+interface DetailOrder {
+  _id: string;
+  type: string;
+  tableNumber?: number;
+  seatNumber?: number;
+  dailyOrderNumber?: number;
+  dineInOrderNumber?: string;
+  items: OrderItem[];
+  createdAt: string;
+  checkout?: {
+    checkoutId: string;
+    totalAmount: number;
+    paymentMethod: string;
+    cashAmount?: number;
+    cardAmount?: number;
+    checkedOutAt: string;
+  } | null;
+}
+
+interface ModalConfig {
+  title: string;
+  icon: string;
+  filters: Record<string, string>;
+}
+
+function getWeekRange(): { start: string; end: string } {
+  const today = new Date();
+  const day = today.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + diffToMonday);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  return { start: fmt(monday), end: fmt(sunday) };
 }
 
 export default function ReportDashboard() {
   const { t } = useTranslation();
   const { token } = useAuth();
+
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [summary, setSummary] = useState<Summary | null>(null);
+  const [stats, setStats] = useState<DetailedStats | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const fetchSummary = useCallback(async () => {
+  // Modal state
+  const [modalConfig, setModalConfig] = useState<ModalConfig | null>(null);
+  const [modalOrders, setModalOrders] = useState<DetailOrder[]>([]);
+  const [modalLoading, setModalLoading] = useState(false);
+
+  useEffect(() => {
+    const { start, end } = getWeekRange();
+    setStartDate(start);
+    setEndDate(end);
+  }, []);
+
+  const fetchStats = useCallback(async () => {
+    if (!startDate || !endDate) return;
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (startDate) params.set('startDate', startDate);
-      if (endDate) params.set('endDate', endDate);
-      const res = await fetch(`/api/reports/summary?${params}`, { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) setSummary(await res.json());
+      params.set('startDate', startDate);
+      params.set('endDate', endDate);
+      const res = await fetch(`/api/reports/detailed?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) setStats(await res.json());
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, [token, startDate, endDate]);
 
-  const statCard = (label: string, value: string, color: string, icon: string) => (
-    <div className="card" style={{ padding: 20, textAlign: 'center' }}>
-      <div style={{ fontSize: 28, marginBottom: 8 }}>{icon}</div>
-      <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 700, color, fontFamily: "'Noto Serif SC', serif" }}>{value}</div>
-    </div>
-  );
+  const openDetail = useCallback(async (config: ModalConfig) => {
+    setModalConfig(config);
+    setModalOrders([]);
+    setModalLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('startDate', startDate);
+      params.set('endDate', endDate);
+      for (const [k, v] of Object.entries(config.filters)) {
+        if (v) params.set(k, v);
+      }
+      const res = await fetch(`/api/reports/orders?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) setModalOrders(await res.json());
+    } catch { /* ignore */ }
+    finally { setModalLoading(false); }
+  }, [token, startDate, endDate]);
+
+  const closeModal = () => { setModalConfig(null); setModalOrders([]); };
+
+  const euro = (v: number) => `€${v.toFixed(2)}`;
+
+  const orderTotal = (o: DetailOrder) =>
+    o.checkout?.totalAmount ?? o.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+
+  /** De-duplicate checkout totals (one checkout may cover multiple orders) */
+  const deduplicatedTotal = (orders: DetailOrder[]) => {
+    const seen = new Set<string>();
+    let total = 0;
+    for (const o of orders) {
+      if (o.checkout) {
+        const key = o.checkout.checkoutId;
+        if (!seen.has(key)) {
+          seen.add(key);
+          total += o.checkout.totalAmount;
+        }
+      } else {
+        total += o.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+      }
+    }
+    return total;
+  };
+
+  const orderNum = (o: DetailOrder) =>
+    o.dineInOrderNumber || (o.dailyOrderNumber ? `#${o.dailyOrderNumber}` : o._id.slice(-6).toUpperCase());
 
   return (
     <div>
       <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>{t('admin.reports')}</h2>
 
+      {/* Date picker */}
       <div className="card" style={{ padding: 16, marginBottom: 16, display: 'flex', gap: 12, alignItems: 'end', flexWrap: 'wrap' }}>
         <div>
           <label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>开始日期</label>
-          <input className="input" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+          <input className="input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         </div>
         <div>
           <label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>结束日期</label>
-          <input className="input" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+          <input className="input" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
         </div>
-        <button className="btn btn-primary" onClick={fetchSummary} disabled={loading}>
+        <button className="btn btn-primary" onClick={fetchStats} disabled={loading || !startDate || !endDate}>
           {loading ? t('common.loading') : t('common.search')}
         </button>
       </div>
 
-      {summary && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
-          {statCard('总营业额', `€${summary.totalRevenue}`, 'var(--red-primary)', '💰')}
-          {statCard('订单数量', String(summary.orderCount), 'var(--blue)', '📋')}
-          {statCard('现金收入', `€${summary.cashTotal}`, 'var(--green)', '💵')}
-          {statCard('刷卡收入', `€${summary.cardTotal}`, 'var(--blue)', '💳')}
-          {statCard('混合支付', `€${summary.mixedTotal}`, 'var(--gold-dark)', '🔄')}
-        </div>
+      {/* Stats display */}
+      {stats && (
+        <>
+          {/* Revenue Summary Cards */}
+          <div style={{ marginBottom: 20 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10, color: 'var(--text-secondary)' }}>💰 营业概览</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+              <StatCard label="净营业额" value={euro(stats.totalRevenue)} color="var(--red-primary)" icon="💰"
+                onClick={() => openDetail({ title: '💰 全部订单', icon: '💰', filters: {} })} />
+              <StatCard label="订单数量" value={String(stats.orderCount)} color="var(--blue, #1976D2)" icon="📋"
+                onClick={() => openDetail({ title: '📋 全部订单', icon: '📋', filters: {} })} />
+              <StatCard label="现金收入" value={euro(stats.cashTotal)} color="var(--green, #388E3C)" icon="💵"
+                onClick={() => openDetail({ title: '💵 现金订单', icon: '💵', filters: { paymentMethod: 'cash' } })} />
+              <StatCard label="刷卡收入" value={euro(stats.cardTotal)} color="var(--blue, #1976D2)" icon="💳"
+                onClick={() => openDetail({ title: '💳 刷卡订单', icon: '💳', filters: { paymentMethod: 'card' } })} />
+              <StatCard label="混合支付" value={euro(stats.mixedTotal)} color="var(--gold-dark, #F57F17)" icon="🔄"
+                onClick={() => openDetail({ title: '🔄 混合支付订单', icon: '🔄', filters: { paymentMethod: 'mixed' } })} />
+              <StatCard label="退单" value={`${stats.refundedCount} 项 · ${euro(stats.refundedAmount)}`} color="#F44336" icon="↩️"
+                onClick={() => openDetail({ title: '↩️ 退单记录', icon: '↩️', filters: { status: 'refunded' } })} />
+            </div>
+          </div>
+
+          {/* Order Breakdown */}
+          <div style={{ marginBottom: 20 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10, color: 'var(--text-secondary)' }}>📊 订单分类</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+              {/* Dine-in card */}
+              <div className="card" style={{ padding: 20, cursor: 'pointer', transition: 'box-shadow 0.2s' }}
+                onClick={() => openDetail({ title: '🍽️ 堂食订单', icon: '🍽️', filters: { type: 'dine_in' } })}
+                onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)')}
+                onMouseLeave={e => (e.currentTarget.style.boxShadow = '')}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                  <span style={{ fontSize: 24 }}>🍽️</span>
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--text-light)' }}>堂食订单</div>
+                    <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--red-primary)' }}>{stats.dineInCount}</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 16, borderTop: '1px solid var(--border, #eee)', paddingTop: 10, fontSize: 13 }}>
+                  <div style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); openDetail({ title: '📱 堂食扫码点餐', icon: '📱', filters: { type: 'dine_in', source: 'scan' } }); }}>
+                    <span style={{ color: 'var(--text-light)' }}>扫码点餐: </span>
+                    <span style={{ fontWeight: 600, textDecoration: 'underline', color: 'var(--red-primary)' }}>{stats.dineInScanCount}</span>
+                  </div>
+                  <div style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); openDetail({ title: '🧑‍💼 堂食收银点餐', icon: '🧑‍💼', filters: { type: 'dine_in', source: 'cashier' } }); }}>
+                    <span style={{ color: 'var(--text-light)' }}>收银点餐: </span>
+                    <span style={{ fontWeight: 600, textDecoration: 'underline', color: 'var(--red-primary)' }}>{stats.dineInCashierCount}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Takeout card */}
+              <div className="card" style={{ padding: 20, cursor: 'pointer', transition: 'box-shadow 0.2s' }}
+                onClick={() => openDetail({ title: '🥡 外卖订单', icon: '🥡', filters: { type: 'takeout' } })}
+                onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)')}
+                onMouseLeave={e => (e.currentTarget.style.boxShadow = '')}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                  <span style={{ fontSize: 24 }}>🥡</span>
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--text-light)' }}>外卖订单</div>
+                    <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--blue, #1976D2)' }}>{stats.takeoutCount}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Top 20 Items */}
+          {stats.topItems.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10, color: 'var(--text-secondary)' }}>
+                🏆 热销菜品 Top {stats.topItems.length}
+              </h3>
+              <div className="card" style={{ overflow: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 500 }}>
+                  <thead>
+                    <tr style={{ background: 'var(--bg)', borderBottom: '2px solid var(--border, #eee)' }}>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', width: 40 }}>#</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left' }}>菜品名称</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left' }}>English Name</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'right' }}>销量</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'right' }}>营收</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats.topItems.map((item, idx) => (
+                      <tr key={item.itemName} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                        <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700, color: idx < 3 ? 'var(--red-primary)' : 'var(--text-light)' }}>{idx + 1}</td>
+                        <td style={{ padding: '8px 12px', fontWeight: 600 }}>{item.itemName}</td>
+                        <td style={{ padding: '8px 12px', color: 'var(--text-secondary)' }}>{item.itemNameEn || '-'}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{item.quantity}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--red-primary)' }}>{euro(item.revenue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
-      {!summary && !loading && (
+      {/* Empty state */}
+      {!stats && !loading && (
         <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-light)' }}>
           <div style={{ fontSize: 48, marginBottom: 12, opacity: 0.3 }}>📊</div>
           <p>选择日期范围查看营业报表</p>
         </div>
       )}
+
+      {/* Detail Modal */}
+      {modalConfig && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={closeModal}>
+          <div style={{ background: '#fff', borderRadius: 16, width: '90%', maxWidth: 800, maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+            onClick={e => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border, #eee)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700 }}>{modalConfig.title}</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                  {modalConfig.filters.status === 'refunded'
+                    ? `${modalOrders.length} 条订单 · 退单菜品 ${modalOrders.reduce((s, o) => s + o.items.filter(i => i.refunded).length, 0)} 项 · 退款 ${euro(modalOrders.reduce((s, o) => s + o.items.filter(i => i.refunded).reduce((a, i) => a + i.unitPrice * i.quantity, 0), 0))}`
+                    : `共 ${modalOrders.length} 条 · 合计 ${euro(deduplicatedTotal(modalOrders))}`
+                  }
+                </span>
+                <button onClick={closeModal} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text-light)', padding: '0 4px' }}>✕</button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ flex: 1, overflow: 'auto', padding: 0 }}>
+              {modalLoading ? (
+                <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-light)' }}>加载中...</div>
+              ) : modalOrders.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-light)' }}>
+                  <div style={{ fontSize: 36, opacity: 0.3, marginBottom: 8 }}>📭</div>
+                  <p>没有找到订单</p>
+                </div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: 'var(--bg, #f9f9f9)', borderBottom: '2px solid var(--border, #eee)', position: 'sticky', top: 0 }}>
+                      <th style={{ padding: '10px 12px', textAlign: 'left' }}>订单号</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left' }}>类型</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left' }}>菜品</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'right' }}>金额</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left' }}>支付</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left' }}>时间</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {modalOrders.map(o => {
+                      const hasRefundedItems = o.items.some(i => i.refunded);
+                      return (
+                        <tr key={o._id} style={{ borderBottom: '1px solid #f0f0f0', background: hasRefundedItems ? '#FFF8E1' : undefined }}>
+                          <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontWeight: 600 }}>{orderNum(o)}</td>
+                          <td style={{ padding: '8px 12px' }}>
+                            <span style={{
+                              display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600,
+                              background: o.type === 'dine_in' ? 'var(--red-light, #FFEBEE)' : '#E3F2FD',
+                              color: o.type === 'dine_in' ? 'var(--red-primary)' : '#1976D2',
+                            }}>{o.type === 'dine_in' ? '堂食' : '外卖'}</span>
+                          </td>
+                          <td style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-secondary)', maxWidth: 220 }}>
+                            {o.items.map((i, idx) => (
+                              <span key={idx} style={{ textDecoration: i.refunded ? 'line-through' : 'none', color: i.refunded ? '#F44336' : undefined }}>
+                                {idx > 0 && ', '}{i.itemName}×{i.quantity}{i.refunded && ' ↩'}
+                              </span>
+                            ))}
+                          </td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--red-primary)' }}>{euro(orderTotal(o))}</td>
+                          <td style={{ padding: '8px 12px', fontSize: 12 }}>{o.checkout?.paymentMethod || '-'}</td>
+                          <td style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-light)' }}>{new Date(o.createdAt).toLocaleString()}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatCard({
+  label, value, color, icon, onClick,
+}: {
+  label: string; value: string; color: string; icon: string; onClick?: () => void;
+}) {
+  return (
+    <div className="card" style={{ padding: 20, textAlign: 'center', cursor: onClick ? 'pointer' : 'default', transition: 'box-shadow 0.2s' }}
+      onClick={onClick}
+      onMouseEnter={e => { if (onClick) e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'; }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow = ''; }}>
+      <div style={{ fontSize: 28, marginBottom: 8 }}>{icon}</div>
+      <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 24, fontWeight: 700, color, fontFamily: "'Noto Serif SC', serif" }}>{value}</div>
+      {onClick && <div style={{ fontSize: 10, color: 'var(--text-light)', marginTop: 6 }}>点击查看详情 →</div>}
     </div>
   );
 }
