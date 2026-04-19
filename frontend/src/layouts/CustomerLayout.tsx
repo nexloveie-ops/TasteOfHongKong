@@ -1,12 +1,10 @@
 import { Outlet, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useMemo } from 'react';
 import { useCart } from '../context/CartContext';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { matchBundles, calcBundleTotal, type OfferData } from '../utils/bundleMatcher';
 
 export default function CustomerLayout() {
-  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();

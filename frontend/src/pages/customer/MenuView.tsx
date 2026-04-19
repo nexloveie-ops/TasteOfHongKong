@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useCart } from '../../context/CartContext';
 import MenuItemCard from '../../components/customer/MenuItemCard';
@@ -20,8 +19,7 @@ interface MenuItemData {
 }
 
 export default function MenuView() {
-  const { i18n, t } = useTranslation();
-  const [searchParams] = useSearchParams();
+  const { i18n } = useTranslation();
   const { addItem, items: cartItems, decreaseQuantity, getItemKey } = useCart();
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItemData[]>([]);
