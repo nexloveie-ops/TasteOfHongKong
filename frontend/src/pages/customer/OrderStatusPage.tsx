@@ -31,7 +31,10 @@ export default function OrderStatusPage() {
 
   useEffect(() => { fetchOrder(); }, [fetchOrder]);
 
-  const total = (items: OrderItem[]) => items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+  const total = (items: OrderItem[]) => items.reduce((s, i) => {
+    const optExtra = (i.selectedOptions || []).reduce((a, o) => a + (o.extraPrice || 0), 0);
+    return s + (i.unitPrice + optExtra) * i.quantity;
+  }, 0);
 
   const handleModifyOrder = () => {
     if (!order) return;
@@ -100,7 +103,7 @@ export default function OrderStatusPage() {
             </div>
             <span style={{ fontSize: 14, fontWeight: 600 }}>×{item.quantity}</span>
             <span style={{ fontWeight: 700, color: 'var(--red-primary)', minWidth: 50, textAlign: 'right', fontFamily: "'Noto Serif SC', serif" }}>
-              €{(item.unitPrice * item.quantity).toFixed(2)}
+              €{((item.unitPrice + (item.selectedOptions || []).reduce((a, o) => a + (o.extraPrice || 0), 0)) * item.quantity).toFixed(2)}
             </span>
           </div>
         ))}

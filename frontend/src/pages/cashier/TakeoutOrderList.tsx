@@ -40,7 +40,10 @@ export default function TakeoutOrderList() {
   }, [fetchOrders]);
 
   const selectedOrder = orders.find(o => o._id === selected);
-  const orderTotal = (o: TakeoutOrder) => o.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+  const orderTotal = (o: TakeoutOrder) => o.items.reduce((s, i) => {
+    const optExtra = (i.selectedOptions || []).reduce((a: number, opt: { extraPrice?: number }) => a + (opt.extraPrice || 0), 0);
+    return s + (i.unitPrice + optExtra) * i.quantity;
+  }, 0);
 
   // Default cashReceived when selecting order or switching to cash
   useEffect(() => {
@@ -160,7 +163,7 @@ export default function TakeoutOrderList() {
               <div key={item._id} style={{ padding: '8px 0', borderBottom: '1px solid #f0f0f0', fontSize: 13 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>{item.itemName} ×{item.quantity}</span>
-                  <span style={{ fontWeight: 600, color: 'var(--red-primary)' }}>€{(item.unitPrice * item.quantity).toFixed(2)}</span>
+                  <span style={{ fontWeight: 600, color: 'var(--red-primary)' }}>€{((item.unitPrice + (item.selectedOptions || []).reduce((a: number, o: { extraPrice?: number }) => a + (o.extraPrice || 0), 0)) * item.quantity).toFixed(2)}</span>
                 </div>
                 {item.selectedOptions && item.selectedOptions.length > 0 && (
                   <div style={{ fontSize: 11, color: 'var(--text-light)', paddingLeft: 8, marginTop: 2 }}>

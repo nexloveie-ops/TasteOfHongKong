@@ -58,7 +58,7 @@ export default function OrderDetail({ orders }: OrderDetailProps) {
                       <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                         <span style={{ color: 'var(--text-light)' }}>×{item.quantity}</span>
                         <span style={{ fontWeight: 600, color: 'var(--red-primary)', minWidth: 50, textAlign: 'right' }}>
-                          €{(item.unitPrice * item.quantity).toFixed(2)}
+                          €{((item.unitPrice + (item.selectedOptions || []).reduce((s, o) => s + (o.extraPrice || 0), 0)) * item.quantity).toFixed(2)}
                         </span>
                       </div>
                     </div>

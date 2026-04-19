@@ -33,7 +33,8 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
       // Calculate total amount
       const totalAmount = orders.reduce((sum, order) => {
         return sum + order.items.reduce((itemSum, item) => {
-          return itemSum + item.unitPrice * item.quantity;
+          const optExtra = (item.selectedOptions || []).reduce((s: number, o: { extraPrice?: number }) => s + (o.extraPrice || 0), 0);
+          return itemSum + (item.unitPrice + optExtra) * item.quantity;
         }, 0);
       }, 0);
 
@@ -111,7 +112,8 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
 
       // Calculate total amount from items, allow override for bundle discounts
       const itemTotal = order.items.reduce((sum, item) => {
-        return sum + item.unitPrice * item.quantity;
+        const optExtra = (item.selectedOptions || []).reduce((s: number, o: { extraPrice?: number }) => s + (o.extraPrice || 0), 0);
+        return sum + (item.unitPrice + optExtra) * item.quantity;
       }, 0);
       const totalAmount = (totalAmountOverride != null && typeof totalAmountOverride === 'number' && totalAmountOverride >= 0)
         ? totalAmountOverride

@@ -29,7 +29,10 @@ export default function DineInOrderBoard() {
       const groups: TableGroup[] = [...grouped.entries()].map(([tableNumber, orders]) => ({
         tableNumber,
         orders,
-        total: orders.reduce((s, o) => s + o.items.reduce((s2, i) => s2 + i.unitPrice * i.quantity, 0), 0),
+        total: orders.reduce((s, o) => s + o.items.reduce((s2, i) => {
+          const optExtra = (i.selectedOptions || []).reduce((a: number, opt: { extraPrice?: number }) => a + (opt.extraPrice || 0), 0);
+          return s2 + (i.unitPrice + optExtra) * i.quantity;
+        }, 0), 0),
       })).sort((a, b) => a.tableNumber - b.tableNumber);
       setTables(groups);
     } catch { /* ignore */ }

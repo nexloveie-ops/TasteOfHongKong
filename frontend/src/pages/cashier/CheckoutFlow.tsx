@@ -20,11 +20,12 @@ function mergeSeatItems(orders: Order[]): EditableItem[] {
   const map = new Map<string, EditableItem>();
   for (const o of orders) {
     for (const item of o.items) {
+      const optExtra = (item.selectedOptions || []).reduce((s: number, opt: { extraPrice?: number }) => s + (opt.extraPrice || 0), 0);
       const existing = map.get(item.menuItemId);
       if (existing) {
         existing.quantity += item.quantity;
       } else {
-        map.set(item.menuItemId, { ...item, editPrice: item.unitPrice });
+        map.set(item.menuItemId, { ...item, editPrice: item.unitPrice + optExtra });
       }
     }
   }
