@@ -5,7 +5,7 @@ export enum Role {
 
 export const rolePermissions: Record<Role, string[]> = {
   [Role.OWNER]: ['menu:*', 'order:*', 'checkout:*', 'report:*', 'admin:*', 'config:*'],
-  [Role.CASHIER]: ['order:read', 'checkout:*', 'receipt:print', 'takeout:complete', 'menu:sold-out'],
+  [Role.CASHIER]: ['order:read', 'checkout:*', 'receipt:print', 'takeout:complete', 'menu:sold-out', 'report:view'],
 };
 
 /**

@@ -17,12 +17,14 @@ interface MenuItemCardProps {
   isSoldOut?: boolean;
   allergenIcons?: string[];
   optionGroups?: OptionGroup[];
+  quantity?: number;
   onAdd: (id: string, names: Record<string, string>, price: number, options?: CartItemOption[]) => void;
+  onDecrease?: (menuItemId: string) => void;
 }
 
 export default function MenuItemCard({
   id, name, names, description, price, calories, avgWaitMinutes,
-  photoUrl, arFileUrl, isSoldOut, allergenIcons, optionGroups, onAdd,
+  photoUrl, arFileUrl, isSoldOut, allergenIcons, optionGroups, quantity, onAdd, onDecrease,
 }: MenuItemCardProps) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
@@ -59,11 +61,20 @@ export default function MenuItemCard({
         display: 'flex', gap: 14, background: 'var(--bg-white, #FFFDF8)',
         borderRadius: 12, padding: 14,
         boxShadow: '0 1px 4px rgba(44,24,16,0.06)',
-        border: '1px solid rgba(232,213,184,0.5)',
+        border: quantity && quantity > 0 ? '2px solid var(--red-primary)' : '1px solid rgba(232,213,184,0.5)',
         position: 'relative', overflow: 'hidden',
         opacity: isSoldOut ? 0.55 : 1,
         transition: 'transform 0.15s',
       }}>
+        {/* Quantity badge */}
+        {quantity != null && quantity > 0 && (
+          <span style={{
+            position: 'absolute', top: 0, left: 0, zIndex: 2,
+            background: 'var(--red-primary)', color: '#fff',
+            fontSize: 11, fontWeight: 700, padding: '2px 10px',
+            borderBottomRightRadius: 10,
+          }}>×{quantity}</span>
+        )}
         {isSoldOut && (
           <span style={{
             position: 'absolute', top: 10, right: 10, zIndex: 2,
@@ -146,11 +157,32 @@ export default function MenuItemCard({
                 background: isSoldOut ? '#ccc' : 'var(--red-primary)',
                 color: '#fff', fontSize: 20, cursor: isSoldOut ? 'not-allowed' : 'pointer',
                 boxShadow: isSoldOut ? 'none' : '0 2px 8px rgba(196,30,36,0.3)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                display: quantity && quantity > 0 ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center',
                 transition: 'transform 0.15s',
               }}
               aria-label={t('customer.addToCart')}
             >+</button>
+            {quantity != null && quantity > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 0, border: '1px solid var(--border, #ddd)', borderRadius: 20, overflow: 'hidden' }}>
+                <button
+                  onClick={() => onDecrease?.(id)}
+                  style={{
+                    width: 30, height: 30, border: 'none', background: 'var(--bg, #f5f5f5)',
+                    color: 'var(--red-primary)', fontSize: 16, fontWeight: 700,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >−</button>
+                <span style={{ width: 28, textAlign: 'center', fontSize: 14, fontWeight: 700 }}>{quantity}</span>
+                <button
+                  onClick={handleAddClick}
+                  style={{
+                    width: 30, height: 30, border: 'none', background: 'var(--red-primary)',
+                    color: '#fff', fontSize: 16, fontWeight: 700,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >+</button>
+              </div>
+            )}
           </div>
         </div>
       </div>

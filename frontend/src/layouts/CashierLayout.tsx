@@ -1,52 +1,129 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { playDineInSound, playTakeoutSound, unlockAudio } from '../utils/orderSound';
+import { printViaIframe } from '../components/cashier/ReceiptPrint';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 
 export default function CashierLayout() {
-  const { user, logout } = useAuth();
+  const { user, logout, token } = useAuth();
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const [clock, setClock] = useState('');
+  // Show settle button only between 20:30 and 23:59
+  const [showSettle, setShowSettle] = useState(false);
+  const [settling, setSettling] = useState(false);
+  useEffect(() => {
+    const check = () => {
+      const now = new Date();
+      const h = now.getHours();
+      const m = now.getMinutes();
+      setShowSettle(h > 20 || (h === 20 && m >= 30));
+    };
+    check();
+    const id = setInterval(check, 30000);
+    return () => clearInterval(id);
+  }, []);
 
-  // Unlock audio on first user interaction
   useEffect(() => {
     const handler = () => unlockAudio();
     document.addEventListener('click', handler, { once: true });
     document.addEventListener('touchstart', handler, { once: true });
-    return () => {
-      document.removeEventListener('click', handler);
-      document.removeEventListener('touchstart', handler);
-    };
+    return () => { document.removeEventListener('click', handler); document.removeEventListener('touchstart', handler); };
   }, []);
 
-  useEffect(() => {
-    const update = () => {
-      const now = new Date();
-      setClock(String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0'));
-    };
-    update();
-    const id = setInterval(update, 10000);
-    return () => clearInterval(id);
-  }, []);
-
-  // Global new order sound notification
   useEffect(() => {
     const socket = io({ transports: ['websocket'] });
     socket.on('order:new', (order: { type?: string }) => {
-      if (order?.type === 'takeout') {
-        playTakeoutSound();
-      } else {
-        playDineInSound();
-      }
+      if (order?.type === 'takeout') playTakeoutSound();
+      else playDineInSound();
     });
     return () => { socket.disconnect(); };
   }, []);
 
   const handleLogout = () => { logout(); navigate('/login'); };
+
+  const handleSettle = useCallback(async () => {
+    setSettling(true);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const [statsRes, configRes] = await Promise.all([
+        fetch(`/api/reports/detailed?startDate=${today}&endDate=${today}`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('/api/admin/config'),
+      ]);
+      if (!statsRes.ok) { alert('Failed to load report'); return; }
+      const stats = await statsRes.json();
+      const config = configRes.ok ? await configRes.json() : {};
+
+      const name = config.restaurant_name_en || config.restaurant_name_zh || '';
+      const addr = config.restaurant_address || '';
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('en-GB');
+      const timeStr = now.toLocaleTimeString('en-GB');
+
+      let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:monospace; font-size:13px; font-weight:bold; color:#000; max-width:300px; margin:0 auto; padding:12px; }
+        .center { text-align:center; }
+        .divider { border-top:1px dashed #000; margin:8px 0; }
+        .row { display:flex; justify-content:space-between; margin:3px 0; }
+        .big { font-size:16px; margin:6px 0; }
+        .section { margin:4px 0; font-size:12px; color:#333; text-decoration:underline; }
+      </style></head><body>`;
+
+      // Header
+      html += `<div class="center">`;
+      if (name) html += `<div style="font-size:16px;margin-bottom:2px">${name}</div>`;
+      if (addr) html += `<div style="font-size:10px">${addr}</div>`;
+      html += `<div class="big">DAILY SETTLEMENT</div>`;
+      html += `<div style="font-size:11px">${dateStr} ${timeStr}</div>`;
+      html += `</div><div class="divider"></div>`;
+
+      // Takeout
+      html += `<div class="section">TAKEOUT</div>`;
+      html += `<div class="row"><span>Orders</span><span>${stats.takeoutCount}</span></div>`;
+      html += `<div class="row"><span>Revenue</span><span>€${(stats.takeoutRevenue ?? 0).toFixed(2)}</span></div>`;
+      html += `<div class="divider"></div>`;
+
+      // Dine-in
+      html += `<div class="section">DINE-IN</div>`;
+      html += `<div class="row"><span>Orders</span><span>${stats.dineInCount}</span></div>`;
+      html += `<div class="row"><span>Revenue</span><span>€${(stats.dineInRevenue ?? 0).toFixed(2)}</span></div>`;
+      html += `<div class="row"><span>  Scan Order</span><span>${stats.dineInScanCount}</span></div>`;
+      html += `<div class="row"><span>  Cashier Order</span><span>${stats.dineInCashierCount}</span></div>`;
+      html += `<div class="divider"></div>`;
+
+      // Payment
+      html += `<div class="section">PAYMENT</div>`;
+      html += `<div class="row"><span>Cash (${stats.cashCount ?? 0})</span><span>€${(stats.grossCashAmount ?? 0).toFixed(2)}</span></div>`;
+      html += `<div class="row"><span>Card (${stats.cardCount ?? 0})</span><span>€${(stats.grossCardAmount ?? 0).toFixed(2)}</span></div>`;
+      html += `<div class="row"><span>Mixed (${stats.mixedCount ?? 0})</span><span>€${(stats.mixedTotal ?? 0).toFixed(2)}</span></div>`;
+      html += `<div class="divider"></div>`;
+
+      // Refund
+      html += `<div class="section">REFUND</div>`;
+      html += `<div class="row"><span>Items Refunded</span><span>${stats.refundedCount}</span></div>`;
+      html += `<div class="row"><span>Refund Amount</span><span>€${(stats.refundedAmount ?? 0).toFixed(2)}</span></div>`;
+      html += `<div class="divider"></div>`;
+
+      // Total
+      html += `<div class="row" style="font-size:14px"><span>Gross Revenue</span><span>€${(stats.grossRevenue ?? 0).toFixed(2)}</span></div>`;
+      html += `<div class="row" style="font-size:11px;color:#666"><span>Less Refunds</span><span>-€${(stats.refundedAmount ?? 0).toFixed(2)}</span></div>`;
+      html += `<div class="row" style="font-size:18px;margin-top:6px"><span>NET TOTAL</span><span>€${(stats.totalRevenue ?? 0).toFixed(2)}</span></div>`;
+
+      // Footer
+      html += `<div class="divider"></div>`;
+      html += `<div class="center" style="font-size:10px;margin-top:4px">Printed by ${user?.username || ''} at ${timeStr}</div>`;
+      html += `</body></html>`;
+
+      printViaIframe(html, 1);
+    } catch {
+      alert('Settlement failed');
+    } finally {
+      setSettling(false);
+    }
+  }, [token, user]);
 
   const tabStyle = (isActive: boolean): React.CSSProperties => ({
     padding: '12px 24px', fontWeight: isActive ? 700 : 500, fontSize: 14,
@@ -67,8 +144,13 @@ export default function CashierLayout() {
         <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--red-primary)', fontFamily: 'var(--font-heading)' }}>
           港知味 · {t('cashier.title')}
         </h1>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
-          <span className="badge" style={{ background: '#F3E5F5', color: '#7B1FA2', padding: '4px 10px', borderRadius: 4, fontWeight: 600, fontSize: 12 }}>{clock}</span>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
+          {showSettle && (
+            <button className="btn" onClick={handleSettle} disabled={settling}
+              style={{ padding: '5px 14px', fontSize: 12, background: '#4CAF50', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600 }}>
+              {settling ? '...' : '💰 结账'}
+            </button>
+          )}
           <LanguageSwitcher />
           <span style={{ fontWeight: 600 }}>{user?.username}</span>
           <button className="btn btn-outline" style={{ padding: '6px 14px', fontSize: 12 }} onClick={handleLogout}>
@@ -82,24 +164,12 @@ export default function CashierLayout() {
         display: 'flex', gap: 0, background: 'var(--bg-white)',
         borderBottom: '2px solid var(--border)', flexShrink: 0, paddingLeft: 16,
       }}>
-        <NavLink to="/cashier" end style={({ isActive }) => tabStyle(isActive)}>
-          {t('cashier.dineIn')}
-        </NavLink>
-        <NavLink to="/cashier/takeout" style={({ isActive }) => tabStyle(isActive)}>
-          {t('cashier.takeout')}
-        </NavLink>
-        <NavLink to="/cashier/delivery" style={({ isActive }) => tabStyle(isActive)}>
-          {t('cashier.delivery')}
-        </NavLink>
-        <NavLink to="/cashier/order" style={({ isActive }) => tabStyle(isActive)}>
-          {t('cashier.newOrder', '点单')}
-        </NavLink>
-        <NavLink to="/cashier/reprint" style={({ isActive }) => tabStyle(isActive)}>
-          {t('cashier.reprint', '重印小票')}
-        </NavLink>
-        <NavLink to="/cashier/inventory" style={({ isActive }) => tabStyle(isActive)}>
-          {t('admin.inventory', '库存')}
-        </NavLink>
+        <NavLink to="/cashier" end style={({ isActive }) => tabStyle(isActive)}>{t('cashier.dineIn')}</NavLink>
+        <NavLink to="/cashier/takeout" style={({ isActive }) => tabStyle(isActive)}>{t('cashier.takeout')}</NavLink>
+        <NavLink to="/cashier/delivery" style={({ isActive }) => tabStyle(isActive)}>{t('cashier.delivery')}</NavLink>
+        <NavLink to="/cashier/order" style={({ isActive }) => tabStyle(isActive)}>{t('cashier.newOrder', '点单')}</NavLink>
+        <NavLink to="/cashier/reprint" style={({ isActive }) => tabStyle(isActive)}>{t('cashier.reprint', '重印小票')}</NavLink>
+        <NavLink to="/cashier/inventory" style={({ isActive }) => tabStyle(isActive)}>{t('admin.inventory', '库存')}</NavLink>
       </div>
 
       {/* Content */}

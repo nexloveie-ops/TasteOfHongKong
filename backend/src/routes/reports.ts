@@ -170,6 +170,11 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
     let cashTotal = 0;
     let cardTotal = 0;
     let mixedTotal = 0;
+    let cashCount = 0;
+    let cardCount = 0;
+    let mixedCount = 0;
+    let grossCashAmount = 0;
+    let grossCardAmount = 0;
     const countedCheckoutIds = new Set<string>();
 
     for (const order of allOrders) {
@@ -181,10 +186,17 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
           grossRevenue += checkout.totalAmount;
           if (checkout.paymentMethod === 'cash') {
             cashTotal += checkout.totalAmount;
+            cashCount++;
+            grossCashAmount += checkout.totalAmount;
           } else if (checkout.paymentMethod === 'card') {
             cardTotal += checkout.totalAmount;
+            cardCount++;
+            grossCardAmount += checkout.totalAmount;
           } else if (checkout.paymentMethod === 'mixed') {
             mixedTotal += checkout.totalAmount;
+            mixedCount++;
+            grossCashAmount += checkout.cashAmount || 0;
+            grossCardAmount += checkout.cardAmount || 0;
           }
         }
       }
@@ -215,16 +227,21 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
     // Net revenue = gross - refunded
     const totalRevenue = grossRevenue - refundedAmount;
 
-    // Order counts (exclude fully refunded from main counts)
+    // Order counts and revenue by type
     const activeOrders = allOrders.filter(o => o.status !== 'refunded');
     let dineInCount = 0;
     let takeoutCount = 0;
     let dineInScanCount = 0;
     let dineInCashierCount = 0;
+    let dineInRevenue = 0;
+    let takeoutRevenue = 0;
 
     for (const order of activeOrders) {
+      const checkout = orderCheckoutMap.get(order._id.toString());
+      const orderItemTotal = order.items.reduce((s: number, i: { unitPrice: number; quantity: number }) => s + i.unitPrice * i.quantity, 0);
       if (order.type === 'dine_in') {
         dineInCount++;
+        dineInRevenue += checkout?.totalAmount ?? orderItemTotal;
         if ((order.tableNumber ?? 0) > 0 && (order.seatNumber ?? 0) > 0) {
           dineInScanCount++;
         } else {
@@ -232,6 +249,7 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
         }
       } else if (order.type === 'takeout') {
         takeoutCount++;
+        takeoutRevenue += checkout?.totalAmount ?? orderItemTotal;
       }
     }
 
@@ -273,8 +291,15 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
       cashTotal: Math.round((cashTotal - cashRefund) * 100) / 100,
       cardTotal: Math.round((cardTotal - cardRefund) * 100) / 100,
       mixedTotal: Math.round((mixedTotal - mixedRefund) * 100) / 100,
+      cashCount,
+      cardCount,
+      mixedCount,
+      grossCashAmount: Math.round(grossCashAmount * 100) / 100,
+      grossCardAmount: Math.round(grossCardAmount * 100) / 100,
       dineInCount,
+      dineInRevenue: Math.round(dineInRevenue * 100) / 100,
       takeoutCount,
+      takeoutRevenue: Math.round(takeoutRevenue * 100) / 100,
       dineInScanCount,
       dineInCashierCount,
       takeoutScanCount: takeoutCount,

@@ -1,9 +1,9 @@
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useCart } from '../../context/CartContext';
 import MenuItemCard from '../../components/customer/MenuItemCard';
-import { matchBundles, calcBundleTotal, type OfferData } from '../../utils/bundleMatcher';
+import type { OfferData } from '../../utils/bundleMatcher';
 
 interface Category { _id: string; sortOrder: number; translations: { locale: string; name: string }[]; }
 interface AllergenData { _id: string; icon: string; }
@@ -22,8 +22,7 @@ interface MenuItemData {
 export default function MenuView() {
   const { i18n, t } = useTranslation();
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const { addItem, totalAmount, totalItems, items: cartItems, getItemKey } = useCart();
+  const { addItem, items: cartItems, decreaseQuantity, getItemKey } = useCart();
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItemData[]>([]);
   const [allergens, setAllergens] = useState<AllergenData[]>([]);
@@ -119,32 +118,17 @@ export default function MenuView() {
     lastScrollY.current = y;
   }, []);
 
-  const goToCart = () => {
-    const qs = searchParams.toString();
-    navigate(`/customer/cart${qs ? '?' + qs : ''}`);
+  // Get cart quantity for a menu item
+  const getCartQty = (menuItemId: string) => cartItems.filter(ci => ci.menuItemId === menuItemId).reduce((s, ci) => s + ci.quantity, 0);
+
+  const handleDecrease = (menuItemId: string) => {
+    // Find the last cart item matching this menuItemId and decrease it
+    const matching = cartItems.filter(ci => ci.menuItemId === menuItemId);
+    if (matching.length > 0) {
+      const last = matching[matching.length - 1];
+      decreaseQuantity(getItemKey(last));
+    }
   };
-
-  // Bundle matching for floating cart price
-  const menuItemCatMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const item of items) map[item._id] = item.categoryId;
-    return map;
-  }, [items]);
-
-  const finalTotal = useMemo(() => {
-    if (activeOffers.length === 0 || cartItems.length === 0) return totalAmount;
-    const cartEntries = cartItems.map(ci => ({
-      key: getItemKey(ci),
-      menuItemId: ci.menuItemId,
-      categoryId: menuItemCatMap[ci.menuItemId] || '',
-      basePrice: ci.price,
-      optionExtra: (ci.options || []).reduce((s, o) => s + o.extraPrice, 0),
-      quantity: ci.quantity,
-    }));
-    const matched = matchBundles(cartEntries, activeOffers);
-    const result = calcBundleTotal(cartEntries, matched);
-    return result.finalTotal;
-  }, [cartItems, activeOffers, menuItemCatMap, totalAmount, getItemKey]);
 
   // Group items by category
   const itemsByCategory = new Map<string, MenuItemData[]>();
@@ -266,7 +250,9 @@ export default function MenuView() {
                     isSoldOut={item.isSoldOut}
                     allergenIcons={(item.allergenIds || []).map(aid => allergens.find(a => a._id === aid)?.icon).filter((x): x is string => !!x)}
                     optionGroups={item.optionGroups}
+                    quantity={getCartQty(item._id)}
                     onAdd={addItem}
+                    onDecrease={handleDecrease}
                   />
                 )) : (
                   <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-light, #999)', fontSize: 13 }}>
@@ -279,44 +265,9 @@ export default function MenuView() {
         })}
 
         {/* Footer */}
-        <div style={{ height: 100 }} />
+        <div style={{ height: 20 }} />
       </div>
 
-      {/* Floating Cart */}
-      {totalItems > 0 && (
-        <div onClick={goToCart} style={{
-          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          maxWidth: 390, width: 'calc(100% - 40px)',
-          background: 'linear-gradient(135deg, #8B1A1A, #C41E24)', color: '#fff',
-          borderRadius: 28, padding: '14px 24px',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          boxShadow: '0 6px 24px rgba(139,26,26,0.35)', zIndex: 100, cursor: 'pointer',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ position: 'relative', fontSize: 22 }}>
-              🛒
-              <span style={{
-                position: 'absolute', top: -6, right: -8,
-                background: '#F9A825', color: 'var(--text-dark)',
-                fontSize: 10, fontWeight: 700, width: 18, height: 18,
-                borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>{totalItems}</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {finalTotal < totalAmount && (
-                <span style={{ fontSize: 12, textDecoration: 'line-through', opacity: 0.6 }}>€{totalAmount.toFixed(2)}</span>
-              )}
-              <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Noto Serif SC', serif" }}>
-                <span style={{ fontSize: 13, fontWeight: 500, marginRight: 1 }}>€</span>{finalTotal.toFixed(2)}
-              </div>
-            </div>
-          </div>
-          <span style={{
-            background: '#F9A825', color: 'var(--text-dark)', border: 'none',
-            padding: '8px 20px', borderRadius: 20, fontSize: 14, fontWeight: 600, letterSpacing: 1,
-          }}>{t('customer.cart')}</span>
-        </div>
-      )}
     </div>
   );
 }

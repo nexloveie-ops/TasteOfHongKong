@@ -222,6 +222,7 @@ export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, b
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const autoPrintDone = useRef(false);
+  const [configLoaded, setConfigLoaded] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -237,6 +238,7 @@ export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, b
           setConfig(c);
           if (c.receipt_print_copies) setCopies(parseInt(c.receipt_print_copies, 10) || 2);
         }
+        setConfigLoaded(true);
       } catch {
         setError('Error loading receipt');
       } finally {
@@ -246,14 +248,14 @@ export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, b
     fetchData();
   }, [checkoutId]);
 
-  // Auto-print once when data is ready
+  // Auto-print once when BOTH receipt and config are ready
   useEffect(() => {
-    if (receipt && !autoPrintDone.current) {
+    if (receipt && configLoaded && !autoPrintDone.current) {
       autoPrintDone.current = true;
       const html = buildReceiptHTML(receipt, config, cashReceived, changeAmount, bundleDiscounts);
       printViaIframe(html, copies);
     }
-  }, [receipt, config, copies, cashReceived, changeAmount, bundleDiscounts]);
+  }, [receipt, config, configLoaded, copies, cashReceived, changeAmount, bundleDiscounts]);
 
   // Manual print function exposed via window.print override
   const handleManualPrint = useCallback(() => {
