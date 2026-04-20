@@ -17,6 +17,7 @@ export interface Order {
   seatNumber?: number;
   status: string;
   items: OrderItem[];
+  appliedBundles?: { offerId?: string; name: string; nameEn?: string; discount: number }[];
   createdAt: string;
 }
 
