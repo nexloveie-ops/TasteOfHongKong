@@ -15,8 +15,8 @@ export function createOrdersRouter(io: SocketIOServer): Router {
       const { type, tableNumber, seatNumber, items, appliedBundles } = req.body;
 
       // Validate type
-      if (!type || !['dine_in', 'takeout'].includes(type)) {
-        throw createAppError('VALIDATION_ERROR', 'type must be "dine_in" or "takeout"');
+      if (!type || !['dine_in', 'takeout', 'phone'].includes(type)) {
+        throw createAppError('VALIDATION_ERROR', 'type must be "dine_in", "takeout", or "phone"');
       }
 
       // For dine_in, require tableNumber and seatNumber
@@ -118,7 +118,7 @@ export function createOrdersRouter(io: SocketIOServer): Router {
           String(now.getSeconds()).padStart(2, '0');
       }
 
-      if (type === 'takeout') {
+      if (type === 'takeout' || type === 'phone') {
         const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
         const counter = await DailyOrderCounter.findOneAndUpdate(
           { date: todayStr },
@@ -139,10 +139,10 @@ export function createOrdersRouter(io: SocketIOServer): Router {
     }
   });
 
-  // GET /api/orders/dine-in — Get pending dine-in orders
+  // GET /api/orders/dine-in — Get pending and paid_online dine-in orders
   router.get('/dine-in', async (_req: Request, res: Response, next: NextFunction) => {
     try {
-      const orders = await Order.find({ type: 'dine_in', status: 'pending' }).sort({ tableNumber: 1, seatNumber: 1 });
+      const orders = await Order.find({ type: 'dine_in', status: { $in: ['pending', 'paid_online'] } }).sort({ tableNumber: 1, seatNumber: 1 });
       res.json(orders);
     } catch (err) {
       next(err);
@@ -153,6 +153,16 @@ export function createOrdersRouter(io: SocketIOServer): Router {
   router.get('/takeout', async (_req: Request, res: Response, next: NextFunction) => {
     try {
       const orders = await Order.find({ type: 'takeout', status: 'pending' }).sort({ dailyOrderNumber: 1 });
+      res.json(orders);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /api/orders/phone — Get pending phone orders sorted by dailyOrderNumber ASC
+  router.get('/phone', async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const orders = await Order.find({ type: 'phone', status: 'pending' }).sort({ dailyOrderNumber: 1 });
       res.json(orders);
     } catch (err) {
       next(err);

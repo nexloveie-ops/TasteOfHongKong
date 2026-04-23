@@ -33,7 +33,7 @@ router.get('/orders', authMiddleware, requirePermission('report:view'), async (r
       filter.createdAt = dateFilter;
     }
 
-    if (type && ['dine_in', 'takeout'].includes(type as string)) {
+    if (type && ['dine_in', 'takeout', 'phone'].includes(type as string)) {
       filter.type = type;
     }
 
@@ -69,13 +69,20 @@ router.get('/orders', authMiddleware, requirePermission('report:view'), async (r
           cashAmount: checkout.cashAmount,
           cardAmount: checkout.cardAmount,
           checkedOutAt: checkout.checkedOutAt,
+          couponName: (checkout as unknown as { couponName?: string }).couponName,
+          couponAmount: (checkout as unknown as { couponAmount?: number }).couponAmount,
         } : null,
       };
     });
 
     // Filter by payment method after joining with checkout
-    if (paymentMethod && ['cash', 'card', 'mixed'].includes(paymentMethod as string)) {
+    if (paymentMethod && ['cash', 'card', 'mixed', 'online'].includes(paymentMethod as string)) {
       result = result.filter(r => r.checkout?.paymentMethod === paymentMethod);
+    }
+
+    // Filter by coupon usage
+    if (req.query.hasCoupon === 'true') {
+      result = result.filter(r => r.checkout && (r.checkout as unknown as { couponAmount?: number }).couponAmount && (r.checkout as unknown as { couponAmount: number }).couponAmount > 0);
     }
 
     res.json(result);
@@ -173,6 +180,10 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
     let cashCount = 0;
     let cardCount = 0;
     let mixedCount = 0;
+    let onlineTotal = 0;
+    let onlineCount = 0;
+    let couponCount = 0;
+    let couponTotalAmount = 0;
     let grossCashAmount = 0;
     let grossCardAmount = 0;
     const countedCheckoutIds = new Set<string>();
@@ -197,6 +208,14 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
             mixedCount++;
             grossCashAmount += checkout.cashAmount || 0;
             grossCardAmount += checkout.cardAmount || 0;
+          } else if (checkout.paymentMethod === 'online') {
+            onlineTotal += checkout.totalAmount;
+            onlineCount++;
+          }
+          // Count coupons
+          if ((checkout as unknown as { couponAmount?: number }).couponAmount && (checkout as unknown as { couponAmount: number }).couponAmount > 0) {
+            couponCount++;
+            couponTotalAmount += (checkout as unknown as { couponAmount: number }).couponAmount;
           }
         }
       }
@@ -208,6 +227,7 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
     let cashRefund = 0;
     let cardRefund = 0;
     let mixedRefund = 0;
+    let onlineRefund = 0;
     for (const order of allOrders) {
       const checkout = orderCheckoutMap.get(order._id.toString());
       const pm = checkout?.paymentMethod;
@@ -220,6 +240,7 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
           if (pm === 'cash') cashRefund += amt;
           else if (pm === 'card') cardRefund += amt;
           else if (pm === 'mixed') mixedRefund += amt;
+          else if (pm === 'online') onlineRefund += amt;
         }
       }
     }
@@ -294,6 +315,10 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
       cashCount,
       cardCount,
       mixedCount,
+      onlineTotal: Math.round((onlineTotal - onlineRefund) * 100) / 100,
+      onlineCount,
+      couponCount,
+      couponTotalAmount: Math.round(couponTotalAmount * 100) / 100,
       grossCashAmount: Math.round(grossCashAmount * 100) / 100,
       grossCardAmount: Math.round(grossCardAmount * 100) / 100,
       dineInCount,

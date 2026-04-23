@@ -16,6 +16,8 @@ import { createCheckoutRouter } from './routes/checkout';
 import adminRouter from './routes/admin';
 import reportsRouter from './routes/reports';
 import offersRouter from './routes/offers';
+import paymentsRouter from './routes/payments';
+import couponsRouter from './routes/coupons';
 
 dotenv.config();
 
@@ -90,6 +92,12 @@ app.use('/api/reports', reportsRouter);
 
 // Offers routes
 app.use('/api/offers', offersRouter);
+
+// Payments routes
+app.use('/api/payments', paymentsRouter);
+
+// Coupons routes
+app.use('/api/coupons', couponsRouter);
 
 // SPA fallback: serve index.html for non-API routes (Express 5 syntax)
 app.get('/{*splat}', (_req, res) => {

@@ -39,6 +39,15 @@
     "goToCheckout": "Please proceed to the counter to pay\nDue to high online payment processing fees, please pay by card or cash at the counter",
     "emptyCart": "Your cart is empty",
     "backToMenu": "Back to Menu",
+    "payment": "Payment",
+    "payNow": "Pay Now",
+    "paymentSuccess": "Payment Successful!",
+    "paymentNotAvailable": "Apple Pay / Google Pay not available on this device.\nPlease pay at the counter.",
+    "payAtCounter": "Pay at Counter Instead",
+    "paymentProcessing": "Processing...",
+    "paymentLoading": "Loading payment...",
+    "paymentNetworkError": "Network error",
+    "statusPaidOnline": "Payment Received ✓",
     "totalAmount": "Total",
     "orderNumber": "Order #",
     "statusPending": "Pending",
@@ -91,7 +100,8 @@
     "cashReceived": "Cash Received",
     "change": "Change",
     "insufficientCash": "Insufficient cash amount",
-    "reprint": "Reprint"
+    "reprint": "Reprint",
+    "phone": "Phone"
   },
   "admin": {
     "title": "Admin Panel",
@@ -101,6 +111,7 @@
     "i18nEditor": "Translations",
     "qrCodes": "QR Codes",
     "offers": "Bundle Offers",
+    "coupons": "Coupons",
     "orderHistory": "Order History",
     "reports": "Reports",
     "users": "Users",

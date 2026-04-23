@@ -90,27 +90,29 @@ export default function OptionSelectModal({ itemName, price, optionGroups, onCon
                 {getName(group.translations)}
                 {group.required && <span style={{ fontSize: 11, color: '#fff', background: 'var(--red-primary)', padding: '1px 6px', borderRadius: 4 }}>{t('admin.required')}</span>}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8 }}>
                 {group.choices.map(choice => {
                   const selected = selections[group._id] === choice._id;
                   return (
-                    <label key={choice._id} onClick={() => setSelections(prev => ({ ...prev, [group._id]: choice._id }))}
+                    <div key={choice._id} onClick={() => setSelections(prev => {
+                        const next = { ...prev };
+                        if (next[group._id] === choice._id) { delete next[group._id]; } else { next[group._id] = choice._id; }
+                        return next;
+                      })}
                       style={{
-                        display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
-                        borderRadius: 10, cursor: 'pointer', transition: 'all 0.12s',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        padding: '10px 8px', borderRadius: 10, cursor: 'pointer', transition: 'all 0.12s',
                         border: selected ? '2px solid var(--red-primary)' : '1px solid var(--border, #ddd)',
                         background: selected ? 'var(--red-light, #FFF5F5)' : 'var(--bg, #fafafa)',
+                        textAlign: 'center', minHeight: 52,
                       }}>
-                      <div style={{
-                        width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                        border: selected ? '6px solid var(--red-primary)' : '2px solid #ccc',
-                        background: '#fff', transition: 'all 0.12s',
-                      }} />
-                      <span style={{ flex: 1, fontSize: 14, fontWeight: selected ? 600 : 400 }}>{getName(choice.translations)}</span>
+                      <span style={{ fontSize: 13, fontWeight: selected ? 700 : 500, lineHeight: 1.3, color: selected ? 'var(--red-primary)' : 'var(--text-dark)' }}>
+                        {getName(choice.translations)}
+                      </span>
                       {choice.extraPrice > 0 && (
-                        <span style={{ fontSize: 13, color: 'var(--red-primary)', fontWeight: 600 }}>+€{choice.extraPrice}</span>
+                        <span style={{ fontSize: 11, color: 'var(--red-primary)', fontWeight: 600, marginTop: 2 }}>+€{choice.extraPrice}</span>
                       )}
-                    </label>
+                    </div>
                   );
                 })}
               </div>

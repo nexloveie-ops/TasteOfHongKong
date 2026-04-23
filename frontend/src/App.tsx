@@ -11,6 +11,7 @@ import CartPage from './pages/customer/CartPage';
 import OrderStatusPage from './pages/customer/OrderStatusPage';
 import CashierOrder from './pages/cashier/CashierOrder';
 import ReprintReceipt from './pages/cashier/ReprintReceipt';
+import PhoneOrderList from './pages/cashier/PhoneOrderList';
 import DineInOrderBoard from './pages/cashier/DineInOrderBoard';
 import TakeoutOrderList from './pages/cashier/TakeoutOrderList';
 import TakeoutDelivery from './pages/cashier/TakeoutDelivery';
@@ -27,6 +28,7 @@ import UserManager from './pages/admin/UserManager';
 import SystemConfig from './pages/admin/SystemConfig';
 import RestaurantInfo from './pages/admin/RestaurantInfo';
 import OfferManager from './pages/admin/OfferManager';
+import CouponManager from './pages/admin/CouponManager';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -54,6 +56,7 @@ export default function App() {
             <Route index element={<DineInOrderBoard />} />
             <Route path="order" element={<CashierOrder />} />
             <Route path="reprint" element={<ReprintReceipt />} />
+            <Route path="phone" element={<PhoneOrderList />} />
             <Route path="inventory" element={<InventoryManager />} />
             <Route path="takeout" element={<TakeoutOrderList />} />
             <Route path="delivery" element={<TakeoutDelivery />} />
@@ -76,6 +79,7 @@ export default function App() {
             <Route path="users" element={<UserManager />} />
             <Route path="config" element={<SystemConfig />} />
             <Route path="offers" element={<OfferManager />} />
+            <Route path="coupons" element={<CouponManager />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/login" replace />} />

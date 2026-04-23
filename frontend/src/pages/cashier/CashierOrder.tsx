@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import OptionSelectModal, { type OptionGroup } from '../../components/customer/OptionSelectModal';
 import type { CartItemOption } from '../../context/CartContext';
 import ReceiptPrint from '../../components/cashier/ReceiptPrint';
+import { buildReceiptHTML, printViaIframe } from '../../components/cashier/ReceiptPrint';
 import { matchBundles, calcBundleTotal, type OfferData, type MatchedBundle } from '../../utils/bundleMatcher';
 
 interface Translation { locale: string; name: string; description?: string; }
@@ -40,7 +41,7 @@ export default function CashierOrder() {
   const [activeCat, setActiveCat] = useState('');
   const [search, setSearch] = useState('');
   const [order, setOrder] = useState<OrderLine[]>([]);
-  const [orderType, setOrderType] = useState<'dine_in' | 'takeout'>('dine_in');
+  const [orderType, setOrderType] = useState<'dine_in' | 'takeout' | 'phone'>('dine_in');
   const [error, setError] = useState('');
   const [optionModal, setOptionModal] = useState<MenuItem | null>(null);
 
@@ -52,18 +53,22 @@ export default function CashierOrder() {
   const [mixedCard, setMixedCard] = useState('');
   const [payingTotal, setPayingTotal] = useState(0);
   const [paying, setPaying] = useState(false);
+  const [selectedCoupon, setSelectedCoupon] = useState<{ name: string; nameEn: string; amount: number } | null>(null);
+  const [availableCoupons, setAvailableCoupons] = useState<{ _id: string; name: string; nameEn: string; amount: number }[]>([]);
 
   // Receipt state
   const [checkoutId, setCheckoutId] = useState<string | null>(null);
   const [checkoutMeta, setCheckoutMeta] = useState<{ total: number; cashReceived: number; change: number } | null>(null);
   const [receiptBundleDiscounts, setReceiptBundleDiscounts] = useState<{ name: string; nameEn: string; discount: number }[]>([]);
+  const [phoneOrderId, setPhoneOrderId] = useState<string | null>(null);
   const [offers, setOffers] = useState<OfferData[]>([]);
 
   const fetchData = useCallback(async () => {
-    const [catRes, itemRes, offersRes] = await Promise.all([
+    const [catRes, itemRes, offersRes, couponsRes] = await Promise.all([
       fetch(`/api/menu/categories?lang=${lang}`),
       fetch('/api/menu/items'),
       fetch('/api/offers'),
+      fetch('/api/coupons'),
     ]);
     if (catRes.ok) {
       const cats: Category[] = await catRes.json();
@@ -72,6 +77,7 @@ export default function CashierOrder() {
     }
     if (itemRes.ok) setMenuItems(await itemRes.json());
     if (offersRes.ok) setOffers(await offersRes.json());
+    if (couponsRes.ok) setAvailableCoupons(await couponsRes.json());
   }, [lang]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -160,14 +166,69 @@ export default function CashierOrder() {
 
   const finalTotal = bundleTotals.finalTotal;
 
-  // Open payment modal (no API call yet)
+  // Open payment modal (no API call yet) — or create phone order directly
   const handleOpenPayment = () => {
     if (order.length === 0) return;
+    if (orderType === 'phone') {
+      handlePhoneOrder();
+      return;
+    }
     setPayingTotal(finalTotal);
     setCashReceived(finalTotal.toFixed(2));
     setPaymentMethod('cash');
+    setSelectedCoupon(null);
     setError('');
     setShowPayment(true);
+  };
+
+  // Phone order: create order only, print kitchen receipt, no payment
+  const handlePhoneOrder = async () => {
+    setPaying(true);
+    setError('');
+    try {
+      const orderBody: Record<string, unknown> = { type: 'phone', items: buildGroupedItems() };
+      if (matchedBundles.length > 0) {
+        orderBody.appliedBundles = matchedBundles.map(b => ({ offerId: b.offer._id, name: b.offer.name, nameEn: b.offer.nameEn, discount: b.savings }));
+      }
+      const orderRes = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(orderBody),
+      });
+      if (!orderRes.ok) { const d = await orderRes.json().catch(() => null); throw new Error(d?.error?.message || 'Failed'); }
+      const orderData = await orderRes.json();
+
+      // Print receipt for phone order
+      try {
+        const configRes = await fetch('/api/admin/config');
+        const cfg = configRes.ok ? await configRes.json() : {};
+        const receiptData = {
+          checkoutId: orderData._id,
+          type: 'seat' as const,
+          totalAmount: finalTotal,
+          paymentMethod: 'cash' as const,
+          checkedOutAt: new Date().toISOString(),
+          orders: [{
+            _id: orderData._id,
+            type: 'phone' as const,
+            dailyOrderNumber: orderData.dailyOrderNumber,
+            status: 'pending',
+            items: orderData.items,
+          }],
+        };
+        const html = buildReceiptHTML(receiptData, cfg, undefined, undefined,
+          matchedBundles.length > 0 ? matchedBundles.map(b => ({ name: b.offer.name, nameEn: b.offer.nameEn, discount: b.savings })) : undefined
+        );
+        printViaIframe(html, 1);
+      } catch { /* print error ignored */ }
+
+      setPhoneOrderId(orderData._id);
+      setOrder([]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed');
+    } finally {
+      setPaying(false);
+    }
   };
 
   // Build grouped items for API
@@ -192,8 +253,10 @@ export default function CashierOrder() {
   };
 
   // Confirm: create order + checkout in one go
+  const couponDiscount = selectedCoupon?.amount || 0;
+  const payAfterCoupon = Math.max(0, payingTotal - couponDiscount);
   const cashReceivedNum = parseFloat(cashReceived) || 0;
-  const changeAmount = paymentMethod === 'cash' ? Math.max(0, cashReceivedNum - payingTotal) : 0;
+  const changeAmount = paymentMethod === 'cash' ? Math.max(0, cashReceivedNum - payAfterCoupon) : 0;
 
   const handlePay = async () => {
     setPaying(true);
@@ -216,8 +279,12 @@ export default function CashierOrder() {
       if (bundleTotals.bundleDiscount > 0) {
         checkoutBody.totalAmountOverride = payingTotal;
       }
-      if (paymentMethod === 'cash') checkoutBody.cashAmount = payingTotal;
-      else if (paymentMethod === 'card') checkoutBody.cardAmount = payingTotal;
+      if (selectedCoupon) {
+        checkoutBody.couponName = selectedCoupon.name;
+        checkoutBody.couponAmount = selectedCoupon.amount;
+      }
+      if (paymentMethod === 'cash') checkoutBody.cashAmount = payAfterCoupon;
+      else if (paymentMethod === 'card') checkoutBody.cardAmount = payAfterCoupon;
       else { checkoutBody.cashAmount = Number(mixedCash); checkoutBody.cardAmount = Number(mixedCard); }
 
       const checkoutRes = await fetch(`/api/checkout/seat/${orderData._id}`, {
@@ -228,7 +295,7 @@ export default function CashierOrder() {
       if (!checkoutRes.ok) { const d = await checkoutRes.json().catch(() => null); throw new Error(d?.error?.message || 'Checkout failed'); }
       const checkoutData = await checkoutRes.json();
       setCheckoutId(checkoutData._id);
-      setCheckoutMeta({ total: payingTotal, cashReceived: cashReceivedNum, change: changeAmount });
+      setCheckoutMeta({ total: payAfterCoupon, cashReceived: cashReceivedNum, change: changeAmount });
       setReceiptBundleDiscounts(matchedBundles.map(b => ({ name: b.offer.name, nameEn: b.offer.nameEn, discount: b.savings })));
       setShowPayment(false);
       setOrder([]);
@@ -244,6 +311,20 @@ export default function CashierOrder() {
     setCheckoutMeta(null);
     setReceiptBundleDiscounts([]);
   };
+
+  // Phone order success screen
+  if (phoneOrderId) {
+    return (
+      <div style={{ maxWidth: 500, margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', padding: 20 }}>
+          <div style={{ fontSize: 48, marginBottom: 8 }}>📞</div>
+          <h2 style={{ color: 'var(--blue, #1976D2)', marginBottom: 12 }}>电话订单已创建</h2>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>客人来取时在"电话"页面完成支付</p>
+          <button className="btn btn-primary" onClick={() => setPhoneOrderId(null)} style={{ marginBottom: 20 }}>继续点单</button>
+        </div>
+      </div>
+    );
+  }
 
   // Receipt screen
   if (checkoutId) {
@@ -319,6 +400,7 @@ export default function CashierOrder() {
           <div style={{ display: 'flex', gap: 6 }}>
             <button className="btn" onClick={() => setOrderType('dine_in')} style={{ flex: 1, fontSize: 12, padding: '6px 0', background: orderType === 'dine_in' ? 'var(--red-primary)' : 'var(--bg)', color: orderType === 'dine_in' ? '#fff' : 'var(--text-secondary)', border: '1px solid var(--border)' }}>堂食</button>
             <button className="btn" onClick={() => setOrderType('takeout')} style={{ flex: 1, fontSize: 12, padding: '6px 0', background: orderType === 'takeout' ? 'var(--red-primary)' : 'var(--bg)', color: orderType === 'takeout' ? '#fff' : 'var(--text-secondary)', border: '1px solid var(--border)' }}>外卖</button>
+            <button className="btn" onClick={() => setOrderType('phone')} style={{ flex: 1, fontSize: 12, padding: '6px 0', background: orderType === 'phone' ? 'var(--red-primary)' : 'var(--bg)', color: orderType === 'phone' ? '#fff' : 'var(--text-secondary)', border: '1px solid var(--border)' }}>📞 电话</button>
           </div>
         </div>
 
@@ -403,14 +485,46 @@ export default function CashierOrder() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#fff', borderRadius: 16, padding: 24, width: 380, maxWidth: '90%' }}>
             <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16, textAlign: 'center' }}>{t('cashier.checkout')}</h3>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 20, marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 20, marginBottom: 12 }}>
               <span>{t('cashier.total')}</span>
               <span style={{ color: 'var(--red-primary)' }}>€{payingTotal.toFixed(2)}</span>
             </div>
 
+            {/* Coupon selection */}
+            {availableCoupons.length > 0 && (
+              <div style={{ marginBottom: 12, padding: 10, background: 'var(--bg)', borderRadius: 8 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 6 }}>🎟️ Coupon</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {availableCoupons.map(c => {
+                    const isSelected = selectedCoupon?.name === c.name && selectedCoupon?.amount === c.amount;
+                    return (
+                      <button key={c._id} onClick={() => {
+                        if (isSelected) { setSelectedCoupon(null); setCashReceived(payingTotal.toFixed(2)); }
+                        else { setSelectedCoupon(c); setCashReceived(Math.max(0, payingTotal - c.amount).toFixed(2)); }
+                      }}
+                        className="btn" style={{
+                          padding: '6px 12px', fontSize: 12, borderRadius: 20,
+                          background: isSelected ? '#4CAF50' : 'var(--bg-white)',
+                          color: isSelected ? '#fff' : 'var(--text-secondary)',
+                          border: isSelected ? '2px solid #388E3C' : '1px solid var(--border)',
+                        }}>
+                        {c.name} -€{c.amount.toFixed(2)}
+                      </button>
+                    );
+                  })}
+                </div>
+                {selectedCoupon && (
+                  <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 16 }}>
+                    <span style={{ color: '#2E7D32' }}>After Coupon</span>
+                    <span style={{ color: '#2E7D32' }}>€{payAfterCoupon.toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
               {(['cash', 'card', 'mixed'] as const).map(m => (
-                <button key={m} onClick={() => { setPaymentMethod(m); if (m === 'cash') setCashReceived(payingTotal.toFixed(2)); }} className="btn" style={{ flex: 1, background: paymentMethod === m ? 'var(--red-primary)' : 'var(--bg)', color: paymentMethod === m ? '#fff' : 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+                <button key={m} onClick={() => { setPaymentMethod(m); if (m === 'cash') setCashReceived(payAfterCoupon.toFixed(2)); }} className="btn" style={{ flex: 1, background: paymentMethod === m ? 'var(--red-primary)' : 'var(--bg)', color: paymentMethod === m ? '#fff' : 'var(--text-secondary)', border: '1px solid var(--border)' }}>
                   {t(`cashier.${m}`)}
                 </button>
               ))}
@@ -422,9 +536,9 @@ export default function CashierOrder() {
                 <input className="input" type="number" step="0.01" value={cashReceived} onChange={e => setCashReceived(e.target.value)}
                   style={{ width: '100%', fontSize: 18, fontWeight: 700, padding: '8px 10px', textAlign: 'right' }} />
                 {cashReceivedNum > 0 && (
-                  <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 6, background: cashReceivedNum >= payingTotal ? '#E8F5E9' : '#FFEBEE' }}>
+                  <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 6, background: cashReceivedNum >= payAfterCoupon ? '#E8F5E9' : '#FFEBEE' }}>
                     <span style={{ fontSize: 13, fontWeight: 600 }}>{t('cashier.change')}</span>
-                    <span style={{ fontSize: 18, fontWeight: 700, color: cashReceivedNum >= payingTotal ? 'var(--green)' : 'var(--red-primary)' }}>€{changeAmount.toFixed(2)}</span>
+                    <span style={{ fontSize: 18, fontWeight: 700, color: cashReceivedNum >= payAfterCoupon ? 'var(--green)' : 'var(--red-primary)' }}>€{changeAmount.toFixed(2)}</span>
                   </div>
                 )}
               </div>
@@ -440,7 +554,7 @@ export default function CashierOrder() {
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setShowPayment(false)}>{t('common.cancel')}</button>
               <button className="btn btn-primary" style={{ flex: 1 }} onClick={handlePay}
-                disabled={paying || (paymentMethod === 'cash' && cashReceivedNum < payingTotal)}>
+                disabled={paying || (paymentMethod === 'cash' && cashReceivedNum < payAfterCoupon)}>
                 {paying ? t('common.loading') : t('cashier.submitCheckout')}
               </button>
             </div>

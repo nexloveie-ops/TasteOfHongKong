@@ -95,12 +95,26 @@ export default function CashierLayout() {
       html += `<div class="row"><span>  Cashier Order</span><span>${stats.dineInCashierCount}</span></div>`;
       html += `<div class="divider"></div>`;
 
-      // Payment
+      // Payment — merge mixed into cash/card
+      const totalCash = (stats.grossCashAmount ?? 0);
+      const totalCard = (stats.grossCardAmount ?? 0);
+      const cashOrders = (stats.cashCount ?? 0) + (stats.mixedCount ?? 0);
+      const cardOrders = (stats.cardCount ?? 0) + (stats.mixedCount ?? 0);
       html += `<div class="section">PAYMENT</div>`;
-      html += `<div class="row"><span>Cash (${stats.cashCount ?? 0})</span><span>€${(stats.cashTotal ?? 0).toFixed(2)}</span></div>`;
-      html += `<div class="row"><span>Card (${stats.cardCount ?? 0})</span><span>€${(stats.cardTotal ?? 0).toFixed(2)}</span></div>`;
-      html += `<div class="row"><span>Mixed (${stats.mixedCount ?? 0})</span><span>€${(stats.mixedTotal ?? 0).toFixed(2)}</span></div>`;
+      html += `<div class="row"><span>Cash (${cashOrders} orders)</span><span>€${totalCash.toFixed(2)}</span></div>`;
+      html += `<div class="row"><span>Card (${cardOrders} orders)</span><span>€${totalCard.toFixed(2)}</span></div>`;
+      if ((stats.onlineCount ?? 0) > 0) {
+        html += `<div class="row"><span>Online (${stats.onlineCount} orders)</span><span>€${(stats.onlineTotal ?? 0).toFixed(2)}</span></div>`;
+      }
       html += `<div class="divider"></div>`;
+
+      // Coupon
+      if ((stats.couponCount ?? 0) > 0) {
+        html += `<div class="section">COUPON</div>`;
+        html += `<div class="row"><span>Coupons Used</span><span>${stats.couponCount}</span></div>`;
+        html += `<div class="row"><span>Coupon Amount</span><span>€${(stats.couponTotalAmount ?? 0).toFixed(2)}</span></div>`;
+        html += `<div class="divider"></div>`;
+      }
 
       // Refund
       html += `<div class="section">REFUND</div>`;
@@ -168,6 +182,7 @@ export default function CashierLayout() {
         <NavLink to="/cashier" end style={({ isActive }) => tabStyle(isActive)}>{t('cashier.dineIn')}</NavLink>
         <NavLink to="/cashier/takeout" style={({ isActive }) => tabStyle(isActive)}>{t('cashier.takeout')}</NavLink>
         <NavLink to="/cashier/delivery" style={({ isActive }) => tabStyle(isActive)}>{t('cashier.delivery')}</NavLink>
+        <NavLink to="/cashier/phone" style={({ isActive }) => tabStyle(isActive)}>📞 {t('cashier.phone', 'Phone')}</NavLink>
         <NavLink to="/cashier/order" style={({ isActive }) => tabStyle(isActive)}>{t('cashier.newOrder', '点单')}</NavLink>
         <NavLink to="/cashier/reprint" style={({ isActive }) => tabStyle(isActive)}>{t('cashier.reprint', '重印小票')}</NavLink>
         <NavLink to="/cashier/inventory" style={({ isActive }) => tabStyle(isActive)}>{t('admin.inventory', '库存')}</NavLink>

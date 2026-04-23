@@ -39,6 +39,15 @@
     "goToCheckout": "请前往前台结账\n由于网络支付手续费太贵，所以请前往吧台刷卡或支付现金",
     "emptyCart": "购物车是空的",
     "backToMenu": "返回菜单",
+    "payment": "支付",
+    "payNow": "立即支付",
+    "paymentSuccess": "支付成功！",
+    "paymentNotAvailable": "Apple Pay / Google Pay 在此设备上不可用。\n请前往吧台支付。",
+    "payAtCounter": "前往吧台支付",
+    "paymentProcessing": "处理中...",
+    "paymentLoading": "加载支付...",
+    "paymentNetworkError": "网络错误",
+    "statusPaidOnline": "已在线支付 ✓",
     "totalAmount": "合计",
     "orderNumber": "订单号",
     "statusPending": "待结账",
@@ -91,7 +100,8 @@
     "cashReceived": "实收",
     "change": "找零",
     "insufficientCash": "实收金额不足",
-    "reprint": "重印小票"
+    "reprint": "重印小票",
+    "phone": "电话"
   },
   "admin": {
     "title": "管理后台",
@@ -101,6 +111,7 @@
     "i18nEditor": "多语言编辑",
     "qrCodes": "QR码管理",
     "offers": "套餐优惠",
+    "coupons": "Coupon管理",
     "orderHistory": "订单历史",
     "reports": "营业报表",
     "users": "用户管理",

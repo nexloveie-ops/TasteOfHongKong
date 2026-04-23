@@ -3,6 +3,7 @@ import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useCart } from '../../context/CartContext';
 import type { CartItem } from '../../context/CartContext';
+import PaymentModal from '../../components/customer/PaymentModal';
 
 interface OrderItem { _id: string; menuItemId: string; quantity: number; unitPrice: number; itemName: string; selectedOptions?: { groupName: string; choiceName: string; extraPrice: number }[]; }
 interface AppliedBundle { offerId?: string; name: string; nameEn?: string; discount: number; }
@@ -20,6 +21,7 @@ export default function OrderStatusPage() {
   const { clearCart, setItems, setEditOrderId } = useCart();
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showPayment, setShowPayment] = useState(false);
   const qs = searchParams.toString();
 
   const fetchOrder = useCallback(async () => {
@@ -58,10 +60,12 @@ export default function OrderStatusPage() {
   if (!order) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-light)' }}>{t('customer.orderNotFound')}</div>;
 
   const isPending = order.status === 'pending';
+  const isPaidOnline = order.status === 'paid_online';
   const statusLabel = order.status === 'pending' ? t('customer.statusPending')
+    : order.status === 'paid_online' ? t('customer.statusPaidOnline')
     : order.status === 'checked_out' ? t('customer.statusCheckedOut')
     : t('customer.statusCompleted');
-  const statusColor = order.status === 'pending' ? 'var(--gold-primary)' : order.status === 'checked_out' ? 'var(--blue)' : 'var(--green)';
+  const statusColor = order.status === 'pending' ? 'var(--gold-primary)' : order.status === 'paid_online' ? '#2E7D32' : order.status === 'checked_out' ? 'var(--blue)' : 'var(--green)';
 
   return (
     <div style={{ padding: 16, paddingBottom: 80 }}>
@@ -82,6 +86,13 @@ export default function OrderStatusPage() {
           <div style={{ marginTop: 14, padding: '12px 16px', background: '#FFF3E0', border: '2px solid #FF9800', borderRadius: 10, textAlign: 'center' }}>
             <p style={{ fontSize: 15, fontWeight: 700, color: '#E65100', whiteSpace: 'pre-line', lineHeight: 1.6 }}>
               {t('customer.goToCheckout')}
+            </p>
+          </div>
+        )}
+        {isPaidOnline && (
+          <div style={{ marginTop: 14, padding: '12px 16px', background: '#E8F5E9', border: '2px solid #4CAF50', borderRadius: 10, textAlign: 'center' }}>
+            <p style={{ fontSize: 15, fontWeight: 700, color: '#2E7D32', lineHeight: 1.6 }}>
+              {t('customer.paymentSuccess')}
             </p>
           </div>
         )}
@@ -136,23 +147,60 @@ export default function OrderStatusPage() {
       </div>
 
       {/* Actions */}
-      <div style={{ marginTop: 16, display: 'flex', gap: 10 }}>
+      <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {isPending && (
           <>
-            <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleModifyOrder}>
-              {t('customer.modifyOrder')}
+            {/* Online Payment Button */}
+            <button className="btn" onClick={() => setShowPayment(true)}
+              style={{
+                width: '100%', padding: '14px 0', fontSize: 16, fontWeight: 700,
+                background: '#000', color: '#fff', border: 'none', borderRadius: 12,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}>
+              <span style={{ fontSize: 20 }}>💳</span> {t('customer.payNow')} · €{(() => {
+                const itemsTotal = total(order.items);
+                const bundleDisc = (order.appliedBundles || []).reduce((s, b) => s + b.discount, 0);
+                return (itemsTotal - bundleDisc).toFixed(2);
+              })()}
             </button>
-            <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => navigate(`/customer/menu?${qs}`)}>
-              {t('customer.backToMenu')}
-            </button>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleModifyOrder}>
+                {t('customer.modifyOrder')}
+              </button>
+              <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => navigate(`/customer/menu?${qs}`)}>
+                {t('customer.backToMenu')}
+              </button>
+            </div>
           </>
         )}
-        {!isPending && (
+        {!isPending && !isPaidOnline && (
           <p style={{ color: 'var(--text-light)', fontSize: 13, textAlign: 'center', width: '100%' }}>
             {t('customer.orderNotModifiable')}
           </p>
         )}
+        {isPaidOnline && (
+          <button className="btn btn-outline" style={{ width: '100%' }} onClick={() => navigate(`/customer/menu?${qs}`)}>
+            {t('customer.backToMenu')}
+          </button>
+        )}
       </div>
+
+      {/* Payment Modal */}
+      {showPayment && order && (
+        <PaymentModal
+          orderId={order._id}
+          amount={(() => {
+            const itemsTotal = total(order.items);
+            const bundleDisc = (order.appliedBundles || []).reduce((s, b) => s + b.discount, 0);
+            return itemsTotal - bundleDisc;
+          })()}
+          onSuccess={() => {
+            setShowPayment(false);
+            fetchOrder(); // Refresh to show checked_out status
+          }}
+          onClose={() => setShowPayment(false)}
+        />
+      )}
     </div>
   );
 }

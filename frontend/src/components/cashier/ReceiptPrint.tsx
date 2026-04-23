@@ -12,7 +12,7 @@ interface ReceiptOrderItem {
 
 interface ReceiptOrder {
   _id: string;
-  type: 'dine_in' | 'takeout';
+  type: 'dine_in' | 'takeout' | 'phone';
   tableNumber?: number;
   seatNumber?: number;
   dailyOrderNumber?: number;
@@ -55,6 +55,7 @@ interface ReceiptPrintProps {
   cashReceived?: number;
   changeAmount?: number;
   bundleDiscounts?: BundleDiscountInfo[];
+  printCopies?: number;
 }
 
 function parseQRCodes(text: string): Array<{ type: 'text' | 'qr'; value: string }> {
@@ -80,6 +81,7 @@ function buildReceiptHTML(
   bundleDiscounts?: BundleDiscountInfo[],
 ): string {
   const isDineIn = receipt.orders.some(o => o.type === 'dine_in');
+  const isPhone = receipt.orders.some(o => o.type === 'phone');
   const checkedOutAt = new Date(receipt.checkedOutAt);
   const paymentLabel = receipt.paymentMethod === 'cash' ? 'Cash' : receipt.paymentMethod === 'card' ? 'Card' : 'Mixed';
   const restaurantName = config.restaurant_name_en || config.restaurant_name_zh || '';
@@ -121,6 +123,8 @@ function buildReceiptHTML(
     const orderNum = receipt.orders.find(o => o.dineInOrderNumber)?.dineInOrderNumber;
     if (orderNum) html += `<div class="big">Order #${orderNum}</div>`;
     html += `<div style="font-size:12px;margin-top:4px">Ref: ${String(receipt.checkoutId).slice(-8).toUpperCase()}</div>`;
+  } else if (isPhone) {
+    html += `<div class="big">Phone #${receipt.orders[0]?.dailyOrderNumber || ''}</div>`;
   } else {
     html += `<div class="big">Pickup #${receipt.orders[0]?.dailyOrderNumber || ''}</div>`;
   }
@@ -219,7 +223,7 @@ function printViaIframe(html: string, copies: number) {
   };
 }
 
-export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, bundleDiscounts }: ReceiptPrintProps) {
+export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, bundleDiscounts, printCopies }: ReceiptPrintProps) {
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [config, setConfig] = useState<RestaurantConfig>({});
   const [copies, setCopies] = useState(2);
@@ -257,9 +261,9 @@ export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, b
     if (receipt && configLoaded && !autoPrintDone.current) {
       autoPrintDone.current = true;
       const html = buildReceiptHTML(receipt, config, cashReceived, changeAmount, bundleDiscounts);
-      printViaIframe(html, copies);
+      printViaIframe(html, printCopies ?? copies);
     }
-  }, [receipt, config, configLoaded, copies, cashReceived, changeAmount, bundleDiscounts]);
+  }, [receipt, config, configLoaded, copies, printCopies, cashReceived, changeAmount, bundleDiscounts]);
 
   // Manual print function exposed via window.print override
   const handleManualPrint = useCallback(() => {
@@ -287,6 +291,7 @@ export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, b
 
   // Render a visible preview (not used for printing)
   const isDineIn = receipt.orders.some(o => o.type === 'dine_in');
+  const isPhonePreview = receipt.orders.some(o => o.type === 'phone');
   const checkedOutAt = new Date(receipt.checkedOutAt);
   const paymentLabel = receipt.paymentMethod === 'cash' ? 'Cash' : receipt.paymentMethod === 'card' ? 'Card' : 'Mixed';
   const restaurantName = config.restaurant_name_en || config.restaurant_name_zh || '';
@@ -305,6 +310,8 @@ export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, b
               {(() => { const s = [...new Set(receipt.orders.map(o => o.seatNumber).filter(v => v != null && v > 0))].sort(); return s.length > 0 ? <div style={{ fontSize: 20 }}>Seat {s.join(', ')}</div> : null; })()}
               {(() => { const n = receipt.orders.find(o => o.dineInOrderNumber)?.dineInOrderNumber; return n ? <div style={{ fontSize: 20 }}>Order #{n}</div> : null; })()}
             </>
+          ) : isPhonePreview ? (
+            <div style={{ fontSize: 20 }}>Phone #{receipt.orders[0]?.dailyOrderNumber}</div>
           ) : (
             <div style={{ fontSize: 20 }}>Pickup #{receipt.orders[0]?.dailyOrderNumber}</div>
           )}

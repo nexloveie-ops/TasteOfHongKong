@@ -4,8 +4,15 @@ import { useTranslation } from 'react-i18next';
 import { io } from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
 import OrderDetail, { type Order } from '../../components/cashier/OrderDetail';
+import { buildReceiptHTML, printViaIframe } from '../../components/cashier/ReceiptPrint';
 
-interface TableGroup { tableNumber: number; orders: Order[]; total: number; }
+interface TableGroup {
+  tableNumber: number;
+  orders: Order[];
+  total: number;
+  hasPaidOnline: boolean;
+  allPaidOnline: boolean;
+}
 
 export default function DineInOrderBoard() {
   const { t } = useTranslation();
@@ -13,13 +20,27 @@ export default function DineInOrderBoard() {
   const navigate = useNavigate();
   const [tables, setTables] = useState<TableGroup[]>([]);
   const [selectedTable, setSelectedTable] = useState<number | null>(null);
+  const [printing, setPrinting] = useState(false);
+  const [config, setConfig] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    fetch('/api/admin/config').then(r => r.ok ? r.json() : {}).then(setConfig).catch(() => {});
+  }, []);
+
+  const calcOrderTotal = (o: Order) => {
+    const itemsSum = o.items.reduce((s2, i) => {
+      const optExtra = (i.selectedOptions || []).reduce((a: number, opt: { extraPrice?: number }) => a + (opt.extraPrice || 0), 0);
+      return s2 + (i.unitPrice + optExtra) * i.quantity;
+    }, 0);
+    const bundleDisc = (o.appliedBundles || []).reduce((a: number, b) => a + b.discount, 0);
+    return itemsSum - bundleDisc;
+  };
 
   const fetchOrders = useCallback(async () => {
     try {
       const res = await fetch('/api/orders/dine-in', { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) return;
       const data: Order[] = await res.json();
-      // Group flat array by tableNumber
       const grouped = new Map<number, Order[]>();
       for (const order of data) {
         const tbl = order.tableNumber ?? 0;
@@ -29,14 +50,9 @@ export default function DineInOrderBoard() {
       const groups: TableGroup[] = [...grouped.entries()].map(([tableNumber, orders]) => ({
         tableNumber,
         orders,
-        total: orders.reduce((s, o) => {
-          const itemsSum = o.items.reduce((s2, i) => {
-            const optExtra = (i.selectedOptions || []).reduce((a: number, opt: { extraPrice?: number }) => a + (opt.extraPrice || 0), 0);
-            return s2 + (i.unitPrice + optExtra) * i.quantity;
-          }, 0);
-          const bundleDisc = (o.appliedBundles || []).reduce((a: number, b) => a + b.discount, 0);
-          return s + itemsSum - bundleDisc;
-        }, 0),
+        total: orders.reduce((s, o) => s + calcOrderTotal(o), 0),
+        hasPaidOnline: orders.some(o => o.status === 'paid_online'),
+        allPaidOnline: orders.length > 0 && orders.every(o => o.status === 'paid_online'),
       })).sort((a, b) => a.tableNumber - b.tableNumber);
       setTables(groups);
     } catch { /* ignore */ }
@@ -60,10 +76,52 @@ export default function DineInOrderBoard() {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) {
-        fetchOrders();
-      }
+      if (res.ok) fetchOrders();
     } catch { /* ignore */ }
+  };
+
+  // Finalize paid_online orders: create checkout + print receipt
+  const handleFinalizePaid = async (tbl: TableGroup) => {
+    setPrinting(true);
+    try {
+      const paidOrders = tbl.orders.filter(o => o.status === 'paid_online');
+      for (const order of paidOrders) {
+        const res = await fetch('/api/payments/finalize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ orderId: order._id }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // Build and print receipt
+          const receiptData = {
+            checkoutId: data.checkoutId,
+            type: 'seat' as const,
+            tableNumber: order.tableNumber,
+            totalAmount: data.totalAmount,
+            paymentMethod: 'card' as const,
+            cardAmount: data.totalAmount,
+            checkedOutAt: new Date().toISOString(),
+            orders: [{
+              _id: order._id,
+              type: order.type as 'dine_in',
+              tableNumber: order.tableNumber,
+              seatNumber: order.seatNumber,
+              dineInOrderNumber: (order as unknown as { dineInOrderNumber?: string }).dineInOrderNumber,
+              status: 'checked_out',
+              items: order.items.map(i => ({
+                ...i,
+                menuItemId: i.menuItemId,
+              })),
+            }],
+          };
+          const html = buildReceiptHTML(receiptData, config);
+          printViaIframe(html, 1);
+        }
+      }
+      fetchOrders();
+    } catch { /* ignore */ }
+    finally { setPrinting(false); }
   };
 
   const selected = tables.find(t2 => t2.tableNumber === selectedTable);
@@ -78,14 +136,27 @@ export default function DineInOrderBoard() {
           {tables.map(tbl => (
             <div key={tbl.tableNumber} onClick={() => setSelectedTable(tbl.tableNumber)}
               className="card" style={{
-                padding: 16, cursor: 'pointer', textAlign: 'center',
-                border: selectedTable === tbl.tableNumber ? '2px solid var(--red-primary)' : '1px solid var(--border)',
-                background: selectedTable === tbl.tableNumber ? 'var(--red-light)' : 'var(--bg-white)',
+                padding: 16, cursor: 'pointer', textAlign: 'center', position: 'relative', overflow: 'hidden',
+                border: tbl.hasPaidOnline ? '3px solid #4CAF50' : selectedTable === tbl.tableNumber ? '2px solid var(--red-primary)' : '1px solid var(--border)',
+                background: tbl.allPaidOnline ? 'linear-gradient(135deg, #E8F5E9, #C8E6C9)' : selectedTable === tbl.tableNumber ? 'var(--red-light)' : 'var(--bg-white)',
+                boxShadow: tbl.hasPaidOnline ? '0 0 12px rgba(76,175,80,0.4)' : undefined,
+                animation: tbl.hasPaidOnline ? 'pulse-green 2s infinite' : undefined,
               }}>
-              <div style={{ fontSize: 13, color: 'var(--text-light)', marginBottom: 4 }}>{t('cashier.table')}</div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--red-primary)', fontFamily: "'Noto Serif SC', serif" }}>{tbl.tableNumber}</div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>{tbl.orders.length} {t('cashier.orderDetail')}</div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--red-primary)', marginTop: 4 }}>€{tbl.total}</div>
+              {tbl.hasPaidOnline && (
+                <div style={{
+                  position: 'absolute', top: 0, left: 0, right: 0,
+                  background: '#4CAF50', color: '#fff', fontSize: 11, fontWeight: 700,
+                  padding: '3px 0', letterSpacing: 1, textAlign: 'center',
+                }}>
+                  💳 ONLINE PAID
+                </div>
+              )}
+              <div style={{ fontSize: 13, color: 'var(--text-light)', marginBottom: 4, marginTop: tbl.hasPaidOnline ? 16 : 0 }}>{t('cashier.table')}</div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: tbl.allPaidOnline ? '#2E7D32' : 'var(--red-primary)', fontFamily: "'Noto Serif SC', serif" }}>{tbl.tableNumber}</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
+                {tbl.orders.length} {t('cashier.orderDetail')}
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: tbl.allPaidOnline ? '#2E7D32' : 'var(--red-primary)', marginTop: 4 }}>€{tbl.total.toFixed(2)}</div>
             </div>
           ))}
         </div>
@@ -94,18 +165,37 @@ export default function DineInOrderBoard() {
       {/* Detail panel */}
       {selected && (
         <div style={{ width: 340, flexShrink: 0, background: 'var(--bg-white)', borderRadius: 12, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
             <h3 style={{ fontSize: 16, fontWeight: 700 }}>{t('cashier.table')} {selected.tableNumber}</h3>
-            <button className="btn btn-primary" style={{ padding: '8px 16px', fontSize: 13 }}
-              onClick={() => navigate(`/cashier/checkout/${selected.tableNumber}`)}>
-              {t('cashier.checkout')}
-            </button>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {selected.hasPaidOnline && (
+                <button className="btn" style={{ padding: '8px 12px', fontSize: 12, background: '#4CAF50', color: '#fff', border: 'none' }}
+                  disabled={printing}
+                  onClick={() => handleFinalizePaid(selected)}>
+                  {printing ? '...' : '🖨️ Print & Complete'}
+                </button>
+              )}
+              {selected.orders.some(o => o.status === 'pending') && (
+                <button className="btn btn-primary" style={{ padding: '8px 12px', fontSize: 12 }}
+                  onClick={() => navigate(`/cashier/checkout/${selected.tableNumber}`)}>
+                  {t('cashier.checkout')}
+                </button>
+              )}
+            </div>
           </div>
           <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
+            {/* Status labels */}
+            {selected.orders.map(o => (
+              o.status === 'paid_online' ? (
+                <div key={o._id + '-badge'} style={{ fontSize: 11, color: '#2E7D32', fontWeight: 600, padding: '3px 8px', background: '#E8F5E9', borderRadius: 4, display: 'inline-block', marginBottom: 6, marginRight: 4 }}>
+                  💳 {o.seatNumber && o.seatNumber > 0 ? `Seat ${o.seatNumber}` : ''} Paid Online
+                </div>
+              ) : null
+            ))}
             <OrderDetail orders={selected.orders} />
-            {/* Cancel buttons per order */}
+            {/* Cancel buttons only for pending orders */}
             <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {selected.orders.map(o => (
+              {selected.orders.filter(o => o.status === 'pending').map(o => (
                 <button key={o._id} className="btn btn-ghost"
                   onClick={() => handleCancelOrder(o._id)}
                   style={{ fontSize: 12, color: 'var(--red-primary)', textAlign: 'left', padding: '6px 8px', border: '1px dashed var(--red-primary)', borderRadius: 6 }}>
@@ -116,7 +206,7 @@ export default function DineInOrderBoard() {
           </div>
           <div style={{ padding: '12px 16px', borderTop: '2px solid var(--border)', display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 16 }}>
             <span>{t('cashier.total')}</span>
-            <span style={{ color: 'var(--red-primary)' }}>€{selected.total}</span>
+            <span style={{ color: 'var(--red-primary)' }}>€{selected.total.toFixed(2)}</span>
           </div>
         </div>
       )}

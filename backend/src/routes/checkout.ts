@@ -17,10 +17,10 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
         throw createAppError('VALIDATION_ERROR', 'Invalid table number');
       }
 
-      const { paymentMethod, cashAmount, cardAmount } = req.body;
+      const { paymentMethod, cashAmount, cardAmount, couponName, couponAmount } = req.body;
 
-      if (!paymentMethod || !['cash', 'card', 'mixed'].includes(paymentMethod)) {
-        throw createAppError('VALIDATION_ERROR', 'paymentMethod must be "cash", "card", or "mixed"');
+      if (!paymentMethod || !['cash', 'card', 'mixed', 'online'].includes(paymentMethod)) {
+        throw createAppError('VALIDATION_ERROR', 'paymentMethod must be "cash", "card", "mixed", or "online"');
       }
 
       // Find all pending dine-in orders for this table
@@ -57,11 +57,17 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
         }
       }
 
+      // Apply coupon discount
+      let finalAmount = totalAmount;
+      if (couponAmount && couponAmount > 0) {
+        finalAmount = Math.max(0, totalAmount - couponAmount);
+      }
+
       // Create checkout record
       const checkoutData: Record<string, unknown> = {
         type: 'table',
         tableNumber,
-        totalAmount,
+        totalAmount: finalAmount,
         paymentMethod,
         orderIds: orders.map(o => o._id),
       };
@@ -70,6 +76,8 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
         checkoutData.cashAmount = Number(cashAmount);
         checkoutData.cardAmount = Number(cardAmount);
       }
+      if (couponName) checkoutData.couponName = couponName;
+      if (couponAmount && couponAmount > 0) checkoutData.couponAmount = couponAmount;
 
       const checkout = await Checkout.create(checkoutData);
 
@@ -98,10 +106,10 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
         throw createAppError('VALIDATION_ERROR', 'Invalid order ID');
       }
 
-      const { paymentMethod, cashAmount, cardAmount, totalAmountOverride } = req.body;
+      const { paymentMethod, cashAmount, cardAmount, totalAmountOverride, couponName, couponAmount } = req.body;
 
-      if (!paymentMethod || !['cash', 'card', 'mixed'].includes(paymentMethod)) {
-        throw createAppError('VALIDATION_ERROR', 'paymentMethod must be "cash", "card", or "mixed"');
+      if (!paymentMethod || !['cash', 'card', 'mixed', 'online'].includes(paymentMethod)) {
+        throw createAppError('VALIDATION_ERROR', 'paymentMethod must be "cash", "card", "mixed", or "online"');
       }
 
       const order = await Order.findById(orderId);
@@ -127,15 +135,21 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
         ? totalAmountOverride
         : autoTotal;
 
+      // Apply coupon discount before validation
+      let finalAmount = totalAmount;
+      if (couponAmount && couponAmount > 0) {
+        finalAmount = Math.max(0, totalAmount - couponAmount);
+      }
+
       // Validate mixed payment
       if (paymentMethod === 'mixed') {
         if (cashAmount == null || cardAmount == null) {
           throw createAppError('VALIDATION_ERROR', 'cashAmount and cardAmount are required for mixed payment');
         }
         const total = Number(cashAmount) + Number(cardAmount);
-        if (Math.abs(total - totalAmount) > 0.001) {
+        if (Math.abs(total - finalAmount) > 0.001) {
           throw createAppError('PAYMENT_AMOUNT_MISMATCH', 'cashAmount + cardAmount must equal totalAmount', {
-            expectedTotal: totalAmount,
+            expectedTotal: finalAmount,
             actualTotal: total,
           });
         }
@@ -144,7 +158,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
       // Create checkout record
       const checkoutData: Record<string, unknown> = {
         type: 'seat',
-        totalAmount,
+        totalAmount: finalAmount,
         paymentMethod,
         orderIds: [order._id],
       };
@@ -157,6 +171,8 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
         checkoutData.cashAmount = Number(cashAmount);
         checkoutData.cardAmount = Number(cardAmount);
       }
+      if (couponName) checkoutData.couponName = couponName;
+      if (couponAmount && couponAmount > 0) checkoutData.couponAmount = couponAmount;
 
       const checkout = await Checkout.create(checkoutData);
 
