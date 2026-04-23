@@ -97,8 +97,8 @@ export default function CashierLayout() {
 
       // Payment
       html += `<div class="section">PAYMENT</div>`;
-      html += `<div class="row"><span>Cash (${stats.cashCount ?? 0})</span><span>€${(stats.grossCashAmount ?? 0).toFixed(2)}</span></div>`;
-      html += `<div class="row"><span>Card (${stats.cardCount ?? 0})</span><span>€${(stats.grossCardAmount ?? 0).toFixed(2)}</span></div>`;
+      html += `<div class="row"><span>Cash (${stats.cashCount ?? 0})</span><span>€${(stats.cashTotal ?? 0).toFixed(2)}</span></div>`;
+      html += `<div class="row"><span>Card (${stats.cardCount ?? 0})</span><span>€${(stats.cardTotal ?? 0).toFixed(2)}</span></div>`;
       html += `<div class="row"><span>Mixed (${stats.mixedCount ?? 0})</span><span>€${(stats.mixedTotal ?? 0).toFixed(2)}</span></div>`;
       html += `<div class="divider"></div>`;
 

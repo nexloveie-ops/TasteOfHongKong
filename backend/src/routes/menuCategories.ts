@@ -73,6 +73,33 @@ router.post(
 );
 
 /**
+ * PUT /api/menu/categories/reorder
+ * Batch update sort orders. Requires auth + menu:write permission.
+ * Body: { order: [{ id: string, sortOrder: number }] }
+ */
+router.put(
+  '/reorder',
+  authMiddleware,
+  requirePermission('menu:write'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { order } = req.body;
+      if (!Array.isArray(order)) {
+        throw createAppError('VALIDATION_ERROR', 'order must be an array');
+      }
+      for (const item of order) {
+        if (!item.id || item.sortOrder == null) continue;
+        await MenuCategory.findByIdAndUpdate(item.id, { sortOrder: item.sortOrder });
+      }
+      const categories = await MenuCategory.find().sort({ sortOrder: 1 }).lean();
+      res.json(categories);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
  * PUT /api/menu/categories/:id
  * Updates an existing menu category. Requires auth + menu:write permission.
  */
