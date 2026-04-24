@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useCart } from '../../context/CartContext';
 import MenuItemCard from '../../components/customer/MenuItemCard';
+import OfferSelectModal from '../../components/customer/OfferSelectModal';
 import type { OfferData } from '../../utils/bundleMatcher';
 
 interface Category { _id: string; sortOrder: number; translations: { locale: string; name: string }[]; }
@@ -29,6 +30,7 @@ export default function MenuView() {
 
   // Active offers for banner
   const [activeOffers, setActiveOffers] = useState<OfferData[]>([]);
+  const [selectedOffer, setSelectedOffer] = useState<OfferData | null>(null);
 
   // Refs for scroll-based category tracking
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -158,10 +160,11 @@ export default function MenuView() {
         {activeOffers.length > 0 && !heroHidden && (
           <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
             {activeOffers.map(offer => (
-              <div key={offer._id} style={{
+              <div key={offer._id} onClick={() => setSelectedOffer(offer)} style={{
                 background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(4px)',
                 borderRadius: 10, padding: '10px 14px',
                 border: '1px solid rgba(240,214,138,0.3)',
+                cursor: 'pointer',
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
@@ -266,6 +269,22 @@ export default function MenuView() {
         <div style={{ height: 20 }} />
       </div>
 
+      {/* Offer Select Modal */}
+      {selectedOffer && (
+        <OfferSelectModal
+          offer={selectedOffer}
+          menuItems={items}
+          categories={categories}
+          lang={lang}
+          onConfirm={(selectedItems) => {
+            for (const si of selectedItems) {
+              addItem(si.menuItemId, si.names, si.price);
+            }
+            setSelectedOffer(null);
+          }}
+          onClose={() => setSelectedOffer(null)}
+        />
+      )}
     </div>
   );
 }
