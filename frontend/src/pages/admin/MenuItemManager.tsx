@@ -134,13 +134,17 @@ export default function MenuItemManager() {
 
   const uploadAR = async (id: string, file: File) => {
     const fd = new FormData(); fd.append('ar', file);
-    const res = await fetch(`/api/menu/items/${id}/ar`, { method: 'POST', headers: authHeaders, body: fd });
-    if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      alert(data?.error?.message || 'AR upload failed');
-      return;
+    try {
+      const res = await fetch(`/api/menu/items/${id}/ar`, { method: 'POST', headers: authHeaders, body: fd });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        alert(data?.error?.message || `AR upload failed (${res.status})`);
+        return;
+      }
+      fetchData();
+    } catch (e) {
+      alert(`AR upload error: ${e instanceof Error ? e.message : 'Network error'}`);
     }
-    fetchData();
   };
 
   const getCatName = (catId: string) => {
