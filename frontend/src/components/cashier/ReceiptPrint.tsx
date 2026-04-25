@@ -137,7 +137,9 @@ function buildReceiptHTML(
       html += `<tr><td><div>${item.itemName}</div>`;
       if (item.itemNameEn && item.itemNameEn !== item.itemName) html += `<div class="sub">${item.itemNameEn}</div>`;
       if (item.selectedOptions && item.selectedOptions.length > 0) {
-        html += `<div class="sub">${item.selectedOptions.map(o => o.choiceName + (o.extraPrice > 0 ? ` +€${o.extraPrice}` : '')).join(', ')}</div>`;
+        for (const o of item.selectedOptions) {
+          html += `<div class="sub">  · ${o.choiceName}${o.extraPrice > 0 ? ` +€${o.extraPrice}` : ''}</div>`;
+        }
       }
       html += `</td><td class="qty">x${item.quantity}</td><td class="amt">€${(item.unitPrice * item.quantity).toFixed(2)}</td></tr>`;
     }
@@ -323,7 +325,9 @@ export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, b
           <div style={{ flex: 1 }}>
             <div>{item.itemName}</div>
             {item.itemNameEn && item.itemNameEn !== item.itemName && <div style={{ fontSize: 12 }}>{item.itemNameEn}</div>}
-            {item.selectedOptions && item.selectedOptions.length > 0 && <div style={{ fontSize: 12 }}>{item.selectedOptions.map(o => o.choiceName).join(', ')}</div>}
+            {item.selectedOptions && item.selectedOptions.length > 0 && item.selectedOptions.map((o, oi) => (
+              <div key={oi} style={{ fontSize: 12 }}>  · {o.choiceName}{o.extraPrice > 0 && ` +€${o.extraPrice}`}</div>
+            ))}
           </div>
           <div style={{ whiteSpace: 'nowrap' }}>x{item.quantity} €{(item.unitPrice * item.quantity).toFixed(2)}</div>
         </div>
