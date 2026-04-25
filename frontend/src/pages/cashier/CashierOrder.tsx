@@ -265,6 +265,9 @@ export default function CashierOrder() {
       // Step 1: Create order
       const orderBody: Record<string, unknown> = { type: orderType, items: buildGroupedItems() };
       if (orderType === 'dine_in') { orderBody.tableNumber = 0; orderBody.seatNumber = 0; }
+      if (matchedBundles.length > 0) {
+        orderBody.appliedBundles = matchedBundles.map(b => ({ offerId: b.offer._id, name: b.offer.name, nameEn: b.offer.nameEn, discount: b.savings }));
+      }
 
       const orderRes = await fetch('/api/orders', {
         method: 'POST',

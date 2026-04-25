@@ -30,6 +30,8 @@ interface DetailedStats {
   onlineCount: number;
   couponCount: number;
   couponTotalAmount: number;
+  bundleOfferCount: number;
+  bundleOfferDiscount: number;
   topItems: TopItem[];
 }
 
@@ -93,6 +95,11 @@ export default function ReportDashboard() {
   const [modalOrders, setModalOrders] = useState<DetailOrder[]>([]);
   const [modalLoading, setModalLoading] = useState(false);
 
+  // Item option modal
+  interface ItemOptionStats { itemName: string; totalSold: number; withPaidOptions: number; totalOptionRevenue: number; options: { groupName: string; choiceName: string; extraPrice: number; count: number; revenue: number }[]; }
+  const [itemOptionStats, setItemOptionStats] = useState<ItemOptionStats | null>(null);
+  const [itemOptionLoading, setItemOptionLoading] = useState(false);
+
   useEffect(() => {
     const { start, end } = getWeekRange();
     setStartDate(start);
@@ -134,6 +141,17 @@ export default function ReportDashboard() {
   }, [token, startDate, endDate]);
 
   const closeModal = () => { setModalConfig(null); setModalOrders([]); };
+
+  const openItemOptions = async (itemName: string) => {
+    setItemOptionLoading(true);
+    setItemOptionStats(null);
+    try {
+      const params = new URLSearchParams({ itemName, startDate, endDate });
+      const res = await fetch(`/api/reports/item-options?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setItemOptionStats(await res.json());
+    } catch { /* ignore */ }
+    finally { setItemOptionLoading(false); }
+  };
 
   const euro = (v: number) => `€${v.toFixed(2)}`;
 
@@ -201,6 +219,8 @@ export default function ReportDashboard() {
                 onClick={() => openDetail({ title: '💳 Online Payment', icon: '💳', filters: { paymentMethod: 'online' } })} />
               <StatCard label="Coupon" value={`${stats.couponCount} 次 · ${euro(stats.couponTotalAmount)}`} color="#FF6F00" icon="🎟️"
                 onClick={() => openDetail({ title: '🎟️ Coupon Orders', icon: '🎟️', filters: { hasCoupon: 'true' } })} />
+              <StatCard label="Bundle" value={`${stats.bundleOfferCount} 次 · -${euro(stats.bundleOfferDiscount)}`} color="#00897B" icon="🎁"
+                onClick={() => openDetail({ title: '🎁 Bundle Orders', icon: '🎁', filters: { hasBundle: 'true' } })} />
               <StatCard label="退单" value={`${stats.refundedCount} 项 · ${euro(stats.refundedAmount)}`} color="#F44336" icon="↩️"
                 onClick={() => openDetail({ title: '↩️ 退单记录', icon: '↩️', filters: { status: 'refunded' } })} />
             </div>
@@ -285,9 +305,12 @@ export default function ReportDashboard() {
                   </thead>
                   <tbody>
                     {stats.topItems.map((item, idx) => (
-                      <tr key={item.itemName} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                      <tr key={item.itemName} style={{ borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}
+                        onClick={() => openItemOptions(item.itemName)}
+                        onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
+                        onMouseLeave={e => (e.currentTarget.style.background = '')}>
                         <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700, color: idx < 3 ? 'var(--red-primary)' : 'var(--text-light)' }}>{idx + 1}</td>
-                        <td style={{ padding: '8px 12px', fontWeight: 600 }}>{item.itemName}</td>
+                        <td style={{ padding: '8px 12px', fontWeight: 600, textDecoration: 'underline' }}>{item.itemName}</td>
                         <td style={{ padding: '8px 12px', color: 'var(--text-secondary)' }}>{item.itemNameEn || '-'}</td>
                         <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{item.quantity}</td>
                         <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--red-primary)' }}>{euro(item.revenue)}</td>
@@ -380,6 +403,57 @@ export default function ReportDashboard() {
                 </table>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Item Option Stats Modal */}
+      {(itemOptionStats || itemOptionLoading) && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setItemOptionStats(null)}>
+          <div style={{ background: '#fff', borderRadius: 16, width: '90%', maxWidth: 500, maxHeight: '80vh', overflow: 'auto', padding: 24 }}
+            onClick={e => e.stopPropagation()}>
+            {itemOptionLoading ? (
+              <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-light)' }}>加载中...</div>
+            ) : itemOptionStats && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 700 }}>⚙ {itemOptionStats.itemName}</h3>
+                  <button onClick={() => setItemOptionStats(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text-light)' }}>✕</button>
+                </div>
+                <div style={{ display: 'flex', gap: 16, marginBottom: 16, fontSize: 13 }}>
+                  <div><span style={{ color: 'var(--text-light)' }}>总销量: </span><span style={{ fontWeight: 700 }}>{itemOptionStats.totalSold}</span></div>
+                  <div><span style={{ color: 'var(--text-light)' }}>付费选项: </span><span style={{ fontWeight: 700 }}>{itemOptionStats.withPaidOptions}</span> ({itemOptionStats.totalSold > 0 ? Math.round(itemOptionStats.withPaidOptions / itemOptionStats.totalSold * 100) : 0}%)</div>
+                  <div><span style={{ color: 'var(--text-light)' }}>选项收入: </span><span style={{ fontWeight: 700, color: 'var(--red-primary)' }}>{euro(itemOptionStats.totalOptionRevenue)}</span></div>
+                </div>
+                {itemOptionStats.options.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-light)' }}>无付费选项数据</div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: 'var(--bg)', borderBottom: '2px solid var(--border)' }}>
+                        <th style={{ padding: '8px 10px', textAlign: 'left' }}>选项组</th>
+                        <th style={{ padding: '8px 10px', textAlign: 'left' }}>选择</th>
+                        <th style={{ padding: '8px 10px', textAlign: 'right' }}>单价</th>
+                        <th style={{ padding: '8px 10px', textAlign: 'right' }}>次数</th>
+                        <th style={{ padding: '8px 10px', textAlign: 'right' }}>收入</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {itemOptionStats.options.map((opt, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                          <td style={{ padding: '6px 10px', color: 'var(--text-secondary)' }}>{opt.groupName}</td>
+                          <td style={{ padding: '6px 10px', fontWeight: 600 }}>{opt.choiceName}</td>
+                          <td style={{ padding: '6px 10px', textAlign: 'right' }}>+€{opt.extraPrice}</td>
+                          <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 700 }}>{opt.count}x</td>
+                          <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 700, color: 'var(--red-primary)' }}>{euro(opt.revenue)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}

@@ -85,6 +85,14 @@ router.get('/orders', authMiddleware, requirePermission('report:view'), async (r
       result = result.filter(r => r.checkout && (r.checkout as unknown as { couponAmount?: number }).couponAmount && (r.checkout as unknown as { couponAmount: number }).couponAmount > 0);
     }
 
+    // Filter by bundle usage
+    if (req.query.hasBundle === 'true') {
+      result = result.filter(r => {
+        const bundles = (r as unknown as { appliedBundles?: unknown[] }).appliedBundles;
+        return bundles && bundles.length > 0;
+      });
+    }
+
     res.json(result);
   } catch (err) {
     next(err);
@@ -221,6 +229,22 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
       }
     }
 
+    // Count bundle offers used
+    let bundleOfferCount = 0;
+    let bundleOfferDiscount = 0;
+    const bundleOfferBreakdown: Record<string, { name: string; nameEn: string; count: number; discount: number }> = {};
+    for (const order of allOrders) {
+      const bundles = (order as unknown as { appliedBundles?: { offerId?: string; name: string; nameEn?: string; discount: number }[] }).appliedBundles || [];
+      for (const b of bundles) {
+        bundleOfferCount++;
+        bundleOfferDiscount += b.discount;
+        const key = b.name;
+        if (!bundleOfferBreakdown[key]) bundleOfferBreakdown[key] = { name: b.name, nameEn: b.nameEn || '', count: 0, discount: 0 };
+        bundleOfferBreakdown[key].count++;
+        bundleOfferBreakdown[key].discount += b.discount;
+      }
+    }
+
     // Count refunded items and calculate refund amount per payment method
     let refundedCount = 0;
     let refundedAmount = 0;
@@ -324,6 +348,8 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
       onlineCount,
       couponCount,
       couponTotalAmount: Math.round(couponTotalAmount * 100) / 100,
+      bundleOfferCount,
+      bundleOfferDiscount: Math.round(bundleOfferDiscount * 100) / 100,
       grossCashAmount: Math.round(grossCashAmount * 100) / 100,
       grossCardAmount: Math.round(grossCardAmount * 100) / 100,
       dineInCount,
@@ -343,6 +369,58 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
   } catch (err) {
     next(err);
   }
+});
+
+// GET /api/reports/item-options?itemName=xxx&startDate=xxx&endDate=xxx
+// Returns paid option stats for a specific menu item
+router.get('/item-options', authMiddleware, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { itemName, startDate, endDate } = req.query;
+    if (!itemName) throw createAppError('VALIDATION_ERROR', 'itemName is required');
+
+    const filter: Record<string, unknown> = {
+      status: { $in: ['checked_out', 'completed', 'refunded'] },
+      'items.itemName': itemName,
+    };
+    if (startDate || endDate) {
+      const dateFilter: Record<string, Date> = {};
+      if (startDate) dateFilter.$gte = new Date((startDate as string) + 'T00:00:00.000');
+      if (endDate) dateFilter.$lte = new Date((endDate as string) + 'T23:59:59.999');
+      filter.createdAt = dateFilter;
+    }
+
+    const orders = await Order.find(filter).lean();
+
+    const optionStats: Record<string, { groupName: string; choiceName: string; extraPrice: number; count: number; revenue: number }> = {};
+    let totalSold = 0;
+    let withPaidOptions = 0;
+
+    for (const order of orders) {
+      for (const item of order.items) {
+        if (item.itemName !== itemName) continue;
+        if ((item as unknown as { refunded?: boolean }).refunded) continue;
+        totalSold += item.quantity;
+        let hasPaid = false;
+        if (item.selectedOptions && item.selectedOptions.length > 0) {
+          for (const opt of item.selectedOptions) {
+            if (opt.extraPrice > 0) {
+              hasPaid = true;
+              const key = `${opt.groupName}|${opt.choiceName}|${opt.extraPrice}`;
+              if (!optionStats[key]) optionStats[key] = { groupName: opt.groupName || '', choiceName: opt.choiceName || '', extraPrice: opt.extraPrice, count: 0, revenue: 0 };
+              optionStats[key].count += item.quantity;
+              optionStats[key].revenue += opt.extraPrice * item.quantity;
+            }
+          }
+        }
+        if (hasPaid) withPaidOptions += item.quantity;
+      }
+    }
+
+    const options = Object.values(optionStats).sort((a, b) => b.revenue - a.revenue);
+    const totalOptionRevenue = options.reduce((s, o) => s + o.revenue, 0);
+
+    res.json({ itemName, totalSold, withPaidOptions, totalOptionRevenue, options });
+  } catch (err) { next(err); }
 });
 
 export default router;
