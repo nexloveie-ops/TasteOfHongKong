@@ -1,0 +1,254 @@
+[
+  {
+    "_id": "69de3cdd9b417456a446d614",
+    "name": "Peanut",
+    "icon": "🥜",
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "花生"
+      },
+      {
+        "locale": "en-US",
+        "name": "Peanut"
+      }
+    ],
+    "createdAt": "2026-04-14T13:10:53.472Z",
+    "updatedAt": "2026-04-14T13:10:53.472Z",
+    "__v": 0
+  },
+  {
+    "_id": "69de3ce09b417456a446d617",
+    "name": "Crustacean",
+    "icon": "🦐",
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "甲壳类"
+      },
+      {
+        "locale": "en-US",
+        "name": "Crustacean"
+      }
+    ],
+    "createdAt": "2026-04-14T13:10:56.857Z",
+    "updatedAt": "2026-04-14T13:10:56.857Z",
+    "__v": 0
+  },
+  {
+    "_id": "69de3ce59b417456a446d61a",
+    "name": "Dairy",
+    "icon": "🥛",
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "乳制品"
+      },
+      {
+        "locale": "en-US",
+        "name": "Dairy"
+      }
+    ],
+    "createdAt": "2026-04-14T13:11:01.352Z",
+    "updatedAt": "2026-04-14T13:11:01.352Z",
+    "__v": 0
+  },
+  {
+    "_id": "69de3cea9b417456a446d61d",
+    "name": "Gluten",
+    "icon": "🌾",
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "麸质"
+      },
+      {
+        "locale": "en-US",
+        "name": "Gluten"
+      }
+    ],
+    "createdAt": "2026-04-14T13:11:06.134Z",
+    "updatedAt": "2026-04-14T13:11:06.134Z",
+    "__v": 0
+  },
+  {
+    "_id": "69de3ced9b417456a446d620",
+    "name": "Egg",
+    "icon": "🥚",
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "鸡蛋"
+      },
+      {
+        "locale": "en-US",
+        "name": "Egg"
+      }
+    ],
+    "createdAt": "2026-04-14T13:11:09.376Z",
+    "updatedAt": "2026-04-14T13:11:09.376Z",
+    "__v": 0
+  },
+  {
+    "_id": "69de3cf09b417456a446d623",
+    "name": "Fish",
+    "icon": "🐟",
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "鱼类"
+      },
+      {
+        "locale": "en-US",
+        "name": "Fish"
+      }
+    ],
+    "createdAt": "2026-04-14T13:11:12.520Z",
+    "updatedAt": "2026-04-14T13:11:12.520Z",
+    "__v": 0
+  },
+  {
+    "_id": "69de3cf39b417456a446d626",
+    "name": "Soy",
+    "icon": "🫘",
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "大豆"
+      },
+      {
+        "locale": "en-US",
+        "name": "Soy"
+      }
+    ],
+    "createdAt": "2026-04-14T13:11:15.359Z",
+    "updatedAt": "2026-04-14T13:11:15.359Z",
+    "__v": 0
+  },
+  {
+    "_id": "69de3cf69b417456a446d629",
+    "name": "Tree Nut",
+    "icon": "🌰",
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "坚果"
+      },
+      {
+        "locale": "en-US",
+        "name": "Tree Nut"
+      }
+    ],
+    "createdAt": "2026-04-14T13:11:18.953Z",
+    "updatedAt": "2026-04-14T13:11:18.953Z",
+    "__v": 0
+  },
+  {
+    "_id": "69de3cfb9b417456a446d62c",
+    "name": "Celery",
+    "icon": "🧅",
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "芹菜"
+      },
+      {
+        "locale": "en-US",
+        "name": "Celery"
+      }
+    ],
+    "createdAt": "2026-04-14T13:11:23.620Z",
+    "updatedAt": "2026-04-14T13:11:23.620Z",
+    "__v": 0
+  },
+  {
+    "_id": "69de3cff9b417456a446d62f",
+    "name": "Sesame",
+    "icon": "🫒",
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "芝麻"
+      },
+      {
+        "locale": "en-US",
+        "name": "Sesame"
+      }
+    ],
+    "createdAt": "2026-04-14T13:11:27.304Z",
+    "updatedAt": "2026-04-14T13:11:27.304Z",
+    "__v": 0
+  },
+  {
+    "_id": "69de3d039b417456a446d632",
+    "name": "Mollusc",
+    "icon": "🐚",
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "软体动物"
+      },
+      {
+        "locale": "en-US",
+        "name": "Mollusc"
+      }
+    ],
+    "createdAt": "2026-04-14T13:11:31.179Z",
+    "updatedAt": "2026-04-14T13:11:31.179Z",
+    "__v": 0
+  },
+  {
+    "_id": "69de3d059b417456a446d635",
+    "name": "Mustard",
+    "icon": "🌿",
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "芥末"
+      },
+      {
+        "locale": "en-US",
+        "name": "Mustard"
+      }
+    ],
+    "createdAt": "2026-04-14T13:11:33.945Z",
+    "updatedAt": "2026-04-14T13:11:33.945Z",
+    "__v": 0
+  },
+  {
+    "_id": "69de3d099b417456a446d638",
+    "name": "Lupin",
+    "icon": "🧄",
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "羽扇豆"
+      },
+      {
+        "locale": "en-US",
+        "name": "Lupin"
+      }
+    ],
+    "createdAt": "2026-04-14T13:11:37.003Z",
+    "updatedAt": "2026-04-14T13:11:37.003Z",
+    "__v": 0
+  },
+  {
+    "_id": "69de3d0b9b417456a446d63b",
+    "name": "Sulphite",
+    "icon": "⚗️",
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "亚硫酸盐"
+      },
+      {
+        "locale": "en-US",
+        "name": "Sulphite"
+      }
+    ],
+    "createdAt": "2026-04-14T13:11:39.452Z",
+    "updatedAt": "2026-04-14T13:11:39.452Z",
+    "__v": 0
+  }
+]

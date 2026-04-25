@@ -1,0 +1,40 @@
+[
+  {
+    "_id": "69e2ec8d6967b37d0d243470",
+    "name": "特惠套餐",
+    "nameEn": "Bundle Offer",
+    "description": "辣袋+咖喱汁+软饮=€10",
+    "bundlePrice": 10,
+    "slots": [
+      {
+        "type": "item",
+        "itemId": "69e4068a8f0219ff7f6166ee",
+        "_id": "69eab7c884f275847922bdbd"
+      },
+      {
+        "type": "item",
+        "itemId": "69e3a2ae776fdb91d27e4515",
+        "_id": "69eab7c884f275847922bdbe"
+      },
+      {
+        "type": "category",
+        "categoryId": "69e408108f0219ff7f616700",
+        "_id": "69eab7c884f275847922bdbf"
+      }
+    ],
+    "active": true,
+    "startDate": "2026-04-18T00:00:00.000Z",
+    "endDate": "2026-05-18T00:00:00.000Z",
+    "createdAt": "2026-04-18T02:29:33.111Z",
+    "updatedAt": "2026-04-24T00:22:32.980Z",
+    "__v": 10,
+    "excludedItemIds": [
+      "69e40b168f0219ff7f61674a",
+      "69e409d78f0219ff7f61671d",
+      "69e408f98f0219ff7f61670d",
+      "69e408ae8f0219ff7f616707",
+      "69eab5fd0da6cf442979b2bf"
+    ],
+    "descriptionEn": "Spacy Box+Curry Sauce+Soft Drink =€10"
+  }
+]

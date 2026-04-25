@@ -152,7 +152,7 @@ export function createOrdersRouter(io: SocketIOServer): Router {
   // GET /api/orders/takeout — Get pending (not checked out) takeout orders sorted by dailyOrderNumber ASC
   router.get('/takeout', async (_req: Request, res: Response, next: NextFunction) => {
     try {
-      const orders = await Order.find({ type: 'takeout', status: 'pending' }).sort({ dailyOrderNumber: 1 });
+      const orders = await Order.find({ type: 'takeout', status: { $in: ['pending', 'paid_online'] } }).sort({ dailyOrderNumber: 1 });
       res.json(orders);
     } catch (err) {
       next(err);

@@ -1,0 +1,138 @@
+[
+  {
+    "_id": "69de33ea8701926431f36934",
+    "sortOrder": 0,
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "头盘"
+      },
+      {
+        "locale": "en-US",
+        "name": "STARTER"
+      }
+    ],
+    "createdAt": "2026-04-14T12:32:42.550Z",
+    "updatedAt": "2026-04-23T23:46:56.526Z",
+    "__v": 0
+  },
+  {
+    "_id": "69de35f18701926431f36937",
+    "sortOrder": 1,
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "点心"
+      },
+      {
+        "locale": "en-US",
+        "name": "DIMSUM "
+      }
+    ],
+    "createdAt": "2026-04-14T12:41:21.921Z",
+    "updatedAt": "2026-04-23T23:46:56.738Z",
+    "__v": 0
+  },
+  {
+    "_id": "69de36258701926431f3693a",
+    "sortOrder": 2,
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "饭类"
+      },
+      {
+        "locale": "en-US",
+        "name": "HONG KONG STYLE RICE"
+      }
+    ],
+    "createdAt": "2026-04-14T12:42:13.596Z",
+    "updatedAt": "2026-04-23T23:46:56.821Z",
+    "__v": 0
+  },
+  {
+    "_id": "69de36308701926431f3693d",
+    "sortOrder": 3,
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "咖喱餐"
+      },
+      {
+        "locale": "en-US",
+        "name": "CURRY DISHES"
+      }
+    ],
+    "createdAt": "2026-04-14T12:42:24.206Z",
+    "updatedAt": "2026-04-23T23:46:56.861Z",
+    "__v": 0
+  },
+  {
+    "_id": "69de363c8701926431f36940",
+    "sortOrder": 4,
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "面类"
+      },
+      {
+        "locale": "en-US",
+        "name": "HONG KONG STYLE NOODLE"
+      }
+    ],
+    "createdAt": "2026-04-14T12:42:36.439Z",
+    "updatedAt": "2026-04-23T23:46:57.016Z",
+    "__v": 0
+  },
+  {
+    "_id": "69e3a039776fdb91d27e44f0",
+    "sortOrder": 5,
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "附加餐"
+      },
+      {
+        "locale": "en-US",
+        "name": "SIDE ORDERS"
+      }
+    ],
+    "createdAt": "2026-04-18T15:16:09.693Z",
+    "updatedAt": "2026-04-23T23:46:57.041Z",
+    "__v": 0
+  },
+  {
+    "_id": "69e3a360776fdb91d27e4526",
+    "sortOrder": 6,
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "整份系列"
+      },
+      {
+        "locale": "en-US",
+        "name": "FULL PORTION"
+      }
+    ],
+    "createdAt": "2026-04-18T15:29:36.518Z",
+    "updatedAt": "2026-04-23T23:46:57.047Z",
+    "__v": 0
+  },
+  {
+    "_id": "69e408108f0219ff7f616700",
+    "sortOrder": 7,
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "饮料"
+      },
+      {
+        "locale": "en-US",
+        "name": "DRINK"
+      }
+    ],
+    "createdAt": "2026-04-18T22:39:12.784Z",
+    "updatedAt": "2026-04-23T23:46:57.052Z",
+    "__v": 0
+  }
+]

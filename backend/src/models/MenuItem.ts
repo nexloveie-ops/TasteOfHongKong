@@ -8,6 +8,7 @@ const ItemTranslationSchema = new mongoose.Schema({
 
 const OptionChoiceSchema = new mongoose.Schema({
   extraPrice: { type: Number, default: 0 },
+  originalPrice: { type: Number },
   translations: [{
     locale: { type: String, required: true },
     name: { type: String, required: true },

@@ -5,6 +5,7 @@ import type { CartItemOption } from '../../context/CartContext';
 interface OptionChoice {
   _id: string;
   extraPrice: number;
+  originalPrice?: number;
   translations: { locale: string; name: string }[];
 }
 
@@ -109,8 +110,15 @@ export default function OptionSelectModal({ itemName, price, optionGroups, onCon
                       <span style={{ fontSize: 13, fontWeight: selected ? 700 : 500, lineHeight: 1.3, color: selected ? 'var(--red-primary)' : 'var(--text-dark)' }}>
                         {getName(choice.translations)}
                       </span>
-                      {choice.extraPrice > 0 && (
-                        <span style={{ fontSize: 11, color: 'var(--red-primary)', fontWeight: 600, marginTop: 2 }}>+€{choice.extraPrice}</span>
+                      {(choice.extraPrice > 0 || (choice.originalPrice && choice.originalPrice > choice.extraPrice)) && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                          {choice.originalPrice && choice.originalPrice > choice.extraPrice && (
+                            <span style={{ fontSize: 10, color: 'var(--text-light)', textDecoration: 'line-through' }}>+€{choice.originalPrice}</span>
+                          )}
+                          {choice.extraPrice > 0 && (
+                            <span style={{ fontSize: 11, color: 'var(--red-primary)', fontWeight: 600 }}>+€{choice.extraPrice}</span>
+                          )}
+                        </div>
                       )}
                     </div>
                   );

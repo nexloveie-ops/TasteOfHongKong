@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { io } from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
 import ReceiptPrint from '../../components/cashier/ReceiptPrint';
+import { buildReceiptHTML, printViaIframe } from '../../components/cashier/ReceiptPrint';
 
 interface OrderItem { _id: string; menuItemId: string; quantity: number; unitPrice: number; itemName: string; selectedOptions?: { groupName: string; choiceName: string; extraPrice: number }[]; }
 interface TakeoutOrder {
@@ -22,6 +23,8 @@ export default function TakeoutOrderList() {
   const [cashReceived, setCashReceived] = useState('');
   const [checkoutId, setCheckoutId] = useState<string | null>(null);
   const [checkoutMeta, setCheckoutMeta] = useState<{ total: number; cashReceived: number; change: number } | null>(null);
+  const [config, setConfig] = useState<Record<string, string>>({});
+  const [finalizing, setFinalizing] = useState(false);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -31,6 +34,10 @@ export default function TakeoutOrderList() {
   }, [token]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
+
+  useEffect(() => {
+    fetch('/api/admin/config').then(r => r.ok ? r.json() : {}).then(setConfig).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const socket = io({ transports: ['websocket'] });
@@ -56,6 +63,39 @@ export default function TakeoutOrderList() {
   const currentTotal = selectedOrder ? orderTotal(selectedOrder) : 0;
   const changeAmount = paymentMethod === 'cash' ? Math.max(0, cashReceivedNum - currentTotal) : 0;
   const cashValid = paymentMethod !== 'cash' || cashReceivedNum >= currentTotal;
+
+  const handleFinalizePaid = async (order: TakeoutOrder) => {
+    setFinalizing(true);
+    try {
+      const res = await fetch('/api/payments/finalize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ orderId: order._id }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const receiptData = {
+          checkoutId: data.checkoutId,
+          type: 'seat' as const,
+          totalAmount: data.totalAmount,
+          paymentMethod: 'online' as const,
+          checkedOutAt: new Date().toISOString(),
+          orders: [{
+            _id: order._id,
+            type: 'takeout' as const,
+            dailyOrderNumber: order.dailyOrderNumber,
+            status: 'checked_out',
+            items: order.items,
+          }],
+        };
+        const html = buildReceiptHTML(receiptData, config);
+        printViaIframe(html, 1);
+        setSelected(null);
+        fetchOrders();
+      }
+    } catch { /* ignore */ }
+    finally { setFinalizing(false); }
+  };
 
   const handleCheckout = async () => {
     if (!selectedOrder) return;
@@ -137,19 +177,27 @@ export default function TakeoutOrderList() {
         <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>{t('cashier.takeout')}</h2>
         {orders.length === 0 && <div style={{ color: 'var(--text-light)', padding: 40, textAlign: 'center' }}>{t('cashier.noOrders')}</div>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {orders.map(o => (
+          {orders.map(o => {
+            const isPaidOnline = o.status === 'paid_online';
+            return (
             <div key={o._id} onClick={() => setSelected(o._id)} className="card" style={{
               padding: '14px 16px', cursor: 'pointer',
-              border: selected === o._id ? '2px solid var(--red-primary)' : '1px solid var(--border)',
+              border: isPaidOnline ? '3px solid #4CAF50' : selected === o._id ? '2px solid var(--red-primary)' : '1px solid var(--border)',
+              background: isPaidOnline ? 'linear-gradient(135deg, #E8F5E9, #C8E6C9)' : undefined,
+              boxShadow: isPaidOnline ? '0 0 10px rgba(76,175,80,0.3)' : undefined,
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
               <div>
-                <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--red-primary)' }}>#{o.dailyOrderNumber}</div>
+                <div style={{ fontWeight: 700, fontSize: 18, color: isPaidOnline ? '#2E7D32' : 'var(--red-primary)' }}>
+                  #{o.dailyOrderNumber}
+                  {isPaidOnline && <span style={{ marginLeft: 8, fontSize: 11, padding: '2px 8px', borderRadius: 4, background: '#4CAF50', color: '#fff', fontWeight: 700 }}>💳 ONLINE PAID</span>}
+                </div>
                 <div style={{ fontSize: 12, color: 'var(--text-light)' }}>{o.items.length} items · {new Date(o.createdAt).toLocaleTimeString()}</div>
               </div>
-              <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--red-primary)', fontFamily: "'Noto Serif SC', serif" }}>€{orderTotal(o).toFixed(2)}</div>
+              <div style={{ fontWeight: 700, fontSize: 16, color: isPaidOnline ? '#2E7D32' : 'var(--red-primary)', fontFamily: "'Noto Serif SC', serif" }}>€{orderTotal(o).toFixed(2)}</div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -178,8 +226,22 @@ export default function TakeoutOrderList() {
           <div style={{ padding: 16, borderTop: '2px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 18 }}>
               <span>{t('cashier.total')}</span>
-              <span style={{ color: 'var(--red-primary)' }}>€{currentTotal.toFixed(2)}</span>
+              <span style={{ color: selectedOrder.status === 'paid_online' ? '#2E7D32' : 'var(--red-primary)' }}>€{currentTotal.toFixed(2)}</span>
             </div>
+
+            {selectedOrder.status === 'paid_online' ? (
+              <>
+                <div style={{ padding: 10, background: '#E8F5E9', borderRadius: 8, textAlign: 'center', fontWeight: 700, color: '#2E7D32' }}>
+                  💳 Online Payment Received
+                </div>
+                <button className="btn" style={{ width: '100%', background: '#4CAF50', color: '#fff', border: 'none', padding: '12px 0', fontSize: 15 }}
+                  disabled={finalizing}
+                  onClick={() => handleFinalizePaid(selectedOrder)}>
+                  {finalizing ? '...' : '🖨️ Print & Complete'}
+                </button>
+              </>
+            ) : (
+            <>
             <div style={{ display: 'flex', gap: 6 }}>
               {(['cash', 'card', 'mixed'] as const).map(m => (
                 <button key={m} onClick={() => { setPaymentMethod(m); if (m === 'cash') setCashReceived(currentTotal.toFixed(2)); else setCashReceived(''); }} className="btn" style={{
@@ -231,6 +293,8 @@ export default function TakeoutOrderList() {
               onClick={() => handleCancelOrder(selectedOrder._id)}>
               ✕ 取消订单
             </button>
+            </>
+            )}
           </div>
         </div>
       )}

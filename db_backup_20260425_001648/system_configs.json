@@ -1,0 +1,82 @@
+[
+  {
+    "_id": "69ded8d242c685390ba0ca70",
+    "key": "restaurant_name_zh",
+    "__v": 0,
+    "createdAt": "2026-04-15T00:16:18.235Z",
+    "updatedAt": "2026-04-20T15:29:59.804Z",
+    "value": "港知味"
+  },
+  {
+    "_id": "69ded8d242c685390ba0ca71",
+    "key": "restaurant_name_en",
+    "__v": 0,
+    "createdAt": "2026-04-15T00:16:18.274Z",
+    "updatedAt": "2026-04-20T15:29:59.816Z",
+    "value": "Taste Of Hong Kong"
+  },
+  {
+    "_id": "69ded8d242c685390ba0ca72",
+    "key": "restaurant_address",
+    "__v": 0,
+    "createdAt": "2026-04-15T00:16:18.303Z",
+    "updatedAt": "2026-04-20T15:29:59.822Z",
+    "value": " Unit 77, iLac Shopping Centre, Moore St, North City, Dublin 1"
+  },
+  {
+    "_id": "69ded8d242c685390ba0ca73",
+    "key": "restaurant_phone",
+    "__v": 0,
+    "createdAt": "2026-04-15T00:16:18.335Z",
+    "updatedAt": "2026-04-20T15:29:59.828Z",
+    "value": "(01) 567 0607"
+  },
+  {
+    "_id": "69ded8d242c685390ba0ca74",
+    "key": "restaurant_website",
+    "__v": 0,
+    "createdAt": "2026-04-15T00:16:18.366Z",
+    "updatedAt": "2026-04-20T15:29:59.841Z",
+    "value": "www.tasteofhongkong.ie"
+  },
+  {
+    "_id": "69ded8d242c685390ba0ca75",
+    "key": "restaurant_email",
+    "__v": 0,
+    "createdAt": "2026-04-15T00:16:18.409Z",
+    "updatedAt": "2026-04-20T15:29:59.847Z",
+    "value": "info@tasteofhongkong.ie"
+  },
+  {
+    "_id": "69ded8d242c685390ba0ca76",
+    "key": "receipt_terms",
+    "__v": 0,
+    "createdAt": "2026-04-15T00:16:18.443Z",
+    "updatedAt": "2026-04-20T15:29:59.860Z",
+    "value": "Term and Condtion\nToilet Code: C5479X\n[QR: https://search.google.com/local/writereview?placeid=ChIJd779cAAPZ0gRYCue64Tr5cw&source=g.page.m.ia._&laa=nmx-review-solicitation-ia2]\nPlease leave your review on Google, thanks "
+  },
+  {
+    "_id": "69e2ca0a42c685390ba15a5a",
+    "key": "restaurant_logo",
+    "__v": 0,
+    "createdAt": "2026-04-18T00:02:18.031Z",
+    "updatedAt": "2026-04-18T03:00:32.012Z",
+    "value": "/uploads/logo/logo.jpg"
+  },
+  {
+    "_id": "69e3afa242c685390ba176c3",
+    "key": "qr_tables",
+    "__v": 0,
+    "createdAt": "2026-04-18T16:21:54.570Z",
+    "updatedAt": "2026-04-24T22:12:57.978Z",
+    "value": "10"
+  },
+  {
+    "_id": "69e3afa242c685390ba176c4",
+    "key": "qr_seats_per_table",
+    "__v": 0,
+    "createdAt": "2026-04-18T16:21:54.603Z",
+    "updatedAt": "2026-04-24T22:12:58.009Z",
+    "value": "2"
+  }
+]

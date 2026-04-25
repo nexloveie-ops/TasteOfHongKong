@@ -1,0 +1,4968 @@
+[
+  {
+    "_id": "69de37318701926431f36948",
+    "categoryId": "69de35f18701926431f36937",
+    "price": 6.5,
+    "calories": 800,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "糯米鸡",
+        "description": "经典港式糯米鸡，每份2个，以荷叶包裹糯米、鸡肉和香菇蒸制而成，软糯咸香。含大豆、小麦（麸质）、芝麻；"
+      },
+      {
+        "locale": "en-US",
+        "name": "Glutinous Rice Chicken",
+        "description": "Classic Hong Kong Glutinous Rice Chicken, 2 pieces per portion, with glutinous rice, chicken, and shiitake mushrooms wrapped in lotus leaf and steamed. Contains soy, wheat (gluten), and sesame; "
+      }
+    ],
+    "createdAt": "2026-04-14T12:46:41.838Z",
+    "updatedAt": "2026-04-24T00:55:25.155Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210554410-202144041.jpg",
+    "allergenIds": [
+      "69de3cf39b417456a446d626",
+      "69de3cea9b417456a446d61d",
+      "69de3cff9b417456a446d62f"
+    ],
+    "arFileUrl": "/uploads/ar/1776992124738-907450758.usdz"
+  },
+  {
+    "_id": "69de3e919b417456a446d660",
+    "categoryId": "69de35f18701926431f36937",
+    "price": 6,
+    "calories": 320,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3ce09b417456a446d617",
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626",
+      "69de3cff9b417456a446d62f",
+      "69de3d039b417456a446d632"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "烧麦",
+        "description": "经典港式烧麦，外皮轻薄，内馅鲜香多汁，常以猪肉、虾仁及香菇蒸制而成。含小麦（麸质）、大豆、甲壳类；"
+      },
+      {
+        "locale": "en-US",
+        "name": "SuiMai",
+        "description": "Classic Hong Kong siu mai with a delicate wrapper and savory filling of pork, prawn, and shiitake mushroom. Contains wheat (gluten), soy, and crustaceans; "
+      }
+    ],
+    "createdAt": "2026-04-14T13:18:09.794Z",
+    "updatedAt": "2026-04-24T00:58:24.636Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210595142-385288338.jpg",
+    "arFileUrl": "/uploads/ar/1776992304389-70079921.usdz",
+    "optionGroups": []
+  },
+  {
+    "_id": "69de3f8e9b417456a446d6a0",
+    "categoryId": "69de35f18701926431f36937",
+    "price": 5.5,
+    "calories": 500,
+    "avgWaitMinutes": 10,
+    "isSoldOut": true,
+    "allergenIds": [
+      "69de3cff9b417456a446d62f",
+      "69de3ced9b417456a446d620",
+      "69de3ce59b417456a446d61a"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "叉烧包",
+        "description": "经典港式叉烧包，松软包皮包裹香甜咸鲜的叉烧馅，口感蓬松细腻。每份约3个，热量约420–600千卡。含小麦（麸质）、大豆；"
+      },
+      {
+        "locale": "en-US",
+        "name": "CharSiuBao",
+        "description": "Classic Hong Kong char siu bao with a soft fluffy bun and sweet-savory barbecued pork filling. Approx. 3 pieces per portion, 420–600 kcal. Contains wheat (gluten) and soy;"
+      }
+    ],
+    "createdAt": "2026-04-14T13:22:22.598Z",
+    "updatedAt": "2026-04-24T11:26:43.329Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210602009-388311648.jpg",
+    "arFileUrl": "/uploads/ar/1776992191069-8811421.usdz"
+  },
+  {
+    "_id": "69de40829b417456a446d6b4",
+    "categoryId": "69de33ea8701926431f36934",
+    "price": 6.5,
+    "calories": 350,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626",
+      "69de3ced9b417456a446d620",
+      "69de3cff9b417456a446d62f"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "鸭卷",
+        "description": "经典港式鸭卷，外皮酥脆，内馅鲜香，炸制后口感丰富。每份约 2–3 件，热量约 280–450 千卡。含小麦（麸质）、大豆；"
+      },
+      {
+        "locale": "en-US",
+        "name": "Duck Spring Rolls",
+        "description": "Classic Hong Kong duck roll with a crispy wrapper and savoury duck filling. Approx. 2–3 pieces per portion, 280–450 kcal. Contains wheat (gluten) and soy;"
+      }
+    ],
+    "createdAt": "2026-04-14T13:26:26.161Z",
+    "updatedAt": "2026-04-14T23:50:08.780Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210608592-141638892.jpg"
+  },
+  {
+    "_id": "69de41369b417456a446d6d0",
+    "categoryId": "69de36258701926431f3693a",
+    "price": 15.5,
+    "calories": 730,
+    "avgWaitMinutes": 4,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626",
+      "69de3cff9b417456a446d62f"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "烧鸭饭",
+        "description": "经典港式烧鸭饭，烧鸭皮脆肉嫩，搭配米饭与酱汁，风味浓郁。每份约 650–800 千卡。含小麦（麸质）、大豆、芝麻；"
+      },
+      {
+        "locale": "en-US",
+        "name": "Roast Duck Rice",
+        "description": "Classic Hong Kong roast duck rice with crispy roast duck, steamed rice, and savoury sauce. Approx. 650–800 kcal per serving. Contains wheat (gluten), soy, and sesame; "
+      }
+    ],
+    "createdAt": "2026-04-14T13:29:26.728Z",
+    "updatedAt": "2026-04-20T15:05:46.364Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210622021-791629500.jpg",
+    "optionGroups": [
+      {
+        "required": true,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "主食",
+            "_id": "69e63c0bf9976529cef8bd74"
+          },
+          {
+            "locale": "en-US",
+            "name": "Main Couse",
+            "_id": "69e63c0bf9976529cef8bd75"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "米饭",
+                "_id": "69e63c0bf9976529cef8bd77"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boiled Rice",
+                "_id": "69e63c0bf9976529cef8bd78"
+              }
+            ],
+            "_id": "69e63c0bf9976529cef8bd76"
+          },
+          {
+            "extraPrice": 2,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "炒饭",
+                "_id": "69e63c0bf9976529cef8bd7a"
+              },
+              {
+                "locale": "en-US",
+                "name": "Fried Rice",
+                "_id": "69e63c0bf9976529cef8bd7b"
+              }
+            ],
+            "_id": "69e63c0bf9976529cef8bd79"
+          },
+          {
+            "extraPrice": 3,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "炒面",
+                "_id": "69e63c0bf9976529cef8bd7d"
+              },
+              {
+                "locale": "en-US",
+                "name": "Fried Noodle",
+                "_id": "69e63c0bf9976529cef8bd7e"
+              }
+            ],
+            "_id": "69e63c0bf9976529cef8bd7c"
+          },
+          {
+            "extraPrice": 1.5,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "薯条",
+                "_id": "69e63c0bf9976529cef8bd80"
+              },
+              {
+                "locale": "en-US",
+                "name": "Chips",
+                "_id": "69e63c0bf9976529cef8bd81"
+              }
+            ],
+            "_id": "69e63c0bf9976529cef8bd7f"
+          }
+        ],
+        "_id": "69e63c0bf9976529cef8bd73"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e63c0bf9976529cef8bd83"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e63c0bf9976529cef8bd84"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 1,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "去骨",
+                "_id": "69e63c0bf9976529cef8bd86"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boneless ",
+                "_id": "69e63c0bf9976529cef8bd87"
+              }
+            ],
+            "_id": "69e63c0bf9976529cef8bd85"
+          }
+        ],
+        "_id": "69e63c0bf9976529cef8bd82"
+      }
+    ]
+  },
+  {
+    "_id": "69de6518b0e3de14dc31dfc0",
+    "categoryId": "69de35f18701926431f36937",
+    "price": 5,
+    "calories": 300,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "小笼包",
+        "description": "经典小笼包，薄皮包裹鲜嫩猪肉与浓郁汤汁，现蒸上桌，鲜香多汁。含小麦（麸质）、大豆；"
+      },
+      {
+        "locale": "en-US",
+        "name": "SiuLoongBao",
+        "description": "Classic Xiao Long Bao with delicate wheat skin, filled with juicy pork and savoury broth, freshly steamed to order. Contains wheat (gluten) and soy"
+      }
+    ],
+    "createdAt": "2026-04-14T16:02:32.968Z",
+    "updatedAt": "2026-04-14T23:50:50.084Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210649915-331146317.jpg"
+  },
+  {
+    "_id": "69de6580b0e3de14dc31dfca",
+    "categoryId": "69de35f18701926431f36937",
+    "price": 5,
+    "calories": 200,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3ce09b417456a446d617",
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "虾饺",
+        "description": "经典港式虾饺，晶莹薄皮包裹鲜虾，现蒸上桌，鲜甜弹嫩。含甲壳类、小麦（麸质）、大豆；"
+      },
+      {
+        "locale": "en-US",
+        "name": "HarGao",
+        "description": "Classic Har Gow with a delicate translucent wrapper and juicy shrimp filling, freshly steamed. Contains crustaceans, wheat (gluten), and soy;"
+      }
+    ],
+    "createdAt": "2026-04-14T16:04:16.962Z",
+    "updatedAt": "2026-04-20T12:26:16.251Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210655719-363491142.jpg"
+  },
+  {
+    "_id": "69de65c8b0e3de14dc31dfd4",
+    "categoryId": "69de35f18701926431f36937",
+    "price": 4.5,
+    "calories": 300,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "腐皮卷",
+        "description": "经典港式腐皮卷，以豆腐皮包裹鲜虾与肉馅炸至金黄，外皮酥脆，内馅鲜香多汁。含大豆、小麦（麸质）、甲壳类及蛋。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Bean Curd Skin Roll",
+        "description": "Classic bean curd roll filled with prawn and meat, wrapped in tofu skin and deep-fried until golden and crispy. Contains soy, wheat (gluten), crustaceans, and egg."
+      }
+    ],
+    "createdAt": "2026-04-14T16:05:28.522Z",
+    "updatedAt": "2026-04-20T22:43:20.713Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210669317-362932245.jpg"
+  },
+  {
+    "_id": "69de661eb0e3de14dc31dfde",
+    "categoryId": "69de33ea8701926431f36934",
+    "price": 6.5,
+    "calories": 300,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626",
+      "69de3ced9b417456a446d620"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "叉烧卷",
+        "description": "经典港式叉烧卷，松软面皮包裹香甜多汁叉烧馅，蒸制而成，口感柔软香浓。含小麦（麸质）、大豆及蛋。"
+      },
+      {
+        "locale": "en-US",
+        "name": "CharSiu Spring Rolls",
+        "description": "Classic Cantonese CharSiu Spring with a soft steamed dough wrapper and a sweet-savory char siu filling. Contains wheat (gluten), soy, and egg."
+      }
+    ],
+    "createdAt": "2026-04-14T16:06:54.749Z",
+    "updatedAt": "2026-04-14T23:51:17.564Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210677379-126424686.jpg"
+  },
+  {
+    "_id": "69de6668b0e3de14dc31dfed",
+    "categoryId": "69de33ea8701926431f36934",
+    "price": 10,
+    "calories": 600,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626",
+      "69de3ced9b417456a446d620"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "猪肉饺子",
+        "description": "手工猪肉饺子，内馅鲜嫩多汁，饺子皮劲道饱满，经典中式风味。含小麦（麸质）、大豆及蛋。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Home Made Pork Dumpling",
+        "description": "Homemade pork dumplings with a juicy seasoned pork filling and tender dumpling skin. Contains wheat (gluten), soy, and egg."
+      }
+    ],
+    "createdAt": "2026-04-14T16:08:08.690Z",
+    "updatedAt": "2026-04-14T23:51:22.670Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210682346-168268125.jpg"
+  },
+  {
+    "_id": "69de66d4b0e3de14dc31dff7",
+    "categoryId": "69de33ea8701926431f36934",
+    "price": 8,
+    "calories": 350,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3ce09b417456a446d617",
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626",
+      "69de3ced9b417456a446d620"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "炸虾 6pcs",
+        "description": "香炸大虾，外层金黄酥脆，虾肉鲜嫩弹牙，口感香酥可口。含甲壳类、小麦（麸质）、大豆及蛋。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Deep-Fry KingPrawn 6pcs",
+        "description": "Deep-fried king prawns with a golden crispy coating and juicy, tender prawn inside. Contains crustaceans, wheat (gluten), soy, and egg."
+      }
+    ],
+    "createdAt": "2026-04-14T16:09:56.530Z",
+    "updatedAt": "2026-04-14T23:51:28.330Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210688114-800186608.jpg"
+  },
+  {
+    "_id": "69de677bb0e3de14dc31dffd",
+    "categoryId": "69de33ea8701926431f36934",
+    "price": 10,
+    "calories": 500,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3ce09b417456a446d617",
+      "69de3cea9b417456a446d61d",
+      "69de3ced9b417456a446d620",
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "炸虾 8pcs",
+        "description": "香炸大虾，外层金黄酥脆，虾肉鲜嫩弹牙，口感香酥可口。含甲壳类、小麦（麸质）、大豆及蛋"
+      },
+      {
+        "locale": "en-US",
+        "name": "Deep-Fry KingPrawn 8pcs",
+        "description": "Deep-fried king prawns with a golden crispy coating and juicy, tender prawn inside. Contains crustaceans, wheat (gluten), soy, and egg."
+      }
+    ],
+    "createdAt": "2026-04-14T16:12:43.535Z",
+    "updatedAt": "2026-04-14T23:51:32.885Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210692706-301581105.jpg"
+  },
+  {
+    "_id": "69de683db0e3de14dc31e010",
+    "categoryId": "69de36258701926431f3693a",
+    "price": 15.5,
+    "calories": 800,
+    "avgWaitMinutes": 4,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "叉烧饭",
+        "description": "经典叉烧饭，香甜多汁的港式叉烧配上米饭，风味浓郁，咸香可口。含小麦（麸质）及大豆。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Sweet Roast Pork Rice\t",
+        "description": "Classic char siu rice with tender Cantonese BBQ pork served over steamed rice, rich in sweet and savoury flavour. Contains wheat (gluten) and soy."
+      }
+    ],
+    "createdAt": "2026-04-14T16:15:57.208Z",
+    "updatedAt": "2026-04-20T12:18:45.242Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210714755-487120508.jpg",
+    "optionGroups": [
+      {
+        "required": true,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "主食",
+            "_id": "69e619a5019900420592156b"
+          },
+          {
+            "locale": "en-US",
+            "name": "Main Course",
+            "_id": "69e619a5019900420592156c"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "白饭",
+                "_id": "69e619a5019900420592156e"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boiled Rice",
+                "_id": "69e619a5019900420592156f"
+              }
+            ],
+            "_id": "69e619a5019900420592156d"
+          },
+          {
+            "extraPrice": 1.5,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "炒饭",
+                "_id": "69e619a50199004205921571"
+              },
+              {
+                "locale": "en-US",
+                "name": "Fried Rice",
+                "_id": "69e619a50199004205921572"
+              }
+            ],
+            "_id": "69e619a50199004205921570"
+          },
+          {
+            "extraPrice": 2.5,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "炒面",
+                "_id": "69e619a50199004205921574"
+              },
+              {
+                "locale": "en-US",
+                "name": "Noodles",
+                "_id": "69e619a50199004205921575"
+              }
+            ],
+            "_id": "69e619a50199004205921573"
+          },
+          {
+            "extraPrice": 1.5,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "薯条",
+                "_id": "69e619a50199004205921577"
+              },
+              {
+                "locale": "en-US",
+                "name": "Chips",
+                "_id": "69e619a50199004205921578"
+              }
+            ],
+            "_id": "69e619a50199004205921576"
+          }
+        ],
+        "_id": "69e619a5019900420592156a"
+      }
+    ]
+  },
+  {
+    "_id": "69de6895b0e3de14dc31e01a",
+    "categoryId": "69de36258701926431f3693a",
+    "price": 15.5,
+    "calories": 800,
+    "avgWaitMinutes": 4,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "脆皮烧肉饭",
+        "description": "经典脆皮烧肉饭，脆皮烧肉外皮酥脆、肉质鲜嫩，配上米饭，咸香浓郁。含小麦（麸质）及大豆。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Crispy Roast Pork Rice\t",
+        "description": "Classic crispy pork belly rice with crispy skin, tender meat, and steamed rice, rich in savoury flavour. Contains wheat (gluten) and soy."
+      }
+    ],
+    "createdAt": "2026-04-14T16:17:25.143Z",
+    "updatedAt": "2026-04-20T22:12:13.871Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210719684-564952806.jpg",
+    "optionGroups": [
+      {
+        "required": true,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "主食",
+            "_id": "69e6a4bd953cf0e52fba07b2"
+          },
+          {
+            "locale": "en-US",
+            "name": "Main Course",
+            "_id": "69e6a4bd953cf0e52fba07b3"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "白饭",
+                "_id": "69e6a4bd953cf0e52fba07b5"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boiled Rice",
+                "_id": "69e6a4bd953cf0e52fba07b6"
+              }
+            ],
+            "_id": "69e6a4bd953cf0e52fba07b4"
+          },
+          {
+            "extraPrice": 2,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "炒饭",
+                "_id": "69e6a4bd953cf0e52fba07b8"
+              },
+              {
+                "locale": "en-US",
+                "name": "Fried Rice",
+                "_id": "69e6a4bd953cf0e52fba07b9"
+              }
+            ],
+            "_id": "69e6a4bd953cf0e52fba07b7"
+          },
+          {
+            "extraPrice": 3,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "炒面",
+                "_id": "69e6a4bd953cf0e52fba07bb"
+              },
+              {
+                "locale": "en-US",
+                "name": "Noodles",
+                "_id": "69e6a4bd953cf0e52fba07bc"
+              }
+            ],
+            "_id": "69e6a4bd953cf0e52fba07ba"
+          },
+          {
+            "extraPrice": 1.5,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "薯条",
+                "_id": "69e6a4bd953cf0e52fba07be"
+              },
+              {
+                "locale": "en-US",
+                "name": "Chips",
+                "_id": "69e6a4bd953cf0e52fba07bf"
+              }
+            ],
+            "_id": "69e6a4bd953cf0e52fba07bd"
+          }
+        ],
+        "_id": "69e6a4bd953cf0e52fba07b1"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e6a4bd953cf0e52fba07c1"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e6a4bd953cf0e52fba07c2"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 1,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "去骨",
+                "_id": "69e6a4bd953cf0e52fba07c4"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boneless ",
+                "_id": "69e6a4bd953cf0e52fba07c5"
+              }
+            ],
+            "_id": "69e6a4bd953cf0e52fba07c3"
+          }
+        ],
+        "_id": "69e6a4bd953cf0e52fba07c0"
+      }
+    ]
+  },
+  {
+    "_id": "69de68cab0e3de14dc31e024",
+    "categoryId": "69de36258701926431f3693a",
+    "price": 12.8,
+    "calories": 800,
+    "avgWaitMinutes": 4,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "豉油鸡饭",
+        "description": "经典豉油鸡饭，鸡肉鲜嫩入味，淋上浓香豉油酱汁，配上米饭，风味咸香可口。含小麦（麸质）及大豆。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Soya Chicken Rice\t",
+        "description": "Classic soy sauce chicken rice with tender chicken, served with steamed rice and rich savoury soy sauce. Contains wheat (gluten) and soy."
+      }
+    ],
+    "createdAt": "2026-04-14T16:18:18.500Z",
+    "updatedAt": "2026-04-24T22:39:57.989Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210739401-506030491.jpg",
+    "optionGroups": [
+      {
+        "required": true,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "主食",
+            "_id": "69e63be10199004205921918"
+          },
+          {
+            "locale": "en-US",
+            "name": "Main Course",
+            "_id": "69e63be10199004205921919"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "白饭",
+                "_id": "69e63be1019900420592191b"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boiled Rice",
+                "_id": "69e63be1019900420592191c"
+              }
+            ],
+            "_id": "69e63be1019900420592191a"
+          },
+          {
+            "extraPrice": 2,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "炒饭",
+                "_id": "69e63be1019900420592191e"
+              },
+              {
+                "locale": "en-US",
+                "name": "Fried Rice",
+                "_id": "69e63be1019900420592191f"
+              }
+            ],
+            "_id": "69e63be1019900420592191d"
+          },
+          {
+            "extraPrice": 3,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "炒面",
+                "_id": "69e63be10199004205921921"
+              },
+              {
+                "locale": "en-US",
+                "name": "Noodles",
+                "_id": "69e63be10199004205921922"
+              }
+            ],
+            "_id": "69e63be10199004205921920"
+          },
+          {
+            "extraPrice": 1.5,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "薯条",
+                "_id": "69e63be10199004205921924"
+              },
+              {
+                "locale": "en-US",
+                "name": "Chips",
+                "_id": "69e63be10199004205921925"
+              }
+            ],
+            "_id": "69e63be10199004205921923"
+          }
+        ],
+        "_id": "69e63be10199004205921917"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e63be10199004205921927"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e63be10199004205921928"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 1,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "去骨",
+                "_id": "69e63be1019900420592192a"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boneless ",
+                "_id": "69e63be1019900420592192b"
+              }
+            ],
+            "_id": "69e63be10199004205921929"
+          }
+        ],
+        "_id": "69e63be10199004205921926"
+      }
+    ]
+  },
+  {
+    "_id": "69de6d54ba3af24a9949a891",
+    "categoryId": "69de36258701926431f3693a",
+    "price": 17,
+    "calories": 900,
+    "avgWaitMinutes": 4,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "双拼饭",
+        "description": "经典双拼饭，可选择两款烧味搭配米饭，肉香浓郁，口感丰富，满足不同口味选择。含小麦（麸质）及大豆。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Double Roast Rice\t",
+        "description": "Classic two-combination rice with your choice of two roasted meat selections served over steamed rice, rich in flavour and satisfying in texture. Contains wheat (gluten) and soy."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": true,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "选择1",
+            "_id": "69e63ce1f9976529cef8bdac"
+          },
+          {
+            "locale": "en-US",
+            "name": "Option1",
+            "_id": "69e63ce1f9976529cef8bdad"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "烧鸭",
+                "_id": "69e63ce1f9976529cef8bdaf"
+              },
+              {
+                "locale": "en-US",
+                "name": "Roast Duck",
+                "_id": "69e63ce1f9976529cef8bdb0"
+              }
+            ],
+            "_id": "69e63ce1f9976529cef8bdae"
+          },
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "叉烧",
+                "_id": "69e63ce1f9976529cef8bdb2"
+              },
+              {
+                "locale": "en-US",
+                "name": "Char Siu",
+                "_id": "69e63ce1f9976529cef8bdb3"
+              }
+            ],
+            "_id": "69e63ce1f9976529cef8bdb1"
+          },
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "烧肉",
+                "_id": "69e63ce1f9976529cef8bdb5"
+              },
+              {
+                "locale": "en-US",
+                "name": "Roast Pork",
+                "_id": "69e63ce1f9976529cef8bdb6"
+              }
+            ],
+            "_id": "69e63ce1f9976529cef8bdb4"
+          },
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "酱油鸡",
+                "_id": "69e63ce1f9976529cef8bdb8"
+              },
+              {
+                "locale": "en-US",
+                "name": "Soya Chicken",
+                "_id": "69e63ce1f9976529cef8bdb9"
+              }
+            ],
+            "_id": "69e63ce1f9976529cef8bdb7"
+          }
+        ],
+        "_id": "69e63ce1f9976529cef8bdab"
+      },
+      {
+        "required": true,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "选择2",
+            "_id": "69e63ce1f9976529cef8bdbb"
+          },
+          {
+            "locale": "en-US",
+            "name": "Option2",
+            "_id": "69e63ce1f9976529cef8bdbc"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "烧鸭",
+                "_id": "69e63ce1f9976529cef8bdbe"
+              },
+              {
+                "locale": "en-US",
+                "name": "Roast Duck",
+                "_id": "69e63ce1f9976529cef8bdbf"
+              }
+            ],
+            "_id": "69e63ce1f9976529cef8bdbd"
+          },
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "叉烧",
+                "_id": "69e63ce1f9976529cef8bdc1"
+              },
+              {
+                "locale": "en-US",
+                "name": "Char Siu",
+                "_id": "69e63ce1f9976529cef8bdc2"
+              }
+            ],
+            "_id": "69e63ce1f9976529cef8bdc0"
+          },
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "烧肉",
+                "_id": "69e63ce1f9976529cef8bdc4"
+              },
+              {
+                "locale": "en-US",
+                "name": "Roast Pork",
+                "_id": "69e63ce1f9976529cef8bdc5"
+              }
+            ],
+            "_id": "69e63ce1f9976529cef8bdc3"
+          },
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "酱油鸡",
+                "_id": "69e63ce1f9976529cef8bdc7"
+              },
+              {
+                "locale": "en-US",
+                "name": "Soya Chicken",
+                "_id": "69e63ce1f9976529cef8bdc8"
+              }
+            ],
+            "_id": "69e63ce1f9976529cef8bdc6"
+          }
+        ],
+        "_id": "69e63ce1f9976529cef8bdba"
+      },
+      {
+        "required": true,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "主食",
+            "_id": "69e63ce1f9976529cef8bdca"
+          },
+          {
+            "locale": "en-US",
+            "name": "Main Course",
+            "_id": "69e63ce1f9976529cef8bdcb"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "白饭",
+                "_id": "69e63ce1f9976529cef8bdcd"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boiled Rice",
+                "_id": "69e63ce1f9976529cef8bdce"
+              }
+            ],
+            "_id": "69e63ce1f9976529cef8bdcc"
+          },
+          {
+            "extraPrice": 2,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "炒饭",
+                "_id": "69e63ce1f9976529cef8bdd0"
+              },
+              {
+                "locale": "en-US",
+                "name": "Fried Rice",
+                "_id": "69e63ce1f9976529cef8bdd1"
+              }
+            ],
+            "_id": "69e63ce1f9976529cef8bdcf"
+          },
+          {
+            "extraPrice": 3,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "炒面",
+                "_id": "69e63ce1f9976529cef8bdd3"
+              },
+              {
+                "locale": "en-US",
+                "name": "Noodles",
+                "_id": "69e63ce1f9976529cef8bdd4"
+              }
+            ],
+            "_id": "69e63ce1f9976529cef8bdd2"
+          },
+          {
+            "extraPrice": 1.5,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "薯条",
+                "_id": "69e63ce1f9976529cef8bdd6"
+              },
+              {
+                "locale": "en-US",
+                "name": "Chips",
+                "_id": "69e63ce1f9976529cef8bdd7"
+              }
+            ],
+            "_id": "69e63ce1f9976529cef8bdd5"
+          }
+        ],
+        "_id": "69e63ce1f9976529cef8bdc9"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e63ce1f9976529cef8bdd9"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e63ce1f9976529cef8bdda"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 1,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "去骨",
+                "_id": "69e63ce1f9976529cef8bddc"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boneless ",
+                "_id": "69e63ce1f9976529cef8bddd"
+              }
+            ],
+            "_id": "69e63ce1f9976529cef8bddb"
+          }
+        ],
+        "_id": "69e63ce1f9976529cef8bdd8"
+      }
+    ],
+    "createdAt": "2026-04-14T16:37:40.963Z",
+    "updatedAt": "2026-04-20T14:49:05.265Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210760984-807546600.jpg"
+  },
+  {
+    "_id": "69de7206c734543f3b3ffa71",
+    "categoryId": "69de36258701926431f3693a",
+    "price": 15.3,
+    "calories": 800,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "牛肉饭",
+        "description": "经典牛肉饭，牛肉鲜嫩入味，配上米饭，口感丰富，咸香可口。含小麦（麸质）及大豆。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Beef Rice",
+        "description": "Classic beef rice with tender, flavourful beef served over steamed rice, rich and savoury in taste. Contains wheat (gluten) and soy."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": true,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "主食",
+            "_id": "69e63cfdf9976529cef8be15"
+          },
+          {
+            "locale": "en-US",
+            "name": "Main Course",
+            "_id": "69e63cfdf9976529cef8be16"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "白饭",
+                "_id": "69e63cfdf9976529cef8be18"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boiled Rice",
+                "_id": "69e63cfdf9976529cef8be19"
+              }
+            ],
+            "_id": "69e63cfdf9976529cef8be17"
+          },
+          {
+            "extraPrice": 2,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "炒饭",
+                "_id": "69e63cfdf9976529cef8be1b"
+              },
+              {
+                "locale": "en-US",
+                "name": "Fried Rice",
+                "_id": "69e63cfdf9976529cef8be1c"
+              }
+            ],
+            "_id": "69e63cfdf9976529cef8be1a"
+          },
+          {
+            "extraPrice": 3,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "炒面",
+                "_id": "69e63cfdf9976529cef8be1e"
+              },
+              {
+                "locale": "en-US",
+                "name": "Noodles",
+                "_id": "69e63cfdf9976529cef8be1f"
+              }
+            ],
+            "_id": "69e63cfdf9976529cef8be1d"
+          },
+          {
+            "extraPrice": 1.5,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "薯条",
+                "_id": "69e63cfdf9976529cef8be21"
+              },
+              {
+                "locale": "en-US",
+                "name": "Chips",
+                "_id": "69e63cfdf9976529cef8be22"
+              }
+            ],
+            "_id": "69e63cfdf9976529cef8be20"
+          },
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "免菜",
+                "_id": "69e63cfdf9976529cef8be24"
+              },
+              {
+                "locale": "en-US",
+                "name": "No Veg",
+                "_id": "69e63cfdf9976529cef8be25"
+              }
+            ],
+            "_id": "69e63cfdf9976529cef8be23"
+          }
+        ],
+        "_id": "69e63cfdf9976529cef8be14"
+      }
+    ],
+    "createdAt": "2026-04-14T16:57:42.809Z",
+    "updatedAt": "2026-04-20T14:49:33.380Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210764941-307759882.jpg"
+  },
+  {
+    "_id": "69de724ac734543f3b3ffa77",
+    "categoryId": "69de36258701926431f3693a",
+    "price": 15.3,
+    "calories": 850,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3ced9b417456a446d620",
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "大虾炒饭",
+        "description": "经典大虾炒饭，以鲜嫩大虾搭配米饭大火快炒，粒粒分明，鲜香可口。含甲壳类、蛋、小麦（麸质）及大豆。"
+      },
+      {
+        "locale": "en-US",
+        "name": "King Prawn Fried Rice",
+        "description": "Classic king prawn fried rice with juicy prawns and fluffy stir-fried rice, full of savoury flavour. Contains crustaceans, egg, wheat (gluten), and soy."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "大虾炒饭",
+            "_id": "69e64e040199004205921f4e"
+          },
+          {
+            "locale": "en-US",
+            "name": "King Prawn Fried Rice",
+            "_id": "69e64e040199004205921f4f"
+          }
+        ],
+        "choices": [],
+        "_id": "69e64e040199004205921f4d"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e64e040199004205921f51"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e64e040199004205921f52"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 3,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "加虾",
+                "_id": "69e64e040199004205921f54"
+              },
+              {
+                "locale": "en-US",
+                "name": "Add King Prawns",
+                "_id": "69e64e040199004205921f55"
+              }
+            ],
+            "_id": "69e64e040199004205921f53"
+          },
+          {
+            "extraPrice": 3,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "加鸭肉",
+                "_id": "69e64e040199004205921f57"
+              },
+              {
+                "locale": "en-US",
+                "name": "Add Roast Duck",
+                "_id": "69e64e040199004205921f58"
+              }
+            ],
+            "_id": "69e64e040199004205921f56"
+          },
+          {
+            "extraPrice": 2,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "加鸡肉",
+                "_id": "69e64e040199004205921f5a"
+              },
+              {
+                "locale": "en-US",
+                "name": "Add Chicken",
+                "_id": "69e64e040199004205921f5b"
+              }
+            ],
+            "_id": "69e64e040199004205921f59"
+          }
+        ],
+        "_id": "69e64e040199004205921f50"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e64e040199004205921f5d"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e64e040199004205921f5e"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "免菜",
+                "_id": "69e64e040199004205921f60"
+              },
+              {
+                "locale": "en-US",
+                "name": "No Veg",
+                "_id": "69e64e040199004205921f61"
+              }
+            ],
+            "_id": "69e64e040199004205921f5f"
+          }
+        ],
+        "_id": "69e64e040199004205921f5c"
+      }
+    ],
+    "createdAt": "2026-04-14T16:58:50.823Z",
+    "updatedAt": "2026-04-20T16:02:12.006Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210789239-49896306.jpg"
+  },
+  {
+    "_id": "69de7280c734543f3b3ffa7d",
+    "categoryId": "69de36258701926431f3693a",
+    "price": 11.5,
+    "calories": 800,
+    "avgWaitMinutes": 8,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3ced9b417456a446d620",
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "鸡炒饭",
+        "description": "经典鸡炒饭，以鲜嫩鸡肉搭配米饭大火快炒，粒粒分明，香气十足。含蛋、小麦（麸质）及大豆。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Chicken Fried Rice\t",
+        "description": "Classic chicken fried rice with tender chicken and fluffy stir-fried rice, full of savoury wok flavour. Contains egg, wheat (gluten), and soy."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "鸡炒饭",
+            "_id": "69e605218c061a506989ddde"
+          },
+          {
+            "locale": "en-US",
+            "name": "Chicken Fried Rice\t",
+            "_id": "69e605218c061a506989dddf"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 3,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "加虾",
+                "_id": "69e605218c061a506989dde1"
+              },
+              {
+                "locale": "en-US",
+                "name": "Add King Prawns",
+                "_id": "69e605218c061a506989dde2"
+              }
+            ],
+            "_id": "69e605218c061a506989dde0"
+          },
+          {
+            "extraPrice": 3,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "加鸭肉",
+                "_id": "69e605218c061a506989dde4"
+              },
+              {
+                "locale": "en-US",
+                "name": "Add Roast Duck",
+                "_id": "69e605218c061a506989dde5"
+              }
+            ],
+            "_id": "69e605218c061a506989dde3"
+          },
+          {
+            "extraPrice": 2,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "加鸡肉",
+                "_id": "69e605218c061a506989dde7"
+              },
+              {
+                "locale": "en-US",
+                "name": "Add Chicken",
+                "_id": "69e605218c061a506989dde8"
+              }
+            ],
+            "_id": "69e605218c061a506989dde6"
+          }
+        ],
+        "_id": "69e605218c061a506989dddd"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e605218c061a506989ddea"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e605218c061a506989ddeb"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "免菜",
+                "_id": "69e605218c061a506989dded"
+              },
+              {
+                "locale": "en-US",
+                "name": "No Veg",
+                "_id": "69e605218c061a506989ddee"
+              }
+            ],
+            "_id": "69e605218c061a506989ddec"
+          }
+        ],
+        "_id": "69e605218c061a506989dde9"
+      }
+    ],
+    "createdAt": "2026-04-14T16:59:44.838Z",
+    "updatedAt": "2026-04-20T10:51:13.241Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210795222-749876856.jpg"
+  },
+  {
+    "_id": "69de72adc734543f3b3ffa83",
+    "categoryId": "69de36258701926431f3693a",
+    "price": 13.8,
+    "calories": 850,
+    "avgWaitMinutes": 8,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "鸭炒饭",
+        "description": "经典鸭肉炒饭，以鲜嫩鸭肉搭配米饭大火快炒，粒粒分明，香气浓郁。含蛋、小麦（麸质）及大豆。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Duck Fried Rice",
+        "description": "Classic duck fried rice with tender duck and fluffy stir-fried rice, full of rich savoury wok flavour. Contains egg, wheat (gluten), and soy."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "鸭炒饭",
+            "_id": "69e605868c061a506989de07"
+          },
+          {
+            "locale": "en-US",
+            "name": "Duck Fried Rice",
+            "_id": "69e605868c061a506989de08"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 3,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "加虾",
+                "_id": "69e605868c061a506989de0a"
+              },
+              {
+                "locale": "en-US",
+                "name": "Add King Prawns",
+                "_id": "69e605868c061a506989de0b"
+              }
+            ],
+            "_id": "69e605868c061a506989de09"
+          },
+          {
+            "extraPrice": 3,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "加鸭肉",
+                "_id": "69e605868c061a506989de0d"
+              },
+              {
+                "locale": "en-US",
+                "name": "Add Roast Duck",
+                "_id": "69e605868c061a506989de0e"
+              }
+            ],
+            "_id": "69e605868c061a506989de0c"
+          },
+          {
+            "extraPrice": 2,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "加鸡肉",
+                "_id": "69e605868c061a506989de10"
+              },
+              {
+                "locale": "en-US",
+                "name": "Add Chicken",
+                "_id": "69e605868c061a506989de11"
+              }
+            ],
+            "_id": "69e605868c061a506989de0f"
+          }
+        ],
+        "_id": "69e605868c061a506989de06"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e605868c061a506989de13"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e605868c061a506989de14"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "免菜",
+                "_id": "69e605868c061a506989de16"
+              },
+              {
+                "locale": "en-US",
+                "name": "No Veg",
+                "_id": "69e605868c061a506989de17"
+              }
+            ],
+            "_id": "69e605868c061a506989de15"
+          }
+        ],
+        "_id": "69e605868c061a506989de12"
+      }
+    ],
+    "createdAt": "2026-04-14T17:00:29.632Z",
+    "updatedAt": "2026-04-20T10:52:54.711Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210818567-769185003.jpg"
+  },
+  {
+    "_id": "69de72e8c734543f3b3ffa8e",
+    "categoryId": "69de36308701926431f3693d",
+    "price": 13,
+    "calories": 800,
+    "avgWaitMinutes": 0,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3ce09b417456a446d617",
+      "69de3cf39b417456a446d626",
+      "69de3cea9b417456a446d61d"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "咖喱大虾",
+        "description": "经典咖喱大虾，鲜嫩大虾配上浓郁香滑咖喱酱，风味浓厚，微辣开胃。含甲壳类、大豆及小麦（麸质）。"
+      },
+      {
+        "locale": "en-US",
+        "name": "King Prawn Curry\t",
+        "description": "Classic king prawn curry with tender prawns in a rich, smooth curry sauce, full of aromatic flavour with a gentle spicy kick. Contains crustaceans, soy, and wheat (gluten)."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": true,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "主食",
+            "_id": "69e63d0801990042059219f7"
+          },
+          {
+            "locale": "en-US",
+            "name": "Main Course",
+            "_id": "69e63d0801990042059219f8"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "白饭",
+                "_id": "69e63d0801990042059219fa"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boiled Rice",
+                "_id": "69e63d0801990042059219fb"
+              }
+            ],
+            "_id": "69e63d0801990042059219f9"
+          },
+          {
+            "extraPrice": 2,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "炒饭",
+                "_id": "69e63d0801990042059219fd"
+              },
+              {
+                "locale": "en-US",
+                "name": "Fried Rice",
+                "_id": "69e63d0801990042059219fe"
+              }
+            ],
+            "_id": "69e63d0801990042059219fc"
+          },
+          {
+            "extraPrice": 3,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "炒面",
+                "_id": "69e63d080199004205921a00"
+              },
+              {
+                "locale": "en-US",
+                "name": "Noodles",
+                "_id": "69e63d080199004205921a01"
+              }
+            ],
+            "_id": "69e63d0801990042059219ff"
+          },
+          {
+            "extraPrice": 1.5,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "薯条",
+                "_id": "69e63d080199004205921a03"
+              },
+              {
+                "locale": "en-US",
+                "name": "Chips",
+                "_id": "69e63d080199004205921a04"
+              }
+            ],
+            "_id": "69e63d080199004205921a02"
+          }
+        ],
+        "_id": "69e63d0801990042059219f6"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e63d080199004205921a06"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e63d080199004205921a07"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "免菜",
+                "_id": "69e63d080199004205921a09"
+              },
+              {
+                "locale": "en-US",
+                "name": "No Veg",
+                "_id": "69e63d080199004205921a0a"
+              }
+            ],
+            "_id": "69e63d080199004205921a08"
+          }
+        ],
+        "_id": "69e63d080199004205921a05"
+      }
+    ],
+    "createdAt": "2026-04-14T17:01:28.863Z",
+    "updatedAt": "2026-04-20T14:49:44.959Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210822706-662852385.jpg"
+  },
+  {
+    "_id": "69de731ec734543f3b3ffa94",
+    "categoryId": "69de36308701926431f3693d",
+    "price": 12.5,
+    "calories": 700,
+    "avgWaitMinutes": 8,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cf39b417456a446d626",
+      "69de3cea9b417456a446d61d"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "咖喱牛肉",
+        "description": "经典咖喱牛肉，鲜嫩牛肉配上浓郁香滑咖喱酱，风味醇厚，微辣开胃。含大豆及小麦（麸质）。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Beef Curry\t",
+        "description": "Classic beef curry with tender beef in a rich, smooth curry sauce, full of aromatic flavour with a gentle spicy kick. Contains soy and wheat (gluten)."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": true,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "主食",
+            "_id": "69e63d25f9976529cef8be3e"
+          },
+          {
+            "locale": "en-US",
+            "name": "Main Course",
+            "_id": "69e63d25f9976529cef8be3f"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "白饭",
+                "_id": "69e63d25f9976529cef8be41"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boiled Rice",
+                "_id": "69e63d25f9976529cef8be42"
+              }
+            ],
+            "_id": "69e63d25f9976529cef8be40"
+          },
+          {
+            "extraPrice": 2,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "炒饭",
+                "_id": "69e63d25f9976529cef8be44"
+              },
+              {
+                "locale": "en-US",
+                "name": "Fried Rice",
+                "_id": "69e63d25f9976529cef8be45"
+              }
+            ],
+            "_id": "69e63d25f9976529cef8be43"
+          },
+          {
+            "extraPrice": 3,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "炒面",
+                "_id": "69e63d25f9976529cef8be47"
+              },
+              {
+                "locale": "en-US",
+                "name": "Noodles",
+                "_id": "69e63d25f9976529cef8be48"
+              }
+            ],
+            "_id": "69e63d25f9976529cef8be46"
+          },
+          {
+            "extraPrice": 2,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "薯条",
+                "_id": "69e63d25f9976529cef8be4a"
+              },
+              {
+                "locale": "en-US",
+                "name": "Chips",
+                "_id": "69e63d25f9976529cef8be4b"
+              }
+            ],
+            "_id": "69e63d25f9976529cef8be49"
+          }
+        ],
+        "_id": "69e63d25f9976529cef8be3d"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e63d25f9976529cef8be4d"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e63d25f9976529cef8be4e"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "免菜",
+                "_id": "69e63d25f9976529cef8be50"
+              },
+              {
+                "locale": "en-US",
+                "name": "No Veg",
+                "_id": "69e63d25f9976529cef8be51"
+              }
+            ],
+            "_id": "69e63d25f9976529cef8be4f"
+          }
+        ],
+        "_id": "69e63d25f9976529cef8be4c"
+      }
+    ],
+    "createdAt": "2026-04-14T17:02:22.477Z",
+    "updatedAt": "2026-04-20T14:50:13.912Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210827063-277858277.jpg"
+  },
+  {
+    "_id": "69de736cc734543f3b3ffa9f",
+    "categoryId": "69de36308701926431f3693d",
+    "price": 12.5,
+    "calories": 700,
+    "avgWaitMinutes": 8,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cf39b417456a446d626",
+      "69de3cea9b417456a446d61d"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "咖喱鸡肉",
+        "description": "经典咖喱鸡肉，鲜嫩鸡肉配上浓郁香滑咖喱酱，风味丰富，微辣开胃。含大豆及小麦（麸质）。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Chicken Curry\t",
+        "description": "Classic chicken curry with tender chicken in a rich, smooth curry sauce, full of aromatic flavour with a gentle spicy kick. Contains soy and wheat (gluten)."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": true,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "主食",
+            "_id": "69e63d590199004205921a26"
+          },
+          {
+            "locale": "en-US",
+            "name": "Main Course",
+            "_id": "69e63d590199004205921a27"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "白饭",
+                "_id": "69e63d590199004205921a29"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boiled Rice",
+                "_id": "69e63d590199004205921a2a"
+              }
+            ],
+            "_id": "69e63d590199004205921a28"
+          },
+          {
+            "extraPrice": 2,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "炒饭",
+                "_id": "69e63d590199004205921a2c"
+              },
+              {
+                "locale": "en-US",
+                "name": "Fried Rice",
+                "_id": "69e63d590199004205921a2d"
+              }
+            ],
+            "_id": "69e63d590199004205921a2b"
+          },
+          {
+            "extraPrice": 3,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "炒面",
+                "_id": "69e63d590199004205921a2f"
+              },
+              {
+                "locale": "en-US",
+                "name": "Noodles",
+                "_id": "69e63d590199004205921a30"
+              }
+            ],
+            "_id": "69e63d590199004205921a2e"
+          },
+          {
+            "extraPrice": 1.5,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "薯条",
+                "_id": "69e63d590199004205921a32"
+              },
+              {
+                "locale": "en-US",
+                "name": "Chips",
+                "_id": "69e63d590199004205921a33"
+              }
+            ],
+            "_id": "69e63d590199004205921a31"
+          }
+        ],
+        "_id": "69e63d590199004205921a25"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e63d590199004205921a35"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e63d590199004205921a36"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "免菜",
+                "_id": "69e63d590199004205921a38"
+              },
+              {
+                "locale": "en-US",
+                "name": "No Veg",
+                "_id": "69e63d590199004205921a39"
+              }
+            ],
+            "_id": "69e63d590199004205921a37"
+          }
+        ],
+        "_id": "69e63d590199004205921a34"
+      }
+    ],
+    "createdAt": "2026-04-14T17:03:40.040Z",
+    "updatedAt": "2026-04-20T14:51:05.084Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210830673-434531987.jpg"
+  },
+  {
+    "_id": "69de73f2c734543f3b3ffab4",
+    "categoryId": "69de363c8701926431f36940",
+    "price": 13.5,
+    "calories": 700,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3ced9b417456a446d620",
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "豉油鸡汤面",
+        "description": "经典豉油鸡汤面，鲜嫩鸡肉搭配爽滑面条与清香汤底，味道鲜美，咸香可口。含小麦（麸质）、大豆及蛋。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Soya Chicken Noodle soup\t",
+        "description": "Classic soy sauce chicken noodle soup with tender chicken, silky noodles, and a light savoury broth. Contains wheat (gluten), soy, and egg."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e63e55f9976529cef8be82"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e63e55f9976529cef8be83"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "河粉",
+                "_id": "69e63e55f9976529cef8be85"
+              },
+              {
+                "locale": "en-US",
+                "name": "Rice noodles",
+                "_id": "69e63e55f9976529cef8be86"
+              }
+            ],
+            "_id": "69e63e55f9976529cef8be84"
+          }
+        ],
+        "_id": "69e63e55f9976529cef8be81"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e63e55f9976529cef8be88"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e63e55f9976529cef8be89"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 1,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "去骨",
+                "_id": "69e63e55f9976529cef8be8b"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boneless ",
+                "_id": "69e63e55f9976529cef8be8c"
+              }
+            ],
+            "_id": "69e63e55f9976529cef8be8a"
+          }
+        ],
+        "_id": "69e63e55f9976529cef8be87"
+      }
+    ],
+    "createdAt": "2026-04-14T17:05:54.636Z",
+    "updatedAt": "2026-04-24T22:39:59.982Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210845216-4983683.jpg"
+  },
+  {
+    "_id": "69de7413c734543f3b3ffaba",
+    "categoryId": "69de363c8701926431f36940",
+    "price": 15.99,
+    "calories": 700,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3ced9b417456a446d620",
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "烧鸭汤面",
+        "description": "经典烧鸭汤面，鲜嫩烧鸭搭配爽滑面条与清香汤底，味道鲜美，香气浓郁。含小麦（麸质）、大豆及蛋。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Roast Duck Noodle Soup\t\t",
+        "description": "Classic roast duck noodle soup with tender roast duck, silky noodles, and a light savoury broth. Contains wheat (gluten), soy, and egg."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e6a4eb953cf0e52fba07e1"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e6a4eb953cf0e52fba07e2"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "河粉",
+                "_id": "69e6a4eb953cf0e52fba07e4"
+              },
+              {
+                "locale": "en-US",
+                "name": "Rice noodles",
+                "_id": "69e6a4eb953cf0e52fba07e5"
+              }
+            ],
+            "_id": "69e6a4eb953cf0e52fba07e3"
+          }
+        ],
+        "_id": "69e6a4eb953cf0e52fba07e0"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e6a4eb953cf0e52fba07e7"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e6a4eb953cf0e52fba07e8"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 1,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "去骨",
+                "_id": "69e6a4eb953cf0e52fba07ea"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boneless ",
+                "_id": "69e6a4eb953cf0e52fba07eb"
+              }
+            ],
+            "_id": "69e6a4eb953cf0e52fba07e9"
+          }
+        ],
+        "_id": "69e6a4eb953cf0e52fba07e6"
+      }
+    ],
+    "createdAt": "2026-04-14T17:06:27.373Z",
+    "updatedAt": "2026-04-20T22:12:59.611Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210856898-289643305.jpg"
+  },
+  {
+    "_id": "69de7438c734543f3b3ffac0",
+    "categoryId": "69de363c8701926431f36940",
+    "price": 15.99,
+    "calories": 700,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626",
+      "69de3ced9b417456a446d620"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "叉烧汤面",
+        "description": "经典叉烧汤面，香甜多汁叉烧搭配爽滑面条与清香汤底，鲜美可口。含小麦（麸质）、大豆及蛋。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Char Siu Noodle soup\t\t",
+        "description": "Classic char siu noodle soup with tender Cantonese BBQ pork, silky noodles, and a light savoury broth. Contains wheat (gluten), soy, and egg."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e63f0d0199004205921ab4"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e63f0d0199004205921ab5"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "河粉",
+                "_id": "69e63f0d0199004205921ab7"
+              },
+              {
+                "locale": "en-US",
+                "name": "Rice noodles",
+                "_id": "69e63f0d0199004205921ab8"
+              }
+            ],
+            "_id": "69e63f0d0199004205921ab6"
+          }
+        ],
+        "_id": "69e63f0d0199004205921ab3"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e63f0d0199004205921aba"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e63f0d0199004205921abb"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "去骨",
+                "_id": "69e63f0d0199004205921abd"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boneless ",
+                "_id": "69e63f0d0199004205921abe"
+              }
+            ],
+            "_id": "69e63f0d0199004205921abc"
+          }
+        ],
+        "_id": "69e63f0d0199004205921ab9"
+      }
+    ],
+    "createdAt": "2026-04-14T17:07:04.962Z",
+    "updatedAt": "2026-04-20T14:58:21.592Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210860356-77649039.jpg"
+  },
+  {
+    "_id": "69de7464c734543f3b3ffac6",
+    "categoryId": "69de363c8701926431f36940",
+    "price": 15.5,
+    "calories": 750,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626",
+      "69de3ced9b417456a446d620"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "牛肉汤面",
+        "description": "经典牛肉面，鲜嫩牛肉搭配爽滑面条与浓郁汤底，味道鲜美，香气十足。含小麦（麸质）、大豆及蛋。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Beef Noodle soup",
+        "description": "Classic beef noodle soup with tender beef, silky noodles, and a rich savoury broth. Contains wheat (gluten), soy, and egg."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "牛肉汤面",
+            "_id": "69e616740199004205921481"
+          },
+          {
+            "locale": "en-US",
+            "name": "Beef Noodle soup",
+            "_id": "69e616740199004205921482"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 2,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "炸蛋",
+                "_id": "69e616740199004205921484"
+              },
+              {
+                "locale": "en-US",
+                "name": "Crispy Fried Egg",
+                "_id": "69e616740199004205921485"
+              }
+            ],
+            "_id": "69e616740199004205921483"
+          }
+        ],
+        "_id": "69e616740199004205921480"
+      }
+    ],
+    "createdAt": "2026-04-14T17:07:48.958Z",
+    "updatedAt": "2026-04-20T12:05:08.462Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210862825-922295417.jpg"
+  },
+  {
+    "_id": "69de7487c734543f3b3ffacc",
+    "categoryId": "69de363c8701926431f36940",
+    "price": 12.99,
+    "calories": 700,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3ced9b417456a446d620",
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "鸡丝汤面",
+        "description": "经典鸡丝汤面，鲜嫩鸡丝搭配爽滑面条与清香汤底，口感细腻，鲜美可口。含小麦（麸质）、大豆及蛋。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Shredded Chicken Noodle soup",
+        "description": "Classic shredded chicken noodle soup with tender chicken strips, silky noodles, and a light savoury broth. Contains wheat (gluten), soy, and egg."
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-14T17:08:23.347Z",
+    "updatedAt": "2026-04-14T23:54:38.228Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210878035-613820241.jpg"
+  },
+  {
+    "_id": "69de74b5c734543f3b3ffad2",
+    "categoryId": "69de363c8701926431f36940",
+    "price": 15,
+    "calories": 600,
+    "avgWaitMinutes": 12,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3ce09b417456a446d617",
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626",
+      "69de3ced9b417456a446d620"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "云吞面",
+        "description": "经典云吞面，鲜美云吞搭配爽滑面条与清香汤底，口感丰富，鲜香可口。含甲壳类、小麦（麸质）、大豆及蛋。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Won Ton Noodle soup ",
+        "description": "Classic wonton noodle soup with savoury wontons, silky noodles, and a light flavourful broth. Contains crustaceans, wheat (gluten), soy, and egg."
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-14T17:09:09.197Z",
+    "updatedAt": "2026-04-14T23:54:46.986Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210886727-655725102.jpg"
+  },
+  {
+    "_id": "69de74dbc734543f3b3ffadd",
+    "categoryId": "69de363c8701926431f36940",
+    "price": 15.99,
+    "calories": 800,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3ced9b417456a446d620",
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "脆皮烧肉汤面",
+        "description": "经典脆皮烧肉汤面，脆皮烧肉搭配爽滑面条与清香汤底，鲜香浓郁，口感丰富。含小麦（麸质）、大豆及蛋。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Crispy Roast Pork Noodle soup",
+        "description": "Classic crispy pork belly noodle soup with crispy pork, silky noodles, and a light savoury broth. Contains wheat (gluten), soy, and egg."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e6a50a953cf0e52fba07fe"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e6a50a953cf0e52fba07ff"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "河粉",
+                "_id": "69e6a50a953cf0e52fba0801"
+              },
+              {
+                "locale": "en-US",
+                "name": "Rice noodles",
+                "_id": "69e6a50a953cf0e52fba0802"
+              }
+            ],
+            "_id": "69e6a50a953cf0e52fba0800"
+          }
+        ],
+        "_id": "69e6a50a953cf0e52fba07fd"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e6a50a953cf0e52fba0804"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e6a50a953cf0e52fba0805"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 1,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "去骨",
+                "_id": "69e6a50a953cf0e52fba0807"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boneless ",
+                "_id": "69e6a50a953cf0e52fba0808"
+              }
+            ],
+            "_id": "69e6a50a953cf0e52fba0806"
+          }
+        ],
+        "_id": "69e6a50a953cf0e52fba0803"
+      }
+    ],
+    "createdAt": "2026-04-14T17:09:47.823Z",
+    "updatedAt": "2026-04-20T22:13:30.816Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210892976-324931790.jpg"
+  },
+  {
+    "_id": "69de754cc734543f3b3ffaf7",
+    "categoryId": "69de363c8701926431f36940",
+    "price": 17.5,
+    "calories": 900,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626",
+      "69de3ced9b417456a446d620"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "双拼汤面",
+        "description": "经典双拼汤面，可选择两款烧味搭配爽滑面条与清香汤底，风味浓郁，口感丰富。含小麦（麸质）、大豆及蛋。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Double Roast Noodle soup",
+        "description": "Classic two-combination noodle soup with your choice of two roasted meat selections, silky noodles, and a light savoury broth. Contains wheat (gluten), soy, and egg."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": true,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "选择1",
+            "_id": "69e6a515953cf0e52fba081b"
+          },
+          {
+            "locale": "en-US",
+            "name": "Option1",
+            "_id": "69e6a515953cf0e52fba081c"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "烧鸭",
+                "_id": "69e6a515953cf0e52fba081e"
+              },
+              {
+                "locale": "en-US",
+                "name": "Roast Duck",
+                "_id": "69e6a515953cf0e52fba081f"
+              }
+            ],
+            "_id": "69e6a515953cf0e52fba081d"
+          },
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "烧肉",
+                "_id": "69e6a515953cf0e52fba0821"
+              },
+              {
+                "locale": "en-US",
+                "name": "Crispy Roast Pork",
+                "_id": "69e6a515953cf0e52fba0822"
+              }
+            ],
+            "_id": "69e6a515953cf0e52fba0820"
+          },
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "叉烧",
+                "_id": "69e6a515953cf0e52fba0824"
+              },
+              {
+                "locale": "en-US",
+                "name": "Char Siu",
+                "_id": "69e6a515953cf0e52fba0825"
+              }
+            ],
+            "_id": "69e6a515953cf0e52fba0823"
+          },
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "酱油鸡",
+                "_id": "69e6a515953cf0e52fba0827"
+              },
+              {
+                "locale": "en-US",
+                "name": "Soya Chicken",
+                "_id": "69e6a515953cf0e52fba0828"
+              }
+            ],
+            "_id": "69e6a515953cf0e52fba0826"
+          }
+        ],
+        "_id": "69e6a515953cf0e52fba081a"
+      },
+      {
+        "required": true,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "选择2",
+            "_id": "69e6a515953cf0e52fba082a"
+          },
+          {
+            "locale": "en-US",
+            "name": "Option2",
+            "_id": "69e6a515953cf0e52fba082b"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "烧鸭",
+                "_id": "69e6a515953cf0e52fba082d"
+              },
+              {
+                "locale": "en-US",
+                "name": "Roast Duck",
+                "_id": "69e6a515953cf0e52fba082e"
+              }
+            ],
+            "_id": "69e6a515953cf0e52fba082c"
+          },
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "烧肉",
+                "_id": "69e6a515953cf0e52fba0830"
+              },
+              {
+                "locale": "en-US",
+                "name": "Crispy Roast Pork",
+                "_id": "69e6a515953cf0e52fba0831"
+              }
+            ],
+            "_id": "69e6a515953cf0e52fba082f"
+          },
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "叉烧",
+                "_id": "69e6a515953cf0e52fba0833"
+              },
+              {
+                "locale": "en-US",
+                "name": "Char Siu",
+                "_id": "69e6a515953cf0e52fba0834"
+              }
+            ],
+            "_id": "69e6a515953cf0e52fba0832"
+          },
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "酱油鸡",
+                "_id": "69e6a515953cf0e52fba0836"
+              },
+              {
+                "locale": "en-US",
+                "name": "Soya Chicken",
+                "_id": "69e6a515953cf0e52fba0837"
+              }
+            ],
+            "_id": "69e6a515953cf0e52fba0835"
+          }
+        ],
+        "_id": "69e6a515953cf0e52fba0829"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e6a515953cf0e52fba0839"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e6a515953cf0e52fba083a"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "河粉",
+                "_id": "69e6a515953cf0e52fba083c"
+              },
+              {
+                "locale": "en-US",
+                "name": "Rice noodles",
+                "_id": "69e6a515953cf0e52fba083d"
+              }
+            ],
+            "_id": "69e6a515953cf0e52fba083b"
+          }
+        ],
+        "_id": "69e6a515953cf0e52fba0838"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e6a515953cf0e52fba083f"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e6a515953cf0e52fba0840"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 1,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "去骨",
+                "_id": "69e6a515953cf0e52fba0842"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boneless ",
+                "_id": "69e6a515953cf0e52fba0843"
+              }
+            ],
+            "_id": "69e6a515953cf0e52fba0841"
+          }
+        ],
+        "_id": "69e6a515953cf0e52fba083e"
+      }
+    ],
+    "createdAt": "2026-04-14T17:11:40.418Z",
+    "updatedAt": "2026-04-20T22:13:41.386Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210904166-606217913.jpg"
+  },
+  {
+    "_id": "69de7596c734543f3b3ffb52",
+    "categoryId": "69de363c8701926431f36940",
+    "price": 10,
+    "calories": 900,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3ced9b417456a446d620",
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "干炒河粉",
+        "description": "经典干炒牛河，嫩滑牛肉搭配宽河粉大火快炒，镬气十足，咸香浓郁。含小麦（麸质）、大豆及蛋。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Stir Fry Beef Rice Noodle",
+        "description": "Classic stir-fried beef ho fun with tender beef and wide rice noodles, wok-fried for a rich savoury flavour. Contains wheat (gluten), soy, and egg."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": true,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "河粉",
+            "_id": "69e639f1019900420592188f"
+          },
+          {
+            "locale": "en-US",
+            "name": "Stir Fry Rice Noodle",
+            "_id": "69e639f10199004205921890"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 6,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "虾",
+                "_id": "69e639f10199004205921892"
+              },
+              {
+                "locale": "en-US",
+                "name": "King Prawns",
+                "_id": "69e639f10199004205921893"
+              }
+            ],
+            "_id": "69e639f10199004205921891"
+          },
+          {
+            "extraPrice": 5,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "鸭",
+                "_id": "69e639f10199004205921895"
+              },
+              {
+                "locale": "en-US",
+                "name": "Roast Duck",
+                "_id": "69e639f10199004205921896"
+              }
+            ],
+            "_id": "69e639f10199004205921894"
+          },
+          {
+            "extraPrice": 3.5,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "鸡",
+                "_id": "69e639f10199004205921898"
+              },
+              {
+                "locale": "en-US",
+                "name": "Chicken",
+                "_id": "69e639f10199004205921899"
+              }
+            ],
+            "_id": "69e639f10199004205921897"
+          },
+          {
+            "extraPrice": 5,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "牛",
+                "_id": "69e639f1019900420592189b"
+              },
+              {
+                "locale": "en-US",
+                "name": "Beef",
+                "_id": "69e639f1019900420592189c"
+              }
+            ],
+            "_id": "69e639f1019900420592189a"
+          }
+        ],
+        "_id": "69e639f1019900420592188e"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e639f1019900420592189e"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e639f1019900420592189f"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "免菜",
+                "_id": "69e639f101990042059218a1"
+              },
+              {
+                "locale": "en-US",
+                "name": "No Veg",
+                "_id": "69e639f101990042059218a2"
+              }
+            ],
+            "_id": "69e639f101990042059218a0"
+          }
+        ],
+        "_id": "69e639f1019900420592189d"
+      }
+    ],
+    "createdAt": "2026-04-14T17:12:54.827Z",
+    "updatedAt": "2026-04-20T14:36:33.645Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210919148-401920400.jpg"
+  },
+  {
+    "_id": "69de75bac734543f3b3ffb58",
+    "categoryId": "69de363c8701926431f36940",
+    "price": 10,
+    "calories": 900,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626",
+      "69de3ced9b417456a446d620"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "炒乌冬面",
+        "description": "经典炒乌冬面，烧鸭 鸡肉或大虾搭配劲道乌冬面大火快炒，香气浓郁，口感丰富。含小麦（麸质）、大豆及蛋。"
+      },
+      {
+        "locale": "en-US",
+        "name": " Stir Fried Udon",
+        "description": "Classic Wok-Fried Udon Noodles\nRoast duck, chicken, or king prawns stir-fried with thick, chewy udon noodles over high heat, delivering a rich aroma and a flavorful, satisfying bite.\nContains: Wheat (gluten), soy, and egg."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "炒乌冬面",
+            "_id": "69e63a4101990042059218bf"
+          },
+          {
+            "locale": "en-US",
+            "name": "Stir Fried Udon",
+            "_id": "69e63a4101990042059218c0"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 5,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "烧鸭",
+                "_id": "69e63a4101990042059218c2"
+              },
+              {
+                "locale": "en-US",
+                "name": "Roast Duck ",
+                "_id": "69e63a4101990042059218c3"
+              }
+            ],
+            "_id": "69e63a4101990042059218c1"
+          },
+          {
+            "extraPrice": 3.5,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "鸡肉",
+                "_id": "69e63a4101990042059218c5"
+              },
+              {
+                "locale": "en-US",
+                "name": "chicken",
+                "_id": "69e63a4101990042059218c6"
+              }
+            ],
+            "_id": "69e63a4101990042059218c4"
+          },
+          {
+            "extraPrice": 6,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "大虾",
+                "_id": "69e63a4101990042059218c8"
+              },
+              {
+                "locale": "en-US",
+                "name": "King Prawns",
+                "_id": "69e63a4101990042059218c9"
+              }
+            ],
+            "_id": "69e63a4101990042059218c7"
+          },
+          {
+            "extraPrice": 5,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "牛",
+                "_id": "69e63a4101990042059218cb"
+              },
+              {
+                "locale": "en-US",
+                "name": "Beef",
+                "_id": "69e63a4101990042059218cc"
+              }
+            ],
+            "_id": "69e63a4101990042059218ca"
+          }
+        ],
+        "_id": "69e63a4101990042059218be"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e63a4101990042059218ce"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e63a4101990042059218cf"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "免菜",
+                "_id": "69e63a4101990042059218d1"
+              },
+              {
+                "locale": "en-US",
+                "name": "No Veg",
+                "_id": "69e63a4101990042059218d2"
+              }
+            ],
+            "_id": "69e63a4101990042059218d0"
+          }
+        ],
+        "_id": "69e63a4101990042059218cd"
+      }
+    ],
+    "createdAt": "2026-04-14T17:13:30.283Z",
+    "updatedAt": "2026-04-20T14:37:53.908Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210927432-131724699.jpg"
+  },
+  {
+    "_id": "69de75ddc734543f3b3ffb5e",
+    "categoryId": "69de363c8701926431f36940",
+    "price": 15.5,
+    "calories": 800,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626",
+      "69de3ced9b417456a446d620"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "大虾炒面",
+        "description": "经典大虾炒面，鲜嫩大虾搭配爽滑面条大火快炒，香气十足，鲜香可口。含甲壳类、小麦（麸质）、大豆及蛋。"
+      },
+      {
+        "locale": "en-US",
+        "name": "King Prawn Stir Fried Noodle\t\t",
+        "description": "Classic king prawn fried noodles with juicy prawns and stir-fried noodles, full of rich savoury wok flavour. Contains crustaceans, wheat (gluten), soy, and egg."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "大虾炒面",
+            "_id": "69e605f08c061a506989de30"
+          },
+          {
+            "locale": "en-US",
+            "name": "King Prawn Stir Fried Noodle",
+            "_id": "69e605f08c061a506989de31"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 3,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "加虾",
+                "_id": "69e605f08c061a506989de33"
+              },
+              {
+                "locale": "en-US",
+                "name": " Add King Prawns",
+                "_id": "69e605f08c061a506989de34"
+              }
+            ],
+            "_id": "69e605f08c061a506989de32"
+          },
+          {
+            "extraPrice": 3,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "加鸭肉",
+                "_id": "69e605f08c061a506989de36"
+              },
+              {
+                "locale": "en-US",
+                "name": "Add Roast Duck",
+                "_id": "69e605f08c061a506989de37"
+              }
+            ],
+            "_id": "69e605f08c061a506989de35"
+          },
+          {
+            "extraPrice": 2,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "加鸡肉",
+                "_id": "69e605f08c061a506989de39"
+              },
+              {
+                "locale": "en-US",
+                "name": "Add Chicken",
+                "_id": "69e605f08c061a506989de3a"
+              }
+            ],
+            "_id": "69e605f08c061a506989de38"
+          }
+        ],
+        "_id": "69e605f08c061a506989de2f"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e605f08c061a506989de3c"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e605f08c061a506989de3d"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "免菜",
+                "_id": "69e605f08c061a506989de3f"
+              },
+              {
+                "locale": "en-US",
+                "name": "No Veg",
+                "_id": "69e605f08c061a506989de40"
+              }
+            ],
+            "_id": "69e605f08c061a506989de3e"
+          }
+        ],
+        "_id": "69e605f08c061a506989de3b"
+      }
+    ],
+    "createdAt": "2026-04-14T17:14:05.641Z",
+    "updatedAt": "2026-04-20T10:54:40.914Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210932418-3147397.jpg"
+  },
+  {
+    "_id": "69de75fac734543f3b3ffb64",
+    "categoryId": "69de363c8701926431f36940",
+    "price": 11.5,
+    "calories": 800,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3ced9b417456a446d620",
+      "69de3cf39b417456a446d626",
+      "69de3ce59b417456a446d61a"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "鸡丝炒面",
+        "description": "经典鸡丝炒面，鲜嫩鸡丝搭配爽滑面条大火快炒，香气浓郁，鲜香可口。含小麦（麸质）、大豆及蛋。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Chicken Fried Noodles\t\t",
+        "description": "Classic shredded chicken fried noodles with tender chicken strips and stir-fried noodles, full of rich savoury wok flavour. Contains wheat (gluten), soy, and egg."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "鸡丝炒面",
+            "_id": "69e6065c8c061a506989de59"
+          },
+          {
+            "locale": "en-US",
+            "name": "Chicken Fried Noodles\t",
+            "_id": "69e6065c8c061a506989de5a"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 3,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "加虾",
+                "_id": "69e6065c8c061a506989de5c"
+              },
+              {
+                "locale": "en-US",
+                "name": "Add King Prawns",
+                "_id": "69e6065c8c061a506989de5d"
+              }
+            ],
+            "_id": "69e6065c8c061a506989de5b"
+          },
+          {
+            "extraPrice": 3,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "加鸭肉",
+                "_id": "69e6065c8c061a506989de5f"
+              },
+              {
+                "locale": "en-US",
+                "name": "Add Roast Duck",
+                "_id": "69e6065c8c061a506989de60"
+              }
+            ],
+            "_id": "69e6065c8c061a506989de5e"
+          },
+          {
+            "extraPrice": 2,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "加鸡肉",
+                "_id": "69e6065c8c061a506989de62"
+              },
+              {
+                "locale": "en-US",
+                "name": "Add Chicken ",
+                "_id": "69e6065c8c061a506989de63"
+              }
+            ],
+            "_id": "69e6065c8c061a506989de61"
+          }
+        ],
+        "_id": "69e6065c8c061a506989de58"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e6065c8c061a506989de65"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e6065c8c061a506989de66"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "免菜",
+                "_id": "69e6065c8c061a506989de68"
+              },
+              {
+                "locale": "en-US",
+                "name": "No Veg",
+                "_id": "69e6065c8c061a506989de69"
+              }
+            ],
+            "_id": "69e6065c8c061a506989de67"
+          }
+        ],
+        "_id": "69e6065c8c061a506989de64"
+      }
+    ],
+    "createdAt": "2026-04-14T17:14:34.648Z",
+    "updatedAt": "2026-04-20T10:56:28.561Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210935761-729366971.jpg"
+  },
+  {
+    "_id": "69de761bc734543f3b3ffb6a",
+    "categoryId": "69de363c8701926431f36940",
+    "price": 13.8,
+    "calories": 850,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3ced9b417456a446d620",
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "鸭肉炒面",
+        "description": "经典鸭肉炒面，鲜嫩鸭肉搭配爽滑面条大火快炒，香气浓郁，口感丰富。含小麦（麸质）、大豆及蛋。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Duck Fried Noodles",
+        "description": "Classic duck fried noodles with tender duck and stir-fried noodles, full of rich savoury wok flavour. Contains wheat (gluten), soy, and egg."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "鸭肉炒面",
+            "_id": "69e606bb8c061a506989de9f"
+          },
+          {
+            "locale": "en-US",
+            "name": "Duck Fried Noodles",
+            "_id": "69e606bb8c061a506989dea0"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "加虾",
+                "_id": "69e606bb8c061a506989dea2"
+              },
+              {
+                "locale": "en-US",
+                "name": "Add King Prawns",
+                "_id": "69e606bb8c061a506989dea3"
+              }
+            ],
+            "_id": "69e606bb8c061a506989dea1"
+          },
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "加鸭肉",
+                "_id": "69e606bb8c061a506989dea5"
+              },
+              {
+                "locale": "en-US",
+                "name": "Add Roast Duck ",
+                "_id": "69e606bb8c061a506989dea6"
+              }
+            ],
+            "_id": "69e606bb8c061a506989dea4"
+          },
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "加鸡肉",
+                "_id": "69e606bb8c061a506989dea8"
+              },
+              {
+                "locale": "en-US",
+                "name": "Add Chicken",
+                "_id": "69e606bb8c061a506989dea9"
+              }
+            ],
+            "_id": "69e606bb8c061a506989dea7"
+          }
+        ],
+        "_id": "69e606bb8c061a506989de9e"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e606bb8c061a506989deab"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e606bb8c061a506989deac"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "免菜",
+                "_id": "69e606bb8c061a506989deae"
+              },
+              {
+                "locale": "en-US",
+                "name": "No Veg",
+                "_id": "69e606bb8c061a506989deaf"
+              }
+            ],
+            "_id": "69e606bb8c061a506989dead"
+          }
+        ],
+        "_id": "69e606bb8c061a506989deaa"
+      }
+    ],
+    "createdAt": "2026-04-14T17:15:07.293Z",
+    "updatedAt": "2026-04-20T10:58:03.418Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776210950431-732718945.jpg"
+  },
+  {
+    "_id": "69e3a0ed776fdb91d27e44f7",
+    "categoryId": "69e3a039776fdb91d27e44f0",
+    "price": 4,
+    "calories": 450,
+    "avgWaitMinutes": 5,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3ced9b417456a446d620"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "炒饭",
+        "description": ""
+      },
+      {
+        "locale": "en-US",
+        "name": "Fried Rice ",
+        "description": ""
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T15:19:09.023Z",
+    "updatedAt": "2026-04-20T15:02:04.675Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776550804049-707371255.jpg"
+  },
+  {
+    "_id": "69e3a13e776fdb91d27e44fd",
+    "categoryId": "69e3a039776fdb91d27e44f0",
+    "price": 3,
+    "calories": 330,
+    "avgWaitMinutes": 5,
+    "isSoldOut": false,
+    "allergenIds": [],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "白饭",
+        "description": ""
+      },
+      {
+        "locale": "en-US",
+        "name": "Boiled Rice ",
+        "description": ""
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T15:20:30.257Z",
+    "updatedAt": "2026-04-18T22:21:27.904Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776550887753-621736898.jpg"
+  },
+  {
+    "_id": "69e3a189776fdb91d27e4503",
+    "categoryId": "69e3a039776fdb91d27e44f0",
+    "price": 4.8,
+    "calories": 480,
+    "avgWaitMinutes": 5,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3ced9b417456a446d620",
+      "69de3cea9b417456a446d61d"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "炒面",
+        "description": ""
+      },
+      {
+        "locale": "en-US",
+        "name": " Noodles",
+        "description": ""
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "炒面",
+            "_id": "69e63ffcf9976529cef8bf54"
+          },
+          {
+            "locale": "en-US",
+            "name": " Noodles",
+            "_id": "69e63ffcf9976529cef8bf55"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "免菜",
+                "_id": "69e63ffcf9976529cef8bf57"
+              },
+              {
+                "locale": "en-US",
+                "name": " No Veg",
+                "_id": "69e63ffcf9976529cef8bf58"
+              }
+            ],
+            "_id": "69e63ffcf9976529cef8bf56"
+          }
+        ],
+        "_id": "69e63ffcf9976529cef8bf53"
+      }
+    ],
+    "createdAt": "2026-04-18T15:21:45.668Z",
+    "updatedAt": "2026-04-20T15:02:20.744Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776606031474-195486899.jpg"
+  },
+  {
+    "_id": "69e3a206776fdb91d27e4509",
+    "categoryId": "69e3a039776fdb91d27e44f0",
+    "price": 5,
+    "calories": 60,
+    "avgWaitMinutes": 6,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "青菜",
+        "description": ""
+      },
+      {
+        "locale": "en-US",
+        "name": "Vegetable",
+        "description": ""
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T15:23:50.950Z",
+    "updatedAt": "2026-04-20T15:34:40.840Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776550947040-825086710.jpg"
+  },
+  {
+    "_id": "69e3a243776fdb91d27e450f",
+    "categoryId": "69e3a039776fdb91d27e44f0",
+    "price": 3.5,
+    "calories": 700,
+    "avgWaitMinutes": 5,
+    "isSoldOut": false,
+    "allergenIds": [],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "薯条",
+        "description": ""
+      },
+      {
+        "locale": "en-US",
+        "name": "Chips ",
+        "description": ""
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T15:24:51.806Z",
+    "updatedAt": "2026-04-19T13:40:36.745Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776606036615-999517407.jpg"
+  },
+  {
+    "_id": "69e3a2ae776fdb91d27e4515",
+    "categoryId": "69e3a039776fdb91d27e44f0",
+    "price": 3,
+    "calories": 120,
+    "avgWaitMinutes": 5,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "咖喱汁",
+        "description": ""
+      },
+      {
+        "locale": "en-US",
+        "name": "Curry Sauce",
+        "description": ""
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T15:26:38.118Z",
+    "updatedAt": "2026-04-19T13:40:45.284Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776606045147-71941122.jpg"
+  },
+  {
+    "_id": "69e3a30a776fdb91d27e451b",
+    "categoryId": "69e3a039776fdb91d27e44f0",
+    "price": 3,
+    "calories": 450,
+    "avgWaitMinutes": 5,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cdd9b417456a446d614",
+      "69de3ce09b417456a446d617",
+      "69de3cea9b417456a446d61d",
+      "69de3cf69b417456a446d629"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "沙爹汁",
+        "description": ""
+      },
+      {
+        "locale": "en-US",
+        "name": "Satay sauce",
+        "description": ""
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T15:28:10.028Z",
+    "updatedAt": "2026-04-19T13:40:48.478Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776606048353-49122200.webp"
+  },
+  {
+    "_id": "69e3a3e0776fdb91d27e452d",
+    "categoryId": "69e3a360776fdb91d27e4526",
+    "price": 22,
+    "calories": 700,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "半只烧鸭",
+        "description": "皮脆肉嫩，鲜香多汁，层次丰富，深受欢迎的人气之选。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Half Portion Roast Duck",
+        "description": "Perfectly crispy skin with juicy, flavorful meat — a customer favorite packed with rich taste."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e641d60199004205921b45"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e641d60199004205921b46"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 1,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "去骨",
+                "_id": "69e641d60199004205921b48"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boneless ",
+                "_id": "69e641d60199004205921b49"
+              }
+            ],
+            "_id": "69e641d60199004205921b47"
+          }
+        ],
+        "_id": "69e641d60199004205921b44"
+      }
+    ],
+    "createdAt": "2026-04-18T15:31:44.635Z",
+    "updatedAt": "2026-04-24T01:04:26.503Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776550985889-484014418.jpg",
+    "arFileUrl": "/uploads/ar/1776992666493-225698746.usdz"
+  },
+  {
+    "_id": "69e3a402776fdb91d27e4533",
+    "categoryId": "69e3a360776fdb91d27e4526",
+    "price": 42,
+    "calories": 1500,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "烧鸭",
+        "description": "皮脆肉嫩，鲜香多汁，层次丰富，深受欢迎的人气之选。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Full Roast Duck ",
+        "description": "Perfectly crispy skin with juicy, flavorful meat — a customer favorite packed with rich taste."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e69a30953cf0e52fba06a3"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e69a30953cf0e52fba06a4"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 1,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "去骨",
+                "_id": "69e69a30953cf0e52fba06a6"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boneless ",
+                "_id": "69e69a30953cf0e52fba06a7"
+              }
+            ],
+            "_id": "69e69a30953cf0e52fba06a5"
+          }
+        ],
+        "_id": "69e69a30953cf0e52fba06a2"
+      }
+    ],
+    "createdAt": "2026-04-18T15:32:18.667Z",
+    "updatedAt": "2026-04-20T21:27:12.465Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776551000058-292659746.jpg"
+  },
+  {
+    "_id": "69e3a5df776fdb91d27e456b",
+    "categoryId": "69e3a360776fdb91d27e4526",
+    "price": 16.5,
+    "calories": 1000,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "蜜汁叉烧",
+        "description": "精选猪肉配以秘制酱料腌制，慢火烤制而成，香甜多汁，风味浓郁（约400克）"
+      },
+      {
+        "locale": "en-US",
+        "name": "Char Siu ",
+        "description": "Premium pork marinated in a house special sauce and slow-roasted to perfection, delivering a rich, juicy, and flavorful bite.(Approx. 400g)"
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T15:40:15.914Z",
+    "updatedAt": "2026-04-18T22:23:51.050Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776551030740-682444388.jpg"
+  },
+  {
+    "_id": "69e3a6c8776fdb91d27e4571",
+    "categoryId": "69e3a360776fdb91d27e4526",
+    "price": 16.5,
+    "calories": 1400,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "脆皮烧肉",
+        "description": "外脆内嫩，入口即化，香而不腻，深受欢迎的人气之选（约400克）"
+      },
+      {
+        "locale": "en-US",
+        "name": "Crispy Roast Pork Belly ",
+        "description": "Perfectly crispy on the outside and tender inside, rich yet not greasy — a customer favorite. (Approx. 400g)"
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T15:44:08.790Z",
+    "updatedAt": "2026-04-18T22:23:25.444Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776551005219-562975601.jpg"
+  },
+  {
+    "_id": "69e3aea8b164df7a4b962225",
+    "categoryId": "69e3a360776fdb91d27e4526",
+    "price": 19.8,
+    "calories": 1100,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3ced9b417456a446d620",
+      "69de3cea9b417456a446d61d"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "全肉双拼",
+        "description": "经典纯肉三拼烧腊拼盘，可自选三款烧味组合，肉香浓郁，口感丰富，适合分享。含小麦（麸质）及大豆。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Roast Meat Platter",
+        "description": "A classic three-meat barbecue platter with your choice of three roasted meat selections, rich in flavour and perfect for sharing. Contains wheat (gluten) and soy."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": true,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "选项1",
+            "_id": "69e69a4c953cf0e52fba06b4"
+          },
+          {
+            "locale": "en-US",
+            "name": "Option1",
+            "_id": "69e69a4c953cf0e52fba06b5"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "烧鸭",
+                "_id": "69e69a4c953cf0e52fba06b7"
+              },
+              {
+                "locale": "en-US",
+                "name": "Roast Duck",
+                "_id": "69e69a4c953cf0e52fba06b8"
+              }
+            ],
+            "_id": "69e69a4c953cf0e52fba06b6"
+          },
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "烧肉",
+                "_id": "69e69a4c953cf0e52fba06ba"
+              },
+              {
+                "locale": "en-US",
+                "name": "Roask Pork",
+                "_id": "69e69a4c953cf0e52fba06bb"
+              }
+            ],
+            "_id": "69e69a4c953cf0e52fba06b9"
+          },
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "叉烧",
+                "_id": "69e69a4c953cf0e52fba06bd"
+              },
+              {
+                "locale": "en-US",
+                "name": "Char Siu",
+                "_id": "69e69a4c953cf0e52fba06be"
+              }
+            ],
+            "_id": "69e69a4c953cf0e52fba06bc"
+          },
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "酱油鸡",
+                "_id": "69e69a4c953cf0e52fba06c0"
+              },
+              {
+                "locale": "en-US",
+                "name": "Soya Chicken",
+                "_id": "69e69a4c953cf0e52fba06c1"
+              }
+            ],
+            "_id": "69e69a4c953cf0e52fba06bf"
+          }
+        ],
+        "_id": "69e69a4c953cf0e52fba06b3"
+      },
+      {
+        "required": true,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "选项2",
+            "_id": "69e69a4c953cf0e52fba06c3"
+          },
+          {
+            "locale": "en-US",
+            "name": "Option2",
+            "_id": "69e69a4c953cf0e52fba06c4"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "烧鸭",
+                "_id": "69e69a4c953cf0e52fba06c6"
+              },
+              {
+                "locale": "en-US",
+                "name": "Roast Duck",
+                "_id": "69e69a4c953cf0e52fba06c7"
+              }
+            ],
+            "_id": "69e69a4c953cf0e52fba06c5"
+          },
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "烧肉",
+                "_id": "69e69a4c953cf0e52fba06c9"
+              },
+              {
+                "locale": "en-US",
+                "name": "Roask Pork",
+                "_id": "69e69a4c953cf0e52fba06ca"
+              }
+            ],
+            "_id": "69e69a4c953cf0e52fba06c8"
+          },
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "叉烧",
+                "_id": "69e69a4c953cf0e52fba06cc"
+              },
+              {
+                "locale": "en-US",
+                "name": "Char Siu",
+                "_id": "69e69a4c953cf0e52fba06cd"
+              }
+            ],
+            "_id": "69e69a4c953cf0e52fba06cb"
+          },
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "酱油鸡",
+                "_id": "69e69a4c953cf0e52fba06cf"
+              },
+              {
+                "locale": "en-US",
+                "name": "Soya Chicken",
+                "_id": "69e69a4c953cf0e52fba06d0"
+              }
+            ],
+            "_id": "69e69a4c953cf0e52fba06ce"
+          }
+        ],
+        "_id": "69e69a4c953cf0e52fba06c2"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "选项3",
+            "_id": "69e69a4c953cf0e52fba06d2"
+          },
+          {
+            "locale": "en-US",
+            "name": "Option3",
+            "_id": "69e69a4c953cf0e52fba06d3"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 7,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "烧鸭",
+                "_id": "69e69a4c953cf0e52fba06d5"
+              },
+              {
+                "locale": "en-US",
+                "name": "Roast Duck",
+                "_id": "69e69a4c953cf0e52fba06d6"
+              }
+            ],
+            "_id": "69e69a4c953cf0e52fba06d4"
+          },
+          {
+            "extraPrice": 7,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "烧肉",
+                "_id": "69e69a4c953cf0e52fba06d8"
+              },
+              {
+                "locale": "en-US",
+                "name": "Roask Pork",
+                "_id": "69e69a4c953cf0e52fba06d9"
+              }
+            ],
+            "_id": "69e69a4c953cf0e52fba06d7"
+          },
+          {
+            "extraPrice": 7,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "叉烧",
+                "_id": "69e69a4c953cf0e52fba06db"
+              },
+              {
+                "locale": "en-US",
+                "name": "Char Siu",
+                "_id": "69e69a4c953cf0e52fba06dc"
+              }
+            ],
+            "_id": "69e69a4c953cf0e52fba06da"
+          },
+          {
+            "extraPrice": 7,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "酱油鸡",
+                "_id": "69e69a4c953cf0e52fba06de"
+              },
+              {
+                "locale": "en-US",
+                "name": "Soya Chicken",
+                "_id": "69e69a4c953cf0e52fba06df"
+              }
+            ],
+            "_id": "69e69a4c953cf0e52fba06dd"
+          }
+        ],
+        "_id": "69e69a4c953cf0e52fba06d1"
+      },
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e69a4c953cf0e52fba06e1"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e69a4c953cf0e52fba06e2"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 1,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "去骨",
+                "_id": "69e69a4c953cf0e52fba06e4"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boneless ",
+                "_id": "69e69a4c953cf0e52fba06e5"
+              }
+            ],
+            "_id": "69e69a4c953cf0e52fba06e3"
+          }
+        ],
+        "_id": "69e69a4c953cf0e52fba06e0"
+      }
+    ],
+    "createdAt": "2026-04-18T16:17:44.408Z",
+    "updatedAt": "2026-04-20T21:27:40.672Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776550290541-6926527.jpg"
+  },
+  {
+    "_id": "69e400d68f0219ff7f616667",
+    "categoryId": "69e3a360776fdb91d27e4526",
+    "price": 12,
+    "calories": 720,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "半只豉油鸡 ",
+        "description": "色泽红润，肉质鲜嫩多汁，咸香入味，经典广式风味"
+      },
+      {
+        "locale": "en-US",
+        "name": "Half Portion Soya Chicken",
+        "description": "Tender and juicy chicken braised in soy sauce, rich in savory flavor — a classic Cantonese dish."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e6a567953cf0e52fba0878"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e6a567953cf0e52fba0879"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 1,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "去骨",
+                "_id": "69e6a567953cf0e52fba087b"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boneless ",
+                "_id": "69e6a567953cf0e52fba087c"
+              }
+            ],
+            "_id": "69e6a567953cf0e52fba087a"
+          }
+        ],
+        "_id": "69e6a567953cf0e52fba0877"
+      }
+    ],
+    "createdAt": "2026-04-18T22:08:22.282Z",
+    "updatedAt": "2026-04-24T22:40:02.534Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776550274279-152894338.jpg"
+  },
+  {
+    "_id": "69e401108f0219ff7f61666d",
+    "categoryId": "69e3a360776fdb91d27e4526",
+    "price": 22,
+    "calories": 1350,
+    "avgWaitMinutes": 10,
+    "isSoldOut": false,
+    "allergenIds": [],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "豉油鸡",
+        "description": "色泽红润，肉质鲜嫩多汁，咸香入味，经典广式风味。"
+      },
+      {
+        "locale": "en-US",
+        "name": " Soya Chicken",
+        "description": "Tender and juicy chicken braised in soy sauce, rich in savory flavor — a classic Cantonese dish."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e64184f9976529cef8bfc4"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e64184f9976529cef8bfc5"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 1,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "去骨",
+                "_id": "69e64184f9976529cef8bfc7"
+              },
+              {
+                "locale": "en-US",
+                "name": "Boneless ",
+                "_id": "69e64184f9976529cef8bfc8"
+              }
+            ],
+            "_id": "69e64184f9976529cef8bfc6"
+          }
+        ],
+        "_id": "69e64184f9976529cef8bfc3"
+      }
+    ],
+    "createdAt": "2026-04-18T22:09:20.983Z",
+    "updatedAt": "2026-04-24T22:40:03.163Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776550270160-798165856.jpg"
+  },
+  {
+    "_id": "69e405658f0219ff7f6166df",
+    "categoryId": "69de33ea8701926431f36934",
+    "price": 6.5,
+    "calories": 360,
+    "avgWaitMinutes": 5,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cdd9b417456a446d614",
+      "69de3cea9b417456a446d61d"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "串鸡",
+        "description": "嫩滑鸡肉串配以香浓沙爹酱，带有浓郁花生香味，风味独特"
+      },
+      {
+        "locale": "en-US",
+        "name": "Chicken Satay Skewers",
+        "description": "Grilled chicken skewers served with rich satay sauce, infused with a fragrant peanut flavor.\n"
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T22:27:49.433Z",
+    "updatedAt": "2026-04-20T23:10:42.708Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776553648097-54271543.jpg"
+  },
+  {
+    "_id": "69e4068a8f0219ff7f6166ee",
+    "categoryId": "69e3a039776fdb91d27e44f0",
+    "price": 8.5,
+    "calories": 600,
+    "avgWaitMinutes": 5,
+    "isSoldOut": false,
+    "allergenIds": [],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "辣袋",
+        "description": "鸡丝配薯条、洋葱，加入秘制香料翻炒，香辣过瘾，是爱尔兰人气外卖。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Spice Bag",
+        "description": "A popular Irish-Chinese takeaway dish with crispy salt & chilli chicken, chips, peppers, and onions, tossed in a flavorful spice mix."
+      }
+    ],
+    "optionGroups": [
+      {
+        "required": false,
+        "translations": [
+          {
+            "locale": "zh-CN",
+            "name": "附加",
+            "_id": "69e62137f9976529cef8ba7a"
+          },
+          {
+            "locale": "en-US",
+            "name": "Add",
+            "_id": "69e62137f9976529cef8ba7b"
+          }
+        ],
+        "choices": [
+          {
+            "extraPrice": 0,
+            "translations": [
+              {
+                "locale": "zh-CN",
+                "name": "免菜",
+                "_id": "69e62137f9976529cef8ba7d"
+              },
+              {
+                "locale": "en-US",
+                "name": "No Veg",
+                "_id": "69e62137f9976529cef8ba7e"
+              }
+            ],
+            "_id": "69e62137f9976529cef8ba7c"
+          }
+        ],
+        "_id": "69e62137f9976529cef8ba79"
+      }
+    ],
+    "createdAt": "2026-04-18T22:32:42.982Z",
+    "updatedAt": "2026-04-20T12:51:03.094Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776553642006-680915329.jpg"
+  },
+  {
+    "_id": "69e408ae8f0219ff7f616707",
+    "categoryId": "69e408108f0219ff7f616700",
+    "price": 3,
+    "calories": 120,
+    "avgWaitMinutes": 0,
+    "isSoldOut": false,
+    "allergenIds": [],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "绿茶",
+        "description": "清新茶香搭配淡淡甜味，口感清爽解渴"
+      },
+      {
+        "locale": "en-US",
+        "name": "Green Tea",
+        "description": "A refreshing green tea with a light sweetness, smooth and easy to drink."
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T22:41:50.057Z",
+    "updatedAt": "2026-04-18T23:07:11.844Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776553631727-92577099.jpg"
+  },
+  {
+    "_id": "69e408f98f0219ff7f61670d",
+    "categoryId": "69e408108f0219ff7f616700",
+    "price": 3,
+    "calories": 140,
+    "avgWaitMinutes": 0,
+    "isSoldOut": true,
+    "allergenIds": [],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "红茶",
+        "description": "茶味浓郁，带有柔和甜味，口感顺滑，是经典的即饮茶选择"
+      },
+      {
+        "locale": "en-US",
+        "name": "Iced Black Tea",
+        "description": "A smooth and flavorful black tea with a gentle sweetness, perfect for everyday refreshment."
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T22:43:05.635Z",
+    "updatedAt": "2026-04-24T18:45:30.125Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776553626155-496375421.jpg"
+  },
+  {
+    "_id": "69e409648f0219ff7f616717",
+    "categoryId": "69e408108f0219ff7f616700",
+    "price": 2.5,
+    "calories": 120,
+    "avgWaitMinutes": 0,
+    "isSoldOut": false,
+    "allergenIds": [],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "加多宝",
+        "description": "传统凉茶饮品，由多种草本植物熬制而成，口感清甜，清凉解腻"
+      },
+      {
+        "locale": "en-US",
+        "name": "Jia Duo Bao Herbal Tea",
+        "description": "A traditional Chinese herbal tea made from natural herbs, mildly sweet and refreshing."
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T22:44:52.719Z",
+    "updatedAt": "2026-04-19T21:52:08.229Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776553622218-587583829.webp"
+  },
+  {
+    "_id": "69e409d78f0219ff7f61671d",
+    "categoryId": "69e408108f0219ff7f616700",
+    "price": 4,
+    "calories": 250,
+    "avgWaitMinutes": 0,
+    "isSoldOut": false,
+    "allergenIds": [],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "杨枝甘露",
+        "description": "香甜芒果搭配西柚果肉与西米露，口感清爽顺滑，是一款人气热带风味饮品。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Bottled Mango Pomelo Sago",
+        "description": "A fruity and refreshing tropical drink with a smooth texture — a customer favorite."
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T22:46:47.444Z",
+    "updatedAt": "2026-04-23T23:16:04.022Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776553616711-228858202.jpg"
+  },
+  {
+    "_id": "69e40a088f0219ff7f616723",
+    "categoryId": "69e408108f0219ff7f616700",
+    "price": 2,
+    "calories": 130,
+    "avgWaitMinutes": 0,
+    "isSoldOut": false,
+    "allergenIds": [],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "可乐",
+        "description": ""
+      },
+      {
+        "locale": "en-US",
+        "name": "Coke",
+        "description": ""
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T22:47:36.650Z",
+    "updatedAt": "2026-04-19T21:53:22.607Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776553609709-765848361.webp"
+  },
+  {
+    "_id": "69e40a568f0219ff7f616729",
+    "categoryId": "69e408108f0219ff7f616700",
+    "price": 2,
+    "calories": 0,
+    "avgWaitMinutes": 0,
+    "isSoldOut": false,
+    "allergenIds": [],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "无糖可乐",
+        "description": ""
+      },
+      {
+        "locale": "en-US",
+        "name": "Coke Zero",
+        "description": ""
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T22:48:54.571Z",
+    "updatedAt": "2026-04-19T22:58:56.448Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776639536195-700596963.jpg"
+  },
+  {
+    "_id": "69e40a688f0219ff7f61672f",
+    "categoryId": "69e408108f0219ff7f616700",
+    "price": 2,
+    "calories": 130,
+    "avgWaitMinutes": 0,
+    "isSoldOut": false,
+    "allergenIds": [],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "7 Up",
+        "description": ""
+      },
+      {
+        "locale": "en-US",
+        "name": "7 Up",
+        "description": ""
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T22:49:12.193Z",
+    "updatedAt": "2026-04-19T21:54:56.173Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776553600930-206880170.jpg"
+  },
+  {
+    "_id": "69e40a9a8f0219ff7f616738",
+    "categoryId": "69e408108f0219ff7f616700",
+    "price": 2,
+    "calories": 130,
+    "avgWaitMinutes": 0,
+    "isSoldOut": false,
+    "allergenIds": [],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "芬达",
+        "description": ""
+      },
+      {
+        "locale": "en-US",
+        "name": "Fanta",
+        "description": ""
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T22:50:02.983Z",
+    "updatedAt": "2026-04-19T21:55:10.678Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776553596411-214184074.jpg"
+  },
+  {
+    "_id": "69e40aca8f0219ff7f61673e",
+    "categoryId": "69e408108f0219ff7f616700",
+    "price": 2,
+    "calories": 0,
+    "avgWaitMinutes": 0,
+    "isSoldOut": false,
+    "allergenIds": [],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "矿泉水",
+        "description": ""
+      },
+      {
+        "locale": "en-US",
+        "name": "Water",
+        "description": ""
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T22:50:50.429Z",
+    "updatedAt": "2026-04-19T23:05:18.876Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776639918668-620569545.jpg"
+  },
+  {
+    "_id": "69e40adc8f0219ff7f616744",
+    "categoryId": "69e408108f0219ff7f616700",
+    "price": 2,
+    "calories": 0,
+    "avgWaitMinutes": 0,
+    "isSoldOut": false,
+    "allergenIds": [],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "气泡水",
+        "description": ""
+      },
+      {
+        "locale": "en-US",
+        "name": "Sparkling Water",
+        "description": ""
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T22:51:08.934Z",
+    "updatedAt": "2026-04-19T23:05:22.661Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776639922556-27189513.jpg"
+  },
+  {
+    "_id": "69e40b168f0219ff7f61674a",
+    "categoryId": "69e408108f0219ff7f616700",
+    "price": 3,
+    "calories": 200,
+    "avgWaitMinutes": 0,
+    "isSoldOut": false,
+    "allergenIds": [],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "芦荟汁",
+        "description": ""
+      },
+      {
+        "locale": "en-US",
+        "name": "Aloe Vera",
+        "description": ""
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T22:52:06.587Z",
+    "updatedAt": "2026-04-19T21:17:45.079Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776553590692-642124129.jpg"
+  },
+  {
+    "_id": "69e40fd28f0219ff7f6167a2",
+    "categoryId": "69e3a039776fdb91d27e44f0",
+    "price": 2.5,
+    "calories": 80,
+    "avgWaitMinutes": 5,
+    "isSoldOut": false,
+    "allergenIds": [],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "汤",
+        "description": "精选排骨配以食材长时间炖煮，汤味清甜醇厚，滋补暖胃，回味悠长"
+      },
+      {
+        "locale": "en-US",
+        "name": "Daily Soup",
+        "description": "A light yet flavorful soup with tender pork ribs, comforting and nourishing — perfect for a warm, satisfying meal."
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T23:12:18.073Z",
+    "updatedAt": "2026-04-19T21:55:45.599Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776605706252-687884272.jpg"
+  },
+  {
+    "_id": "69e4104a8f0219ff7f6167ad",
+    "categoryId": "69e3a039776fdb91d27e44f0",
+    "price": 1.5,
+    "calories": 70,
+    "avgWaitMinutes": 5,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3cea9b417456a446d61d",
+      "69de3cf39b417456a446d626"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "卤鸡蛋",
+        "description": "精选鸡蛋慢火卤制，充分吸收酱香，口感细腻，味道浓郁。"
+      },
+      {
+        "locale": "en-US",
+        "name": "Marinated Egg",
+        "description": "Carefully braised eggs infused with a house soy-based sauce, delivering a deep and savory taste."
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-18T23:14:18.370Z",
+    "updatedAt": "2026-04-19T21:56:16.823Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776605816531-459781499.jpg"
+  },
+  {
+    "_id": "69e6176101990042059214d0",
+    "categoryId": "69e3a039776fdb91d27e44f0",
+    "price": 2.5,
+    "calories": 90,
+    "avgWaitMinutes": 5,
+    "isSoldOut": false,
+    "allergenIds": [
+      "69de3ced9b417456a446d620"
+    ],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "炸蛋",
+        "description": "外酥内嫩，蛋香浓郁，口感丰富，是简单却美味的经典配菜"
+      },
+      {
+        "locale": "en-US",
+        "name": "Crispy Fried Egg",
+        "description": "Crispy on the outside with a soft, tender center, offering a rich egg flavor and satisfying texture."
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-20T12:09:05.086Z",
+    "updatedAt": "2026-04-20T19:53:21.379Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776714801112-944266443.webp"
+  },
+  {
+    "_id": "69eab5fd0da6cf442979b2bf",
+    "categoryId": "69e408108f0219ff7f616700",
+    "price": 3.99,
+    "calories": 0,
+    "avgWaitMinutes": 0,
+    "isSoldOut": false,
+    "allergenIds": [],
+    "translations": [
+      {
+        "locale": "zh-CN",
+        "name": "哈密瓜气泡水",
+        "description": "碳酸水、高果糖玉米糖浆、葡萄提取物、酸性（柠檬酸（E330））、调味剂。"
+      },
+      {
+        "locale": "en-US",
+        "name": "SANGARIA MELON SODA",
+        "description": "Carbonated Water, High Fructose Corn Syrup, Grape Extract, Acidulant [Citric Acid (E330)], Flavoring."
+      }
+    ],
+    "optionGroups": [],
+    "createdAt": "2026-04-24T00:14:53.805Z",
+    "updatedAt": "2026-04-24T01:02:07.710Z",
+    "__v": 0,
+    "photoUrl": "/uploads/photos/1776989708960-873537425.jpg",
+    "arFileUrl": "/uploads/ar/1776992527366-263004221.usdz"
+  }
+]

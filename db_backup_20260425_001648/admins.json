@@ -1,0 +1,20 @@
+[
+  {
+    "_id": "69de32a84719ff085babf350",
+    "username": "0001",
+    "passwordHash": "$2a$10$rAVuPJXEXWBLoddSuvZ3/.qLi7Gg5.4dqe04M/L8vEGpdDGNB.Rlq",
+    "role": "owner",
+    "createdAt": "2026-04-14T12:27:20.789Z",
+    "updatedAt": "2026-04-14T12:27:20.789Z",
+    "__v": 0
+  },
+  {
+    "_id": "69de43ac9b417456a446d72e",
+    "username": "Taste",
+    "passwordHash": "$2a$10$hI.Ez0nPt0S6UcmGZyjGiOIe75YnxcQIdOQVAiILOGtGbZxau3TA.",
+    "role": "cashier",
+    "createdAt": "2026-04-14T13:39:56.884Z",
+    "updatedAt": "2026-04-14T14:53:30.078Z",
+    "__v": 0
+  }
+]

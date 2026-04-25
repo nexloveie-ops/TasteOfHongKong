@@ -252,10 +252,12 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
     const activeOrders = allOrders.filter(o => o.status !== 'refunded');
     let dineInCount = 0;
     let takeoutCount = 0;
+    let phoneCount = 0;
     let dineInScanCount = 0;
     let dineInCashierCount = 0;
     let dineInRevenue = 0;
     let takeoutRevenue = 0;
+    let phoneRevenue = 0;
 
     for (const order of activeOrders) {
       const checkout = orderCheckoutMap.get(order._id.toString());
@@ -271,6 +273,9 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
       } else if (order.type === 'takeout') {
         takeoutCount++;
         takeoutRevenue += checkout?.totalAmount ?? orderItemTotal;
+      } else if (order.type === 'phone') {
+        phoneCount++;
+        phoneRevenue += checkout?.totalAmount ?? orderItemTotal;
       }
     }
 
@@ -325,6 +330,8 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
       dineInRevenue: Math.round(dineInRevenue * 100) / 100,
       takeoutCount,
       takeoutRevenue: Math.round(takeoutRevenue * 100) / 100,
+      phoneCount,
+      phoneRevenue: Math.round(phoneRevenue * 100) / 100,
       dineInScanCount,
       dineInCashierCount,
       takeoutScanCount: takeoutCount,

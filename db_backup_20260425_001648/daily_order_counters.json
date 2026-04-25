@@ -1,0 +1,62 @@
+[
+  {
+    "_id": "69de4a2e42c685390ba0ba7a",
+    "date": "2026-04-14",
+    "__v": 0,
+    "currentNumber": 5
+  },
+  {
+    "_id": "69dfd7f542c685390ba0e72e",
+    "date": "2026-04-15",
+    "__v": 0,
+    "currentNumber": 4
+  },
+  {
+    "_id": "69e2bb9c42c685390ba1581b",
+    "date": "2026-04-17",
+    "__v": 0,
+    "currentNumber": 6
+  },
+  {
+    "_id": "69e384eb42c685390ba170ee",
+    "date": "2026-04-18",
+    "__v": 0,
+    "currentNumber": 1
+  },
+  {
+    "_id": "69e525a242c685390ba1b078",
+    "date": "2026-04-19",
+    "__v": 0,
+    "currentNumber": 5
+  },
+  {
+    "_id": "69e5fe4a42c685390ba1d353",
+    "date": "2026-04-20",
+    "__v": 0,
+    "currentNumber": 33
+  },
+  {
+    "_id": "69e7517642c685390ba203c8",
+    "date": "2026-04-21",
+    "__v": 0,
+    "currentNumber": 49
+  },
+  {
+    "_id": "69e8a25042c685390ba23639",
+    "date": "2026-04-22",
+    "__v": 0,
+    "currentNumber": 34
+  },
+  {
+    "_id": "69e9f98b42c685390ba26708",
+    "date": "2026-04-23",
+    "__v": 0,
+    "currentNumber": 35
+  },
+  {
+    "_id": "69eb3db642c685390ba29307",
+    "date": "2026-04-24",
+    "__v": 0,
+    "currentNumber": 50
+  }
+]

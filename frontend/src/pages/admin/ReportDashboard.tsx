@@ -18,6 +18,8 @@ interface DetailedStats {
   mixedTotal: number;
   dineInCount: number;
   takeoutCount: number;
+  phoneCount: number;
+  phoneRevenue: number;
   dineInScanCount: number;
   dineInCashierCount: number;
   takeoutScanCount: number;
@@ -245,6 +247,22 @@ export default function ReportDashboard() {
                   </div>
                 </div>
               </div>
+
+              {/* Phone card */}
+              {stats.phoneCount > 0 && (
+                <div className="card" style={{ padding: 20, cursor: 'pointer', transition: 'box-shadow 0.2s' }}
+                  onClick={() => openDetail({ title: '📞 电话订单', icon: '📞', filters: { type: 'phone' } })}
+                  onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)')}
+                  onMouseLeave={e => (e.currentTarget.style.boxShadow = '')}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                    <span style={{ fontSize: 24 }}>📞</span>
+                    <div>
+                      <div style={{ fontSize: 12, color: 'var(--text-light)' }}>电话订单</div>
+                      <div style={{ fontSize: 28, fontWeight: 700, color: '#7B1FA2' }}>{stats.phoneCount}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

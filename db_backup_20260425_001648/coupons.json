@@ -1,0 +1,12 @@
+[
+  {
+    "_id": "69eaa3104fd871a0c514bfb6",
+    "name": "满9赠15",
+    "nameEn": "9 stamp for 15euro",
+    "amount": 15,
+    "active": true,
+    "createdAt": "2026-04-23T22:54:08.411Z",
+    "updatedAt": "2026-04-23T23:09:09.344Z",
+    "__v": 0
+  }
+]

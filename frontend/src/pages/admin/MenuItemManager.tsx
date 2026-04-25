@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 
@@ -14,7 +14,7 @@ interface MenuItem {
   optionGroups?: OptionGroupData[];
 }
 
-interface FormOptionChoice { nameZh: string; nameEn: string; extraPrice: number; }
+interface FormOptionChoice { nameZh: string; nameEn: string; extraPrice: number; originalPrice: number; }
 interface FormOptionGroup { nameZh: string; nameEn: string; required: boolean; choices: FormOptionChoice[]; }
 
 const emptyForm = { categoryId: '', price: 0, calories: 0, avgWaitMinutes: 0, nameZh: '', nameEn: '', descZh: '', descEn: '', allergenIds: [] as string[], optionGroups: [] as FormOptionGroup[] };
@@ -55,6 +55,7 @@ export default function MenuItemManager() {
           nameZh: c.translations.find(t2 => t2.locale === 'zh-CN')?.name || '',
           nameEn: c.translations.find(t2 => t2.locale === 'en-US')?.name || '',
           extraPrice: c.extraPrice,
+          originalPrice: c.originalPrice || 0,
         })),
       }));
       setForm({
@@ -94,6 +95,7 @@ export default function MenuItemManager() {
         ],
         choices: g.choices.map(c => ({
           extraPrice: c.extraPrice,
+          originalPrice: c.originalPrice || undefined,
           translations: [
             { locale: 'zh-CN', name: c.nameZh },
             { locale: 'en-US', name: c.nameEn },
@@ -156,7 +158,7 @@ export default function MenuItemManager() {
   const addOptionGroup = () => {
     setForm(prev => ({
       ...prev,
-      optionGroups: [...prev.optionGroups, { nameZh: '', nameEn: '', required: false, choices: [{ nameZh: '', nameEn: '', extraPrice: 0 }] }],
+      optionGroups: [...prev.optionGroups, { nameZh: '', nameEn: '', required: false, choices: [{ nameZh: '', nameEn: '', extraPrice: 0, originalPrice: 0 }] }],
     }));
   };
 
@@ -175,7 +177,7 @@ export default function MenuItemManager() {
     setForm(prev => ({
       ...prev,
       optionGroups: prev.optionGroups.map((g, i) =>
-        i === gi ? { ...g, choices: [...g.choices, { nameZh: '', nameEn: '', extraPrice: 0 }] } : g
+        i === gi ? { ...g, choices: [...g.choices, { nameZh: '', nameEn: '', extraPrice: 0, originalPrice: 0 }] } : g
       ),
     }));
   };
@@ -205,7 +207,7 @@ export default function MenuItemManager() {
         <button className="btn btn-primary" onClick={() => startEdit(null)}>{t('common.add')}</button>
       </div>
 
-      {showForm && (
+      {showForm && !editingId && (
         <div className="card" style={{ padding: 20, marginBottom: 16 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
@@ -309,11 +311,13 @@ export default function MenuItemManager() {
                 </div>
                 {/* Choices */}
                 {group.choices.map((choice, ci) => (
-                  <div key={ci} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px auto', gap: 6, marginBottom: 4 }}>
+                  <div key={ci} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px 80px auto', gap: 6, marginBottom: 4 }}>
                     <input className="input" placeholder={`${t('admin.choiceName')} (中文)`} value={choice.nameZh}
                       onChange={e => updateChoice(gi, ci, 'nameZh', e.target.value)} style={{ fontSize: 12 }} />
                     <input className="input" placeholder={`${t('admin.choiceName')} (EN)`} value={choice.nameEn}
                       onChange={e => updateChoice(gi, ci, 'nameEn', e.target.value)} style={{ fontSize: 12 }} />
+                    <input className="input" type="number" placeholder="原价" value={choice.originalPrice || ''}
+                      onChange={e => updateChoice(gi, ci, 'originalPrice', Number(e.target.value))} style={{ fontSize: 12 }} />
                     <input className="input" type="number" placeholder={t('admin.extraPrice')} value={choice.extraPrice}
                       onChange={e => updateChoice(gi, ci, 'extraPrice', Number(e.target.value))} style={{ fontSize: 12 }} />
                     <button className="btn btn-ghost" style={{ fontSize: 14, color: 'var(--red-primary)', padding: '0 4px' }}
@@ -351,56 +355,52 @@ export default function MenuItemManager() {
           </thead>
           <tbody>
             {items.map(item => (
-              <tr key={item._id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+              <React.Fragment key={item._id}>
+              <tr style={{ borderBottom: showForm && editingId === item._id ? 'none' : '1px solid #f0f0f0', background: showForm && editingId === item._id ? '#FFF5F5' : undefined }}>
                 <td style={{ padding: '8px 12px' }}>
                   <label style={{ cursor: 'pointer', display: 'block' }}>
-                    <div style={{
-                      width: 48, height: 48, borderRadius: 6,
-                      background: item.photoUrl ? `url(${item.photoUrl}) center/cover` : 'var(--bg)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
-                    }}>
-                      {!item.photoUrl && '📷'}
-                    </div>
+                    <div style={{ width: 48, height: 48, borderRadius: 6, background: item.photoUrl ? `url(${item.photoUrl}) center/cover` : 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>{!item.photoUrl && '📷'}</div>
                     <input type="file" accept="image/*" hidden onChange={e => { if (e.target.files?.[0]) { uploadPhoto(item._id, e.target.files[0]); e.target.value = ''; } }} />
                   </label>
                 </td>
                 <td style={{ padding: '8px 12px' }}>
                   <div style={{ fontWeight: 600 }}>{item.translations.find(t2 => t2.locale === 'zh-CN')?.name}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{item.translations.find(t2 => t2.locale === 'en-US')?.name}</div>
-                  {item.optionGroups && item.optionGroups.length > 0 && (
-                    <div style={{ fontSize: 10, color: 'var(--text-light)', marginTop: 2 }}>
-                      ⚙ {item.optionGroups.length} {t('admin.optionGroups').toLowerCase()}
-                    </div>
-                  )}
+                  {item.optionGroups && item.optionGroups.length > 0 && (<div style={{ fontSize: 10, color: 'var(--text-light)', marginTop: 2 }}>⚙ {item.optionGroups.length} {t('admin.optionGroups').toLowerCase()}</div>)}
                 </td>
                 <td style={{ padding: '8px 12px', color: 'var(--text-secondary)' }}>{getCatName(item.categoryId)}</td>
                 <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--red-primary)' }}>€{item.price}</td>
-                <td style={{ padding: '8px 12px' }}>
-                  {(item.allergenIds || []).map(aid => {
-                    const a = allergens.find(al => al._id === aid);
-                    return a ? <span key={aid} title={a.translations.find(t2 => t2.locale === 'zh-CN')?.name || a.name} style={{ marginRight: 2 }}>{a.icon}</span> : null;
-                  })}
-                </td>
+                <td style={{ padding: '8px 12px' }}>{(item.allergenIds || []).map(aid => { const a = allergens.find(al => al._id === aid); return a ? <span key={aid} title={a.translations.find(t2 => t2.locale === 'zh-CN')?.name || a.name} style={{ marginRight: 2 }}>{a.icon}</span> : null; })}</td>
                 <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                  <label style={{ cursor: 'pointer' }}>
-                    {item.arFileUrl ? (
-                      <span style={{ color: 'var(--green)', fontSize: 13 }}>✓ <span style={{ textDecoration: 'underline', fontSize: 11 }}>替换</span></span>
-                    ) : (
-                      <span className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 8px', display: 'inline-block' }}>上传 AR</span>
-                    )}
-                    <input type="file" accept=".usdz,.glb" hidden onChange={e => { if (e.target.files?.[0]) { uploadAR(item._id, e.target.files[0]); e.target.value = ''; } }} />
-                  </label>
+                  <label style={{ cursor: 'pointer' }}>{item.arFileUrl ? (<span style={{ color: 'var(--green)', fontSize: 13 }}>✓ <span style={{ textDecoration: 'underline', fontSize: 11 }}>替换</span></span>) : (<span className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 8px', display: 'inline-block' }}>上传 AR</span>)}<input type="file" accept=".usdz,.glb" hidden onChange={e => { if (e.target.files?.[0]) { uploadAR(item._id, e.target.files[0]); e.target.value = ''; } }} /></label>
                 </td>
-                <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                  {item.isSoldOut
-                    ? <span className="badge" style={{ background: 'var(--red-light)', color: 'var(--red-primary)' }}>售罄</span>
-                    : <span className="badge" style={{ background: 'var(--green-light)', color: 'var(--green)' }}>在售</span>}
-                </td>
+                <td style={{ padding: '8px 12px', textAlign: 'center' }}>{item.isSoldOut ? <span className="badge" style={{ background: 'var(--red-light)', color: 'var(--red-primary)' }}>售罄</span> : <span className="badge" style={{ background: 'var(--green-light)', color: 'var(--green)' }}>在售</span>}</td>
                 <td style={{ padding: '8px 12px', textAlign: 'right' }}>
-                  <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => startEdit(item)}>{t('common.edit')}</button>
+                  <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => { if (showForm && editingId === item._id) setShowForm(false); else startEdit(item); }}>{showForm && editingId === item._id ? '收起' : t('common.edit')}</button>
                   <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--red-primary)' }} onClick={() => handleDelete(item._id)}>{t('common.delete')}</button>
                 </td>
               </tr>
+              {showForm && editingId === item._id && (
+                <tr><td colSpan={8} style={{ padding: 16, background: 'var(--bg)', borderBottom: '2px solid var(--red-primary)' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div><label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>分类</label><select className="input" value={form.categoryId} onChange={e => setForm({ ...form, categoryId: e.target.value })}>{categories.map(c => <option key={c._id} value={c._id}>{c.translations.find(t2 => t2.locale === 'zh-CN')?.name}</option>)}</select></div>
+                    <div><label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>价格</label><input className="input" type="number" value={form.price} onChange={e => setForm({ ...form, price: Number(e.target.value) })} /></div>
+                    <div><label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>中文名称</label><input className="input" value={form.nameZh} onChange={e => setForm({ ...form, nameZh: e.target.value })} /></div>
+                    <div><label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>English Name</label><input className="input" value={form.nameEn} onChange={e => setForm({ ...form, nameEn: e.target.value })} /></div>
+                    <div><label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>中文描述</label><textarea className="input" value={form.descZh} onChange={e => setForm({ ...form, descZh: e.target.value })} rows={2} /></div>
+                    <div><label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>English Description</label><textarea className="input" value={form.descEn} onChange={e => setForm({ ...form, descEn: e.target.value })} rows={2} /></div>
+                    <div><label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>热量</label><input className="input" type="number" value={form.calories} onChange={e => setForm({ ...form, calories: Number(e.target.value) })} /></div>
+                    <div><label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>等待时间(分)</label><input className="input" type="number" value={form.avgWaitMinutes} onChange={e => setForm({ ...form, avgWaitMinutes: Number(e.target.value) })} /></div>
+                  </div>
+                  {allergens.length > 0 && (<div style={{ marginTop: 12 }}><label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 6 }}>过敏原</label><div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>{allergens.map(a => { const ck = form.allergenIds.includes(a._id); return (<label key={a._id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 6, fontSize: 13, cursor: 'pointer', background: ck ? 'var(--red-light)' : '#fff', border: ck ? '1px solid var(--red-primary)' : '1px solid var(--border)', color: ck ? 'var(--red-primary)' : 'var(--text-secondary)' }}><input type="checkbox" checked={ck} style={{ display: 'none' }} onChange={() => setForm(prev => ({ ...prev, allergenIds: ck ? prev.allergenIds.filter(id => id !== a._id) : [...prev.allergenIds, a._id] }))} /><span>{a.icon}</span><span>{a.translations.find(t2 => t2.locale === 'zh-CN')?.name || a.name}</span></label>); })}</div></div>)}
+                  <div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}><label style={{ fontSize: 13, fontWeight: 700 }}>{t('admin.optionGroups')}</label><button className="btn btn-outline" style={{ fontSize: 12, padding: '4px 10px' }} onClick={addOptionGroup}>+ {t('admin.addOptionGroup')}</button></div>
+                    {form.optionGroups.map((group, gi) => (<div key={gi} style={{ background: '#fff', borderRadius: 8, padding: 12, marginBottom: 10, border: '1px solid var(--border)' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}><span style={{ fontSize: 12, fontWeight: 600 }}>#{gi + 1}</span><button className="btn btn-ghost" style={{ fontSize: 11, color: 'var(--red-primary)' }} onClick={() => removeOptionGroup(gi)}>{t('common.delete')}</button></div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 8 }}><div><label style={{ fontSize: 11, color: 'var(--text-light)' }}>名称(中)</label><input className="input" value={group.nameZh} onChange={e => updateOptionGroup(gi, 'nameZh', e.target.value)} style={{ width: '100%' }} /></div><div><label style={{ fontSize: 11, color: 'var(--text-light)' }}>Name(EN)</label><input className="input" value={group.nameEn} onChange={e => updateOptionGroup(gi, 'nameEn', e.target.value)} style={{ width: '100%' }} /></div><div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 2 }}><label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}><input type="checkbox" checked={group.required} onChange={e => updateOptionGroup(gi, 'required', e.target.checked)} />{t('admin.required')}</label></div></div>{group.choices.map((choice, ci) => (<div key={ci} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 70px 70px auto', gap: 6, marginBottom: 4 }}><input className="input" placeholder="中文" value={choice.nameZh} onChange={e => updateChoice(gi, ci, 'nameZh', e.target.value)} style={{ fontSize: 12 }} /><input className="input" placeholder="EN" value={choice.nameEn} onChange={e => updateChoice(gi, ci, 'nameEn', e.target.value)} style={{ fontSize: 12 }} /><input className="input" type="number" placeholder="原价" value={choice.originalPrice || ''} onChange={e => updateChoice(gi, ci, 'originalPrice', Number(e.target.value))} style={{ fontSize: 12 }} /><input className="input" type="number" placeholder="现价" value={choice.extraPrice} onChange={e => updateChoice(gi, ci, 'extraPrice', Number(e.target.value))} style={{ fontSize: 12 }} /><button className="btn btn-ghost" style={{ fontSize: 14, color: 'var(--red-primary)' }} onClick={() => removeChoice(gi, ci)}>✕</button></div>))}<button className="btn btn-ghost" style={{ fontSize: 11, marginTop: 4 }} onClick={() => addChoice(gi)}>+ {t('admin.addChoice')}</button></div>))}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 14 }}><button className="btn btn-primary" onClick={handleSave}>{t('common.save')}</button><button className="btn btn-outline" onClick={() => setShowForm(false)}>{t('common.cancel')}</button></div>
+                </td></tr>
+              )}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
