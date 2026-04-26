@@ -155,7 +155,7 @@ export default function CheckoutFlow() {
         const data = await res.json();
         setCheckoutId(data._id);
         setCheckoutMeta(meta);
-        setCheckoutBundles(activeBundles);
+        setCheckoutBundles(activeBundles.map(b => ({ name: b.name, nameEn: b.nameEn || '', discount: b.discount })));
       } else {
         const activeSG = seatGroups.find(g => g.seatNumber === selectedSeat);
         if (!activeSG) return;
@@ -172,7 +172,7 @@ export default function CheckoutFlow() {
         }
         setCheckoutId(lastId);
         setCheckoutMeta(meta);
-        setCheckoutBundles(activeBundles);
+        setCheckoutBundles(activeBundles.map(b => ({ name: b.name, nameEn: b.nameEn || '', discount: b.discount })));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Checkout failed');

@@ -91,7 +91,7 @@ export default function PhoneOrderList() {
       const data = await res.json();
       setCheckoutId(data._id);
       setCheckoutMeta({ total: selectedTotal, cashReceived: cashReceivedNum, change: changeAmount });
-      setCheckoutBundles((selectedOrder.appliedBundles || []).map(b => ({ name: b.name, nameEn: b.nameEn || '', discount: b.discount })));
+      setCheckoutBundles((selectedOrder?.appliedBundles || []).map(b => ({ name: b.name, nameEn: b.nameEn || '', discount: b.discount })));
       setShowPayment(false);
       fetchOrders();
     } catch (e) {
