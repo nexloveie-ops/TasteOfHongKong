@@ -37,6 +37,12 @@ const tempUpload = multer({
  */
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Auto-restore sold-out items whose soldOutUntil has passed
+    await MenuItem.updateMany(
+      { isSoldOut: true, soldOutUntil: { $ne: null, $lte: new Date() } },
+      { isSoldOut: false, soldOutUntil: null }
+    );
+
     const lang = req.query.lang as string | undefined;
     const category = req.query.category as string | undefined;
 
@@ -248,14 +254,21 @@ router.put(
         throw createAppError('NOT_FOUND', 'Menu item not found');
       }
 
-      const { isSoldOut } = req.body;
+      const { isSoldOut, soldOutUntil } = req.body;
       if (typeof isSoldOut !== 'boolean') {
         throw createAppError('VALIDATION_ERROR', 'isSoldOut must be a boolean');
       }
 
+      const updateData: Record<string, unknown> = { isSoldOut };
+      if (isSoldOut && soldOutUntil) {
+        updateData.soldOutUntil = new Date(soldOutUntil);
+      } else {
+        updateData.soldOutUntil = null;
+      }
+
       const updated = await MenuItem.findByIdAndUpdate(
         id,
-        { isSoldOut },
+        updateData,
         { new: true, runValidators: true }
       );
 

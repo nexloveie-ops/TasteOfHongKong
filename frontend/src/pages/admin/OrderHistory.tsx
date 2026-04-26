@@ -41,12 +41,30 @@ export default function OrderHistory() {
       const params = new URLSearchParams();
       params.set('startDate', startDate);
       params.set('endDate', endDate);
-      if (typeFilter) params.set('type', typeFilter);
+      if (typeFilter) params.set('paymentMethod', typeFilter);
       const res = await fetch(`/api/reports/orders?${params}`, { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) setOrders(await res.json());
+      if (res.ok) {
+        const data: HistoryOrder[] = await res.json();
+        // Only show completed and completed-hide orders
+        const filtered = data.filter(o => o.status === 'completed' || o.status === 'completed-hide');
+        setOrders(filtered);
+      }
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, [token, startDate, endDate, typeFilter]);
+
+  const toggleHide = useCallback(async (orderId: string) => {
+    try {
+      const res = await fetch(`/api/orders/${orderId}/toggle-hide`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+      if (res.ok) {
+        const updated: HistoryOrder = await res.json();
+        setOrders(prev => prev.map(o => o._id === orderId ? { ...o, status: updated.status } : o));
+      }
+    } catch { /* ignore */ }
+  }, [token]);
 
   const orderTotal = (o: HistoryOrder) => o.checkout?.totalAmount ?? o.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
 
@@ -94,11 +112,11 @@ export default function OrderHistory() {
           <input className="input" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
         </div>
         <div>
-          <label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>类型</label>
+          <label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>支付方式</label>
           <select className="input" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
             <option value="">全部</option>
-            <option value="dine_in">堂食</option>
-            <option value="takeout">外卖</option>
+            <option value="card">刷卡</option>
+            <option value="cash">现金</option>
           </select>
         </div>
         <button className="btn btn-primary" onClick={fetchOrders} disabled={loading || !startDate || !endDate}>
@@ -130,14 +148,25 @@ export default function OrderHistory() {
               {orders.map(o => {
                 const orderNum = o.dineInOrderNumber
                   || (o.dailyOrderNumber ? `#${o.dailyOrderNumber}` : o._id.slice(-6).toUpperCase());
+                const isHidden = o.status === 'completed-hide' || o.status === 'checked_out-hide';
+                const isCash = o.checkout?.paymentMethod === 'cash';
                 return (
-                  <tr key={o._id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                  <tr
+                    key={o._id}
+                    style={{
+                      borderBottom: '1px solid #f0f0f0',
+                      background: isHidden ? '#FFFDE7' : undefined,
+                      cursor: isCash ? 'pointer' : undefined,
+                    }}
+                    onClick={isCash ? () => toggleHide(o._id) : undefined}
+                    title={isCash ? (isHidden ? '点击恢复显示' : '点击隐藏') : undefined}
+                  >
                     <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontWeight: 600 }}>{orderNum}</td>
                     <td style={{ padding: '8px 12px' }}>
                       <span className="badge" style={{
                         background: o.type === 'dine_in' ? 'var(--red-light)' : '#E3F2FD',
                         color: o.type === 'dine_in' ? 'var(--red-primary)' : 'var(--blue)',
-                      }}>{o.type === 'dine_in' ? '堂食' : '外卖'}</span>
+                      }}>{o.type === 'dine_in' ? '堂食' : o.type === 'phone' ? '电话' : '外卖'}</span>
                     </td>
                     <td style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-secondary)', maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {o.items.map(i => `${i.itemName}×${i.quantity}`).join(', ')}

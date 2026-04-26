@@ -15,11 +15,11 @@ router.get('/orders', authMiddleware, requirePermission('report:view'), async (r
 
     if (status === 'refunded') {
       // Find orders that have ANY refunded items (partial or full)
-      filter.status = { $in: ['checked_out', 'completed', 'refunded'] };
+      filter.status = { $in: ['checked_out', 'completed', 'refunded', 'checked_out-hide', 'completed-hide'] };
       filter['items.refunded'] = true;
     } else {
       // Include refunded orders too so totals match the card (which counts all checkouts)
-      filter.status = { $in: ['checked_out', 'completed', 'refunded'] };
+      filter.status = { $in: ['checked_out', 'completed', 'refunded', 'checked_out-hide', 'completed-hide'] };
     }
 
     if (startDate || endDate) {
@@ -162,7 +162,7 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
 
     // Fetch ALL orders in date range (including refunded)
     const orderFilter: Record<string, unknown> = {
-      status: { $in: ['checked_out', 'completed', 'refunded'] },
+      status: { $in: ['checked_out', 'completed', 'refunded', 'checked_out-hide', 'completed-hide'] },
     };
     if (startDate || endDate) {
       orderFilter.createdAt = dateFilter;
@@ -379,7 +379,7 @@ router.get('/item-options', authMiddleware, requirePermission('report:view'), as
     if (!itemName) throw createAppError('VALIDATION_ERROR', 'itemName is required');
 
     const filter: Record<string, unknown> = {
-      status: { $in: ['checked_out', 'completed', 'refunded'] },
+      status: { $in: ['checked_out', 'completed', 'refunded', 'checked_out-hide', 'completed-hide'] },
       'items.itemName': itemName,
     };
     if (startDate || endDate) {

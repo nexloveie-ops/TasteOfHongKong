@@ -27,7 +27,7 @@ const OrderSchema = new mongoose.Schema({
   seatNumber: { type: Number },
   dailyOrderNumber: { type: Number },
   dineInOrderNumber: { type: String },
-  status: { type: String, enum: ['pending', 'paid_online', 'checked_out', 'completed', 'refunded'], default: 'pending' },
+  status: { type: String, enum: ['pending', 'paid_online', 'checked_out', 'completed', 'refunded', 'checked_out-hide', 'completed-hide'], default: 'pending' },
   items: [OrderItemSubdocSchema],
   appliedBundles: [AppliedBundleSchema],
   completedAt: { type: Date },

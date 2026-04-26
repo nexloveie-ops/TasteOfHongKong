@@ -81,51 +81,11 @@ export default function CashierLayout() {
       html += `<div style="font-size:13px">${dateStr} ${timeStr}</div>`;
       html += `</div><div class="divider"></div>`;
 
-      // Takeout
-      html += `<div class="section">TAKEOUT</div>`;
-      html += `<div class="row"><span>Orders</span><span>${stats.takeoutCount}</span></div>`;
-      html += `<div class="row"><span>Revenue</span><span>€${(stats.takeoutRevenue ?? 0).toFixed(2)}</span></div>`;
-      html += `<div class="divider"></div>`;
+      // Cash (net of refunds)
+      html += `<div class="row" style="font-size:16px"><span>Cash</span><span>€${(stats.cashTotal ?? 0).toFixed(2)}</span></div>`;
 
-      // Dine-in
-      html += `<div class="section">DINE-IN</div>`;
-      html += `<div class="row"><span>Orders</span><span>${stats.dineInCount}</span></div>`;
-      html += `<div class="row"><span>Revenue</span><span>€${(stats.dineInRevenue ?? 0).toFixed(2)}</span></div>`;
-      html += `<div class="row"><span>  Scan Order</span><span>${stats.dineInScanCount}</span></div>`;
-      html += `<div class="row"><span>  Cashier Order</span><span>${stats.dineInCashierCount}</span></div>`;
-      html += `<div class="divider"></div>`;
-
-      // Payment — merge mixed into cash/card
-      const totalCash = (stats.grossCashAmount ?? 0);
-      const totalCard = (stats.grossCardAmount ?? 0);
-      const cashOrders = (stats.cashCount ?? 0) + (stats.mixedCount ?? 0);
-      const cardOrders = (stats.cardCount ?? 0) + (stats.mixedCount ?? 0);
-      html += `<div class="section">PAYMENT</div>`;
-      html += `<div class="row"><span>Cash (${cashOrders} orders)</span><span>€${totalCash.toFixed(2)}</span></div>`;
-      html += `<div class="row"><span>Card (${cardOrders} orders)</span><span>€${totalCard.toFixed(2)}</span></div>`;
-      if ((stats.onlineCount ?? 0) > 0) {
-        html += `<div class="row"><span>Online (${stats.onlineCount} orders)</span><span>€${(stats.onlineTotal ?? 0).toFixed(2)}</span></div>`;
-      }
-      html += `<div class="divider"></div>`;
-
-      // Coupon
-      if ((stats.couponCount ?? 0) > 0) {
-        html += `<div class="section">COUPON</div>`;
-        html += `<div class="row"><span>Coupons Used</span><span>${stats.couponCount}</span></div>`;
-        html += `<div class="row"><span>Coupon Amount</span><span>€${(stats.couponTotalAmount ?? 0).toFixed(2)}</span></div>`;
-        html += `<div class="divider"></div>`;
-      }
-
-      // Refund
-      html += `<div class="section">REFUND</div>`;
-      html += `<div class="row"><span>Items Refunded</span><span>${stats.refundedCount}</span></div>`;
-      html += `<div class="row"><span>Refund Amount</span><span>€${(stats.refundedAmount ?? 0).toFixed(2)}</span></div>`;
-      html += `<div class="divider"></div>`;
-
-      // Total
-      html += `<div class="row" style="font-size:16px"><span>Gross Revenue</span><span>€${(stats.grossRevenue ?? 0).toFixed(2)}</span></div>`;
-      html += `<div class="row"><span>Less Refunds</span><span>-€${(stats.refundedAmount ?? 0).toFixed(2)}</span></div>`;
-      html += `<div class="row" style="font-size:20px;margin-top:6px"><span>NET TOTAL</span><span>€${(stats.totalRevenue ?? 0).toFixed(2)}</span></div>`;
+      // Card (net of refunds)
+      html += `<div class="row" style="font-size:16px"><span>Card</span><span>€${(stats.cardTotal ?? 0).toFixed(2)}</span></div>`;
 
       // Footer
       html += `<div class="divider"></div>`;

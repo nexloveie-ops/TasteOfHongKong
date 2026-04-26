@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 
 interface MenuItem {
-  _id: string; isSoldOut?: boolean;
+  _id: string; isSoldOut?: boolean; soldOutUntil?: string;
   translations: { locale: string; name: string }[];
 }
 
@@ -11,6 +11,10 @@ export default function InventoryManager() {
   const { t } = useTranslation();
   const { token } = useAuth();
   const [items, setItems] = useState<MenuItem[]>([]);
+  const [showModal, setShowModal] = useState<string | null>(null); // item id
+  const [restoreMode, setRestoreMode] = useState<'quick' | 'custom'>('quick');
+  const [customDate, setCustomDate] = useState('');
+  const [customTime, setCustomTime] = useState('');
 
   const fetchItems = useCallback(async () => {
     const res = await fetch('/api/menu/items', { headers: { Authorization: `Bearer ${token}` } });
@@ -19,21 +23,64 @@ export default function InventoryManager() {
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
-  const toggleSoldOut = async (id: string, current: boolean) => {
+  const markSoldOut = async (id: string, soldOutUntil: string | null) => {
     await fetch(`/api/menu/items/${id}/sold-out`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ isSoldOut: !current }),
+      body: JSON.stringify({ isSoldOut: true, soldOutUntil }),
+    });
+    setShowModal(null);
+    fetchItems();
+  };
+
+  const restoreSupply = async (id: string) => {
+    await fetch(`/api/menu/items/${id}/sold-out`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ isSoldOut: false }),
     });
     fetchItems();
+  };
+
+  const openSoldOutModal = (id: string) => {
+    setShowModal(id);
+    setRestoreMode('quick');
+    const now = new Date();
+    setCustomDate(now.toISOString().slice(0, 10));
+    setCustomTime(String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0'));
+  };
+
+  const handleQuickSelect = (hours: number) => {
+    if (!showModal) return;
+    const until = new Date(Date.now() + hours * 3600 * 1000).toISOString();
+    markSoldOut(showModal, until);
+  };
+
+  const handleCustomConfirm = () => {
+    if (!showModal || !customDate || !customTime) return;
+    const until = new Date(`${customDate}T${customTime}:00`).toISOString();
+    markSoldOut(showModal, until);
+  };
+
+  const formatUntil = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diff = d.getTime() - now.getTime();
+    if (diff <= 0) return 'Expired';
+    const hours = Math.floor(diff / 3600000);
+    const mins = Math.floor((diff % 3600000) / 60000);
+    if (hours > 24) return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (hours > 0) return `${hours}h ${mins}m`;
+    return `${mins}m`;
   };
 
   return (
     <div>
       <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>{t('admin.inventory')}</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
         {items.map(item => {
           const name = item.translations.find(t2 => t2.locale === 'zh-CN')?.name || item.translations[0]?.name || '';
+          const nameEn = item.translations.find(t2 => t2.locale === 'en-US')?.name || '';
           return (
             <div key={item._id} className="card" style={{
               padding: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -41,6 +88,7 @@ export default function InventoryManager() {
             }}>
               <div>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{name}</div>
+                {nameEn && <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{nameEn}</div>}
                 <span className="badge" style={{
                   marginTop: 4,
                   background: item.isSoldOut ? 'var(--red-light)' : 'var(--green-light)',
@@ -48,18 +96,83 @@ export default function InventoryManager() {
                 }}>
                   {item.isSoldOut ? t('customer.soldOut') : '在售'}
                 </span>
+                {item.isSoldOut && item.soldOutUntil && (
+                  <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 2 }}>
+                    ⏰ {formatUntil(item.soldOutUntil)}
+                  </div>
+                )}
               </div>
-              <button
-                className={`btn ${item.isSoldOut ? 'btn-primary' : 'btn-outline'}`}
-                style={{ fontSize: 12, padding: '8px 14px' }}
-                onClick={() => toggleSoldOut(item._id, !!item.isSoldOut)}
-              >
-                {item.isSoldOut ? '恢复供应' : '标记售罄'}
-              </button>
+              {item.isSoldOut ? (
+                <button className="btn btn-primary" style={{ fontSize: 12, padding: '8px 14px' }}
+                  onClick={() => restoreSupply(item._id)}>
+                  恢复供应
+                </button>
+              ) : (
+                <button className="btn btn-outline" style={{ fontSize: 12, padding: '8px 14px' }}
+                  onClick={() => openSoldOutModal(item._id)}>
+                  标记售罄
+                </button>
+              )}
             </div>
           );
         })}
       </div>
+
+      {/* Sold Out Time Modal */}
+      {showModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setShowModal(null)}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 24, width: 380, maxWidth: '90%' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, textAlign: 'center' }}>⏰ 选择恢复供应时间</h3>
+
+            {/* Mode tabs */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <button className="btn" onClick={() => setRestoreMode('quick')} style={{
+                flex: 1, fontSize: 13, padding: '8px 0',
+                background: restoreMode === 'quick' ? 'var(--red-primary)' : 'var(--bg)',
+                color: restoreMode === 'quick' ? '#fff' : 'var(--text-secondary)',
+                border: '1px solid var(--border)',
+              }}>快速选择</button>
+              <button className="btn" onClick={() => setRestoreMode('custom')} style={{
+                flex: 1, fontSize: 13, padding: '8px 0',
+                background: restoreMode === 'custom' ? 'var(--red-primary)' : 'var(--bg)',
+                color: restoreMode === 'custom' ? '#fff' : 'var(--text-secondary)',
+                border: '1px solid var(--border)',
+              }}>自定义时间</button>
+            </div>
+
+            {restoreMode === 'quick' ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <button className="btn btn-outline" style={{ padding: '14px 0', fontSize: 14 }} onClick={() => handleQuickSelect(1)}>1 小时</button>
+                <button className="btn btn-outline" style={{ padding: '14px 0', fontSize: 14 }} onClick={() => handleQuickSelect(3)}>3 小时</button>
+                <button className="btn btn-outline" style={{ padding: '14px 0', fontSize: 14 }} onClick={() => handleQuickSelect(24)}>1 天</button>
+                <button className="btn btn-outline" style={{ padding: '14px 0', fontSize: 14 }} onClick={() => handleQuickSelect(48)}>2 天</button>
+              </div>
+            ) : (
+              <div>
+                <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>日期</label>
+                    <input className="input" type="date" value={customDate} onChange={e => setCustomDate(e.target.value)} style={{ width: '100%' }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>时间</label>
+                    <input className="input" type="time" value={customTime} onChange={e => setCustomTime(e.target.value)} style={{ width: '100%' }} />
+                  </div>
+                </div>
+                <button className="btn btn-primary" style={{ width: '100%', padding: '12px 0' }} onClick={handleCustomConfirm}>
+                  确认
+                </button>
+              </div>
+            )}
+
+            <button className="btn btn-ghost" style={{ width: '100%', marginTop: 12, fontSize: 13 }} onClick={() => setShowModal(null)}>
+              取消
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -367,5 +367,42 @@ export function createOrdersRouter(io: SocketIOServer): Router {
     }
   });
 
+  // PUT /api/orders/:id/toggle-hide — Toggle hide status for cash orders
+  router.put('/:id/toggle-hide', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id as string;
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw createAppError('VALIDATION_ERROR', 'Invalid order ID');
+      }
+
+      const order = await Order.findById(id);
+      if (!order) {
+        throw createAppError('NOT_FOUND', 'Order not found');
+      }
+
+      // Toggle between normal and hide status
+      const toggleMap: Record<string, string> = {
+        'completed': 'completed-hide',
+        'completed-hide': 'completed',
+        'checked_out': 'checked_out-hide',
+        'checked_out-hide': 'checked_out',
+      };
+
+      const newStatus = toggleMap[order.status];
+      if (!newStatus) {
+        throw createAppError('VALIDATION_ERROR', 'Order status cannot be toggled', {
+          currentStatus: order.status,
+        });
+      }
+
+      order.status = newStatus as typeof order.status;
+      await order.save();
+
+      res.json(order);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   return router;
 }

@@ -32,6 +32,7 @@ const MenuItemSchema = new mongoose.Schema({
   photoUrl: { type: String },
   arFileUrl: { type: String },
   isSoldOut: { type: Boolean, default: false },
+  soldOutUntil: { type: Date },
   allergenIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Allergen' }],
   translations: [ItemTranslationSchema],
   optionGroups: [OptionGroupSchema],
