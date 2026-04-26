@@ -160,9 +160,9 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
       dateFilter.$lte = new Date((endDate as string) + 'T23:59:59.999');
     }
 
-    // Fetch ALL orders in date range (including refunded)
+    // Fetch ALL orders in date range (including refunded, excluding hidden)
     const orderFilter: Record<string, unknown> = {
-      status: { $in: ['checked_out', 'completed', 'refunded', 'checked_out-hide', 'completed-hide'] },
+      status: { $in: ['checked_out', 'completed', 'refunded'] },
     };
     if (startDate || endDate) {
       orderFilter.createdAt = dateFilter;
@@ -379,7 +379,7 @@ router.get('/item-options', authMiddleware, requirePermission('report:view'), as
     if (!itemName) throw createAppError('VALIDATION_ERROR', 'itemName is required');
 
     const filter: Record<string, unknown> = {
-      status: { $in: ['checked_out', 'completed', 'refunded', 'checked_out-hide', 'completed-hide'] },
+      status: { $in: ['checked_out', 'completed', 'refunded'] },
       'items.itemName': itemName,
     };
     if (startDate || endDate) {
