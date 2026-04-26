@@ -32,6 +32,20 @@ export default function MenuView() {
   const [activeOffers, setActiveOffers] = useState<OfferData[]>([]);
   const [selectedOffer, setSelectedOffer] = useState<OfferData | null>(null);
 
+  // Banner carousel index
+  // Banner carousel index + countdown
+  const [bannerIndex, setBannerIndex] = useState(0);
+  const [countdownKey, setCountdownKey] = useState(0);
+  useEffect(() => {
+    if (activeOffers.length <= 1) return;
+    setCountdownKey(k => k + 1);
+    const timer = setInterval(() => {
+      setBannerIndex(prev => (prev + 1) % activeOffers.length);
+      setCountdownKey(k => k + 1);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [activeOffers.length]);
+
   // Refs for scroll-based category tracking
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -156,16 +170,24 @@ export default function MenuView() {
             <div>info@lztechserve.com</div>
           </div>
         </div>
-        {/* Active offers */}
+        {/* Active offers — carousel */}
         {activeOffers.length > 0 && !heroHidden && (
-          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {activeOffers.map(offer => (
+          <div style={{ marginTop: 12, position: 'relative' }}>
+            {activeOffers.map((offer, idx) => (
               <div key={offer._id} onClick={() => setSelectedOffer(offer)} style={{
                 background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(4px)',
                 borderRadius: 10, padding: '10px 14px',
                 border: '1px solid rgba(240,214,138,0.3)',
                 cursor: 'pointer',
+                opacity: idx === bannerIndex ? 1 : 0,
+                position: idx === 0 ? 'relative' : 'absolute',
+                top: idx === 0 ? undefined : 0,
+                left: idx === 0 ? undefined : 0,
+                right: idx === 0 ? undefined : 0,
+                transition: 'opacity 0.6s ease',
+                pointerEvents: idx === bannerIndex ? 'auto' : 'none',
               }}>
+                {/* Circular countdown — top-left of each banner */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <div style={{ color: '#F0D68A', fontSize: 13, fontWeight: 700 }}>
@@ -177,12 +199,40 @@ export default function MenuView() {
                       </div>
                     )}
                   </div>
-                  <div style={{ color: '#fff', fontSize: 18, fontWeight: 700, fontFamily: "'Noto Serif SC', serif", flexShrink: 0, marginLeft: 12 }}>
-                    €{offer.bundlePrice.toFixed(2)}
+                  <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, marginLeft: 12, gap: 8 }}>
+                    <div style={{ color: '#fff', fontSize: 18, fontWeight: 700, fontFamily: "'Noto Serif SC', serif" }}>
+                      €{offer.bundlePrice.toFixed(2)}
+                    </div>
+                    {activeOffers.length > 1 && idx === bannerIndex && (
+                      <svg width="20" height="20" viewBox="0 0 20 20" style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
+                        <circle cx="10" cy="10" r="8" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2" />
+                        <circle
+                          key={countdownKey}
+                          cx="10" cy="10" r="8" fill="none" stroke="#F0D68A" strokeWidth="2"
+                          strokeDasharray={`${2 * Math.PI * 8}`}
+                          strokeDashoffset={`${2 * Math.PI * 8}`}
+                          strokeLinecap="round"
+                          style={{ animation: 'bannerCountdown 5s linear forwards' }}
+                        />
+                      </svg>
+                    )}
+                    <style>{`@keyframes bannerCountdown { from { stroke-dashoffset: ${2 * Math.PI * 8}; } to { stroke-dashoffset: 0; } }`}</style>
                   </div>
                 </div>
               </div>
             ))}
+            {/* Dots indicator */}
+            {activeOffers.length > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 8 }}>
+                {activeOffers.map((_, idx) => (
+                  <div key={idx} onClick={(e) => { e.stopPropagation(); setBannerIndex(idx); }} style={{
+                    width: idx === bannerIndex ? 16 : 6, height: 6, borderRadius: 3,
+                    background: idx === bannerIndex ? '#F0D68A' : 'rgba(255,255,255,0.4)',
+                    cursor: 'pointer', transition: 'all 0.3s ease',
+                  }} />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
