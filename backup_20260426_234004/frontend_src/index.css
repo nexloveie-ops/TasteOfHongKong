@@ -1,0 +1,196 @@
+/* ── Design System: 港式烧腊 Hong Kong BBQ ── */
+:root {
+  /* Primary Colors */
+  --red-primary: #D32F2F;
+  --red-dark: #B71C1C;
+  --red-light: #FFEBEE;
+  --gold-primary: #F9A825;
+  --gold-dark: #F57F17;
+  --gold-light: #FFF8E1;
+
+  /* Backgrounds */
+  --bg: #F5F5F5;
+  --bg-white: #FFFFFF;
+  --bg-cream: #FDF6EC;
+  --bg-warm: #FAF0E4;
+
+  /* Text */
+  --text-primary: #1A1A1A;
+  --text-secondary: #666666;
+  --text-light: #999999;
+  --text-dark: #2C1810;
+  --text-body: #4A3728;
+
+  /* Borders */
+  --border: #E0E0E0;
+  --border-light: #E8D5B8;
+
+  /* Semantic */
+  --green: #2E7D32;
+  --green-light: #E8F5E9;
+  --blue: #1565C0;
+  --blue-light: #E3F2FD;
+  --orange: #E65100;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.12);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.15);
+
+  /* Radius */
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Fonts */
+  --font-body: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-heading: 'Noto Serif SC', 'Noto Sans SC', serif;
+
+  /* Transitions */
+  --transition: all 0.15s ease;
+}
+
+/* ── Reset & Base ── */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+a {
+  color: var(--red-primary);
+  text-decoration: none;
+}
+
+button {
+  font-family: var(--font-body);
+  cursor: pointer;
+  border: none;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input, select, textarea {
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
+/* ── Utility Classes ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+  transition: var(--transition);
+  min-height: 44px;
+  min-width: 44px;
+  user-select: none;
+}
+
+.btn-primary {
+  background: var(--red-primary);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(211,47,47,0.3);
+}
+.btn-primary:hover { background: var(--red-dark); }
+.btn-primary:active { transform: scale(0.98); }
+
+.btn-gold {
+  background: var(--gold-primary);
+  color: var(--text-dark);
+}
+.btn-gold:hover { background: var(--gold-dark); }
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+.btn-outline:hover { background: var(--bg); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+.btn-ghost:hover { background: var(--bg); }
+
+.card {
+  background: var(--bg-white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+}
+
+.input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+  background: var(--bg-white);
+  transition: var(--transition);
+  min-height: 44px;
+}
+.input:focus {
+  border-color: var(--red-primary);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(211,47,47,0.1);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ── Print Styles ── */
+@media print {
+  body > *:not(.receipt-print-container) { display: none !important; }
+  .receipt-print-container { display: block !important; }
+  .no-print { display: none !important; }
+}
+
+@keyframes pulse-green {
+  0%, 100% { box-shadow: 0 0 8px rgba(76,175,80,0.3); }
+  50% { box-shadow: 0 0 20px rgba(76,175,80,0.6); }
+}

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
-import LanguageSwitcher from '../components/LanguageSwitcher';
 
 const sidebarItems = [
   { path: '/admin/restaurant', icon: '🏪', key: 'admin.restaurantInfo' },
@@ -88,7 +87,6 @@ export default function AdminLayout() {
           borderBottom: '1px solid var(--border)', flexShrink: 0, fontSize: 13,
         }}>
           <span style={{ fontWeight: 600 }}>{user?.username}</span>
-          <LanguageSwitcher />
           <button className="btn btn-outline" style={{ padding: '6px 14px', fontSize: 12 }} onClick={handleLogout}>
             {t('login.logout', '退出')}
           </button>

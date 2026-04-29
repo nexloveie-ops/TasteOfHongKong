@@ -1,0 +1,240 @@
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { useCart } from '../../context/CartContext';
+import { matchBundles, calcBundleTotal, type OfferData, type MatchedBundle } from '../../utils/bundleMatcher';
+
+export default function CartPage() {
+  const { items, increaseQuantity, decreaseQuantity, removeItem, clearCart, totalAmount, totalItems, getItemKey, editOrderId, setEditOrderId } = useCart();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language;
+  const getItemName = (names: Record<string, string>) => names[lang] || Object.values(names)[0] || '';
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [offers, setOffers] = useState<OfferData[]>([]);
+  const [menuItemCategories, setMenuItemCategories] = useState<Record<string, string>>({});
+  const [offersLoaded, setOffersLoaded] = useState(false);
+
+  const table = searchParams.get('table');
+  const seat = searchParams.get('seat');
+  const orderType = searchParams.get('type');
+  const qs = searchParams.toString();
+
+  // Fetch offers and menu item category mapping
+  useEffect(() => {
+    let loaded = 0;
+    const check = () => { loaded++; if (loaded >= 2) setOffersLoaded(true); };
+    fetch('/api/offers').then(r => r.ok ? r.json() : []).then(d => { setOffers(d); check(); }).catch(() => check());
+    fetch('/api/menu/items').then(r => r.ok ? r.json() : []).then((data: { _id: string; categoryId: string }[]) => {
+      const map: Record<string, string> = {};
+      for (const item of data) map[item._id] = item.categoryId;
+      setMenuItemCategories(map);
+      check();
+    }).catch(() => check());
+  }, []);
+
+  // Bundle matching
+  const matchedBundles: MatchedBundle[] = useMemo(() => {
+    if (offers.length === 0 || items.length === 0) return [];
+    const cartEntries = items.map(item => {
+      const optExtra = (item.options || []).reduce((s, o) => s + o.extraPrice, 0);
+      return {
+        key: getItemKey(item),
+        menuItemId: item.menuItemId,
+        categoryId: menuItemCategories[item.menuItemId] || '',
+        basePrice: item.price,
+        optionExtra: optExtra,
+        quantity: item.quantity,
+      };
+    });
+    return matchBundles(cartEntries, offers);
+  }, [items, offers, menuItemCategories, getItemKey]);
+
+  const bundleTotals = useMemo(() => {
+    const cartEntries = items.map(item => {
+      const optExtra = (item.options || []).reduce((s, o) => s + o.extraPrice, 0);
+      return {
+        key: getItemKey(item),
+        menuItemId: item.menuItemId,
+        categoryId: menuItemCategories[item.menuItemId] || '',
+        basePrice: item.price,
+        optionExtra: optExtra,
+        quantity: item.quantity,
+      };
+    });
+    return calcBundleTotal(cartEntries, matchedBundles);
+  }, [items, matchedBundles, menuItemCategories, getItemKey]);
+
+  const finalTotal = bundleTotals.finalTotal;
+
+  const handleSubmit = async () => {
+    if (items.length === 0) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      const itemsPayload = items.map(i => {
+        const item: Record<string, unknown> = { menuItemId: i.menuItemId, quantity: i.quantity };
+        if (i.options && i.options.length > 0) {
+          item.selectedOptions = i.options.map(o => ({ groupId: o.groupId, choiceId: o.choiceId }));
+        }
+        return item;
+      });
+
+      let res: Response;
+      if (editOrderId) {
+        // Update existing order
+        res = await fetch(`/api/orders/${editOrderId}/items`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: itemsPayload }),
+        });
+      } else {
+        // Create new order
+        const body: Record<string, unknown> = { items: itemsPayload };
+        if (orderType === 'takeout') {
+          body.type = 'takeout';
+        } else {
+          body.type = 'dine_in';
+          body.tableNumber = Number(table);
+          body.seatNumber = Number(seat);
+        }
+        // Include bundle discount info
+        if (matchedBundles.length > 0) {
+          body.appliedBundles = matchedBundles.map(b => ({
+            offerId: b.offer._id,
+            name: b.offer.name,
+            nameEn: b.offer.nameEn,
+            discount: b.savings,
+          }));
+        }
+        res = await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      }
+      if (!res.ok) throw new Error('Failed');
+      const order = await res.json();
+      const navId = editOrderId || order._id;
+      clearCart();
+      setEditOrderId(null);
+      navigate(`/customer/order/${navId}?${qs}`);
+    } catch {
+      setError(t('customer.updateFailed'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (items.length === 0) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 16 }}>
+        <span style={{ fontSize: 48, opacity: 0.3 }}>🛒</span>
+        <p style={{ color: 'var(--text-light)' }}>{t('customer.emptyCart')}</p>
+        <button className="btn btn-primary" onClick={() => navigate(`/customer/menu?${qs}`)}>
+          {t('customer.backToMenu')}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: 16, paddingBottom: 120 }}>
+      <h2 style={{ fontFamily: "'Noto Serif SC', serif", fontSize: 20, marginBottom: 16, color: 'var(--text-dark)', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button onClick={() => navigate(`/customer/menu?${qs}`)} style={{
+          background: 'none', border: 'none', cursor: 'pointer', fontSize: 18,
+          color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', padding: 0,
+        }}>←</button>
+        {t('customer.cart')}
+      </h2>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {items.map(item => {
+          const key = getItemKey(item);
+          const optExtra = (item.options || []).reduce((s, o) => s + o.extraPrice, 0);
+          return (
+            <div key={key} style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              background: 'var(--bg-white)', borderRadius: 10, padding: '12px 14px',
+              border: '1px solid rgba(232,213,184,0.5)',
+            }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-dark)' }}>{getItemName(item.names)}</div>
+                {item.options && item.options.length > 0 && (
+                  <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 2 }}>
+                    {item.options.map((o, i) => (
+                      <span key={i}>
+                        {i > 0 && ' · '}
+                        {o.groupName[lang] || Object.values(o.groupName)[0]}: {o.choiceName[lang] || Object.values(o.choiceName)[0]}
+                        {o.extraPrice > 0 && ` +€${o.extraPrice}`}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div style={{ fontSize: 13, color: 'var(--red-primary)', fontWeight: 600, fontFamily: "'Noto Serif SC', serif" }}>
+                  €{item.price}{optExtra > 0 && ` +€${optExtra}`}
+                </div>
+              </div>
+              <div style={{
+                display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden',
+              }}>
+                <button onClick={() => decreaseQuantity(key)} style={{
+                  width: 34, height: 34, background: 'var(--bg)', fontSize: 16, fontWeight: 700,
+                  color: 'var(--red-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>−</button>
+                <span style={{ width: 34, textAlign: 'center', fontSize: 14, fontWeight: 700 }}>{item.quantity}</span>
+                <button onClick={() => increaseQuantity(key)} style={{
+                  width: 34, height: 34, background: 'var(--bg)', fontSize: 16, fontWeight: 700,
+                  color: 'var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>+</button>
+              </div>
+              <div style={{ fontWeight: 700, color: 'var(--red-primary)', minWidth: 50, textAlign: 'right', fontFamily: "'Noto Serif SC', serif" }}>
+                €{((item.price + optExtra) * item.quantity).toFixed(2)}
+              </div>
+              <button onClick={() => removeItem(key)} style={{
+                background: 'none', color: 'var(--text-light)', fontSize: 18, padding: 4,
+              }}>✕</button>
+            </div>
+          );
+        })}
+      </div>
+
+      {error && <div style={{ color: 'var(--red-primary)', marginTop: 12, fontSize: 13 }}>{error}</div>}
+
+      {/* Bundle discount display */}
+      {matchedBundles.length > 0 && (
+        <div style={{ marginTop: 12, padding: '10px 14px', background: '#E8F5E9', borderRadius: 10, border: '1px solid #C8E6C9' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#2E7D32', marginBottom: 4 }}>🎁 {lang === 'zh-CN' ? '套餐优惠已匹配' : 'Bundle Offer Applied'}</div>
+          {matchedBundles.map((b, i) => (
+            <div key={i} style={{ fontSize: 12, color: '#388E3C', display: 'flex', justifyContent: 'space-between' }}>
+              <span>{b.offer.name}{b.offer.nameEn ? ` ${b.offer.nameEn}` : ''}</span>
+              <span style={{ fontWeight: 600 }}>-€{b.savings.toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Fixed bottom bar */}
+      <div style={{
+        position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)',
+        maxWidth: 430, width: '100%', padding: '16px 20px',
+        background: 'var(--bg-white)', borderTop: '2px solid var(--border-light)',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 100,
+      }}>
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--text-light)' }}>{t('customer.totalAmount')} · {totalItems} {t('customer.quantity')}</div>
+          {bundleTotals.bundleDiscount > 0 && (
+            <div style={{ fontSize: 12, color: 'var(--text-light)', textDecoration: 'line-through' }}>€{totalAmount.toFixed(2)}</div>
+          )}
+          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--red-primary)', fontFamily: "'Noto Serif SC', serif" }}>€{finalTotal.toFixed(2)}</div>
+        </div>
+        <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting || !offersLoaded}
+          style={{ padding: '12px 28px', fontSize: 15, letterSpacing: 1 }}>
+          {!offersLoaded ? '...' : submitting ? t('common.loading') : editOrderId ? t('customer.saveChanges') : t('customer.submitOrder')}
+        </button>
+      </div>
+    </div>
+  );
+}

@@ -1,17 +1,15 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import Stripe from 'stripe';
-import { Server as SocketIOServer } from 'socket.io';
 import { Order } from '../models/Order';
 import { Checkout } from '../models/Checkout';
 import { createAppError } from '../middleware/errorHandler';
 
+const router = Router();
+
 function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY || '');
 }
-
-export function createPaymentsRouter(io: SocketIOServer): Router {
-  const router = Router();
 
 /**
  * POST /api/payments/create-intent
@@ -81,9 +79,6 @@ router.post('/confirm', async (req: Request, res: Response, next: NextFunction) 
     order.status = 'paid_online';
     await order.save();
 
-    // Notify cashier dashboard in real-time
-    io.emit('order:updated', order);
-
     const totalAmount = paymentIntent.amount / 100;
 
     res.json({ message: 'Payment confirmed', orderId: order._id, totalAmount });
@@ -145,7 +140,4 @@ router.post('/finalize', async (req: Request, res: Response, next: NextFunction)
   }
 });
 
-  return router;
-}
-
-export default createPaymentsRouter;
+export default router;

@@ -1,0 +1,201 @@
+import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import ARViewer from './ARViewer';
+import OptionSelectModal, { type OptionGroup } from './OptionSelectModal';
+import type { CartItemOption } from '../../context/CartContext';
+
+interface MenuItemCardProps {
+  id: string;
+  name: string;
+  names: Record<string, string>;
+  description?: string;
+  price: number;
+  calories?: number;
+  avgWaitMinutes?: number;
+  photoUrl?: string;
+  arFileUrl?: string;
+  isSoldOut?: boolean;
+  allergenIcons?: string[];
+  optionGroups?: OptionGroup[];
+  quantity?: number;
+  onAdd: (id: string, names: Record<string, string>, price: number, options?: CartItemOption[]) => void;
+  onDecrease?: (menuItemId: string) => void;
+}
+
+export default function MenuItemCard({
+  id, name, names, description, price, calories, avgWaitMinutes,
+  photoUrl, arFileUrl, isSoldOut, allergenIcons, optionGroups, quantity, onAdd, onDecrease,
+}: MenuItemCardProps) {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+  const [isClamped, setIsClamped] = useState(false);
+  const [showOptions, setShowOptions] = useState(false);
+  const descRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = descRef.current;
+    if (el) {
+      setIsClamped(el.scrollHeight > el.clientHeight + 1);
+    }
+  }, [description]);
+
+  const hasOptions = optionGroups && optionGroups.length > 0;
+
+  const handleAddClick = () => {
+    if (isSoldOut) return;
+    if (hasOptions) {
+      setShowOptions(true);
+    } else {
+      onAdd(id, names, price);
+    }
+  };
+
+  const handleOptionConfirm = (options: CartItemOption[]) => {
+    onAdd(id, names, price, options);
+    setShowOptions(false);
+  };
+
+  return (
+    <>
+      <div style={{
+        display: 'flex', gap: 14, background: 'var(--bg-white, #FFFDF8)',
+        borderRadius: 12, padding: 14,
+        boxShadow: '0 1px 4px rgba(44,24,16,0.06)',
+        border: quantity && quantity > 0 ? '2px solid var(--red-primary)' : '1px solid rgba(232,213,184,0.5)',
+        position: 'relative', overflow: 'hidden',
+        opacity: isSoldOut ? 0.55 : 1,
+        transition: 'transform 0.15s',
+      }}>
+        {/* Quantity badge */}
+        {quantity != null && quantity > 0 && (
+          <span style={{
+            position: 'absolute', top: 0, left: 0, zIndex: 2,
+            background: 'var(--red-primary)', color: '#fff',
+            fontSize: 11, fontWeight: 700, padding: '2px 10px',
+            borderBottomRightRadius: 10,
+          }}>×{quantity}</span>
+        )}
+        {isSoldOut && (
+          <span style={{
+            position: 'absolute', top: 10, right: 10, zIndex: 2,
+            background: 'rgba(44,24,16,0.75)', color: '#F0D68A',
+            fontSize: 10, padding: '3px 8px', borderRadius: 3,
+            letterSpacing: 2, fontWeight: 500,
+          }}>{t('customer.soldOut')}</span>
+        )}
+
+        {/* Image */}
+        <div style={{
+          width: 100, height: 100, borderRadius: 8, flexShrink: 0,
+          background: photoUrl ? `url(${photoUrl}) center/cover` : 'linear-gradient(135deg, #f5e6d0, #edd9c0)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 36, filter: isSoldOut ? 'grayscale(60%)' : 'none',
+        }}>
+          {!photoUrl && '🍽️'}
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <div style={{
+            fontFamily: "'Noto Serif SC', serif", fontSize: 16, fontWeight: 600,
+            color: 'var(--text-dark)', marginBottom: 2,
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+            {arFileUrl && <ARViewer arFileUrl={arFileUrl} itemName={name} />}
+          </div>
+
+          {description && (
+            <div style={{ marginBottom: 6 }}>
+              <div ref={descRef} style={{
+                fontSize: 12, color: 'var(--text-light)', lineHeight: 1.5,
+                ...(!expanded ? {
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical' as const,
+                  overflow: 'hidden',
+                } : {}),
+              }}>{description}</div>
+              {(isClamped || expanded) && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+                  style={{
+                    background: 'none', border: 'none', padding: 0, marginTop: 2,
+                    fontSize: 11, color: 'var(--red-primary, #C41E24)', cursor: 'pointer',
+                    fontWeight: 500, display: 'flex', alignItems: 'center', gap: 2,
+                  }}
+                >
+                  {expanded ? t('customer.collapse') + ' ▲' : t('customer.expand') + ' ▼'}
+                </button>
+              )}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'var(--text-light)', marginBottom: 8 }}>
+            {calories != null && <span>🔥 {calories} {t('customer.calories')}</span>}
+            {avgWaitMinutes != null && <span>⏱ {avgWaitMinutes} {t('customer.waitTime')}</span>}
+          </div>
+
+          {allergenIcons && allergenIcons.length > 0 && (
+            <div style={{ display: 'flex', gap: 3, fontSize: 14, marginBottom: 6, opacity: 0.7 }}>
+              {allergenIcons.map((icon, i) => <span key={i}>{icon}</span>)}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
+            <div style={{
+              fontSize: 20, fontWeight: 700, color: 'var(--red-primary)',
+              fontFamily: "'Noto Serif SC', serif",
+            }}>
+              <span style={{ fontSize: 13, fontWeight: 500, marginRight: 1 }}>€</span>{price}
+            </div>
+            <button
+              onClick={handleAddClick}
+              disabled={isSoldOut}
+              style={{
+                width: 34, height: 34, borderRadius: '50%', border: 'none',
+                background: isSoldOut ? '#ccc' : 'var(--red-primary)',
+                color: '#fff', fontSize: 20, cursor: isSoldOut ? 'not-allowed' : 'pointer',
+                boxShadow: isSoldOut ? 'none' : '0 2px 8px rgba(196,30,36,0.3)',
+                display: quantity && quantity > 0 ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'transform 0.15s',
+              }}
+              aria-label={t('customer.addToCart')}
+            >+</button>
+            {quantity != null && quantity > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 0, border: '1px solid var(--border, #ddd)', borderRadius: 20, overflow: 'hidden' }}>
+                <button
+                  onClick={() => onDecrease?.(id)}
+                  style={{
+                    width: 30, height: 30, border: 'none', background: 'var(--bg, #f5f5f5)',
+                    color: 'var(--red-primary)', fontSize: 16, fontWeight: 700,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >−</button>
+                <span style={{ width: 28, textAlign: 'center', fontSize: 14, fontWeight: 700 }}>{quantity}</span>
+                <button
+                  onClick={handleAddClick}
+                  style={{
+                    width: 30, height: 30, border: 'none', background: 'var(--red-primary)',
+                    color: '#fff', fontSize: 16, fontWeight: 700,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >+</button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {showOptions && hasOptions && (
+        <OptionSelectModal
+          itemName={name}
+          price={price}
+          optionGroups={optionGroups!}
+          onConfirm={handleOptionConfirm}
+          onClose={() => setShowOptions(false)}
+        />
+      )}
+    </>
+  );
+}

@@ -16,7 +16,7 @@ import { createCheckoutRouter } from './routes/checkout';
 import adminRouter from './routes/admin';
 import reportsRouter from './routes/reports';
 import offersRouter from './routes/offers';
-import { createPaymentsRouter } from './routes/payments';
+import paymentsRouter from './routes/payments';
 import couponsRouter from './routes/coupons';
 
 dotenv.config();
@@ -94,7 +94,7 @@ app.use('/api/reports', reportsRouter);
 app.use('/api/offers', offersRouter);
 
 // Payments routes
-app.use('/api/payments', createPaymentsRouter(io));
+app.use('/api/payments', paymentsRouter);
 
 // Coupons routes
 app.use('/api/coupons', couponsRouter);
