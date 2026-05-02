@@ -6,11 +6,13 @@ import { io } from 'socket.io-client';
 import { playDineInSound, playTakeoutSound, unlockAudio } from '../utils/orderSound';
 import { printViaIframe } from '../components/cashier/ReceiptPrint';
 import LanguageSwitcher from '../components/LanguageSwitcher';
+import { useRestaurantConfig } from '../hooks/useRestaurantConfig';
 
 export default function CashierLayout() {
   const { user, logout, token } = useAuth();
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { displayName } = useRestaurantConfig();
   // Show settle button only between 20:30 and 23:59
   const [showSettle, setShowSettle] = useState(false);
   const [settling, setSettling] = useState(false);
@@ -117,7 +119,7 @@ export default function CashierLayout() {
         borderBottom: '2px solid var(--border)', flexShrink: 0,
       }}>
         <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--red-primary)', fontFamily: 'var(--font-heading)' }}>
-          港知味 · {t('cashier.title')}
+          {displayName} · {t('cashier.title')}
         </h1>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
           {showSettle && (

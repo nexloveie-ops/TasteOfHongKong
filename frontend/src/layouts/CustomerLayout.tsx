@@ -3,12 +3,14 @@ import { useState, useEffect, useMemo } from 'react';
 import { useCart } from '../context/CartContext';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { matchBundles, calcBundleTotal, type OfferData } from '../utils/bundleMatcher';
+import { useRestaurantConfig } from '../hooks/useRestaurantConfig';
 
 export default function CustomerLayout() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { totalItems, totalAmount, items: cartItems, getItemKey } = useCart();
+  const { displayName } = useRestaurantConfig();
   const table = searchParams.get('table');
   const seat = searchParams.get('seat');
   const qs = searchParams.toString();
@@ -57,7 +59,7 @@ export default function CustomerLayout() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 16, color: 'var(--red-primary)' }}>
-            港知味
+            {displayName}
           </span>
           {table && seat && (
             <span style={{ fontSize: 12, color: 'var(--text-light)' }}>

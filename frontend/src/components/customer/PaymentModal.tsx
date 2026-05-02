@@ -31,9 +31,13 @@ function PaymentContent({ orderId, amount, onSuccess, onClose }: PaymentModalPro
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [restaurantLabel, setRestaurantLabel] = useState('Restaurant');
 
   // Create payment intent
   useEffect(() => {
+    fetch('/api/admin/config').then(r => r.ok ? r.json() : {}).then((c: Record<string, string>) => {
+      setRestaurantLabel(c.restaurant_name_en || c.restaurant_name_zh || 'Restaurant');
+    }).catch(() => {});
     fetch('/api/payments/create-intent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -54,7 +58,7 @@ function PaymentContent({ orderId, amount, onSuccess, onClose }: PaymentModalPro
     const pr = stripe.paymentRequest({
       country: 'IE',
       currency: 'eur',
-      total: { label: 'Taste of Hong Kong', amount: Math.round(amount * 100) },
+      total: { label: restaurantLabel, amount: Math.round(amount * 100) },
       requestPayerName: false,
       requestPayerEmail: false,
     });

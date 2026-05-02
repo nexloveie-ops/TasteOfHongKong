@@ -2,16 +2,18 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
+import { useRestaurantConfig } from '../hooks/useRestaurantConfig';
 
 export default function LoginPage() {
   const { login, user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { displayName, displayNameEn, config } = useRestaurantConfig();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [logoUrl, setLogoUrl] = useState('/logo.jpg');
+  const logoUrl = config.restaurant_logo || '/logo.jpg';
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -19,13 +21,6 @@ export default function LoginPage() {
       navigate(target, { replace: true });
     }
   }, [isAuthenticated, user, navigate]);
-
-  // Load logo from config
-  useEffect(() => {
-    fetch('/api/admin/config').then(r => r.ok ? r.json() : {}).then((c: Record<string, string>) => {
-      if (c.restaurant_logo) setLogoUrl(c.restaurant_logo);
-    }).catch(() => {});
-  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -56,10 +51,10 @@ export default function LoginPage() {
         <h1 style={{
           fontFamily: "'Noto Serif SC', serif", fontSize: 28, fontWeight: 700,
           color: '#D32F2F', letterSpacing: 3, marginBottom: 4,
-        }}>港知味</h1>
+        }}>{displayName}</h1>
         <div style={{
           fontSize: 11, letterSpacing: 4, color: '#999', marginBottom: 24, textTransform: 'uppercase',
-        }}>TASTE OF HONG KONG</div>
+        }}>{displayNameEn}</div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <input

@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from '../components/LanguageSwitcher';
+import { useRestaurantConfig } from '../hooks/useRestaurantConfig';
 
 const sidebarItems = [
   { path: '/admin/restaurant', icon: '🏪', key: 'admin.restaurantInfo' },
@@ -24,6 +25,7 @@ export default function AdminLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { displayName } = useRestaurantConfig();
   const [collapsed, setCollapsed] = useState(false);
 
   const handleLogout = () => { logout(); navigate('/login'); };
@@ -42,7 +44,7 @@ export default function AdminLayout() {
           color: 'var(--red-primary)', letterSpacing: 2, textAlign: collapsed ? 'center' : 'left',
           whiteSpace: 'nowrap', overflow: 'hidden',
         }}>
-          {collapsed ? '港' : '港知味'}
+          {collapsed ? (displayName ? displayName.charAt(0) : '🏪') : displayName}
           {!collapsed && (
             <div style={{ fontSize: 10, color: 'var(--text-light)', letterSpacing: 3, fontFamily: 'var(--font-body)', fontWeight: 400 }}>
               {t('admin.title')}

@@ -5,6 +5,7 @@ import { useCart } from '../../context/CartContext';
 import MenuItemCard from '../../components/customer/MenuItemCard';
 import OfferSelectModal from '../../components/customer/OfferSelectModal';
 import type { OfferData } from '../../utils/bundleMatcher';
+import { useRestaurantConfig } from '../../hooks/useRestaurantConfig';
 
 interface Category { _id: string; sortOrder: number; translations: { locale: string; name: string }[]; }
 interface AllergenData { _id: string; icon: string; }
@@ -25,6 +26,7 @@ export default function MenuView() {
   const { addItem, items: cartItems, decreaseQuantity, getItemKey, editOrderId } = useCart();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { displayName, displayNameEn, config } = useRestaurantConfig();
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItemData[]>([]);
   const [allergens, setAllergens] = useState<AllergenData[]>([]);
@@ -184,17 +186,39 @@ export default function MenuView() {
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
           <div style={{ position: 'relative', zIndex: 1, color: '#fff' }}>
-            <h1 style={{ fontFamily: "'Noto Serif SC', serif", fontSize: 24, fontWeight: 700, letterSpacing: 3, marginBottom: 2 }}>港知味</h1>
-            <div style={{ fontSize: 11, fontWeight: 300, letterSpacing: 5, color: '#F0D68A' }}>TASTE OF HONG KONG</div>
+            <h1 style={{ fontFamily: "'Noto Serif SC', serif", fontSize: 24, fontWeight: 700, letterSpacing: 3, marginBottom: 2 }}>{displayName}</h1>
+            <div style={{ fontSize: 11, fontWeight: 300, letterSpacing: 5, color: '#F0D68A' }}>{displayNameEn}</div>
           </div>
           <div style={{ position: 'absolute', top: 8, right: 12, zIndex: 1, textAlign: 'right', color: 'rgba(255,255,255,0.7)', fontSize: 9, lineHeight: 1.5 }}>
-            <div>Powered By <span style={{ fontWeight: 600, color: '#F0D68A' }}>L&amp;Z TECHSERVE LTD</span></div>
-            <div>info@lztechserve.com</div>
+            {config.restaurant_website && <div>{config.restaurant_website}</div>}
+            {config.restaurant_email && <div>{config.restaurant_email}</div>}
           </div>
         </div>
         {/* Active offers — carousel */}
         {activeOffers.length > 0 && !heroHidden && (
-          <div style={{ marginTop: 12, position: 'relative' }}>
+          <div
+            style={{ marginTop: 12, position: 'relative' }}
+            onTouchStart={(e) => {
+              const touch = e.touches[0];
+              (e.currentTarget as HTMLDivElement).dataset.touchStartX = String(touch.clientX);
+            }}
+            onTouchEnd={(e) => {
+              const startX = parseFloat((e.currentTarget as HTMLDivElement).dataset.touchStartX || '0');
+              const endX = e.changedTouches[0].clientX;
+              const diff = startX - endX;
+              if (Math.abs(diff) > 40 && activeOffers.length > 1) {
+                if (diff > 0) {
+                  // swipe left → next
+                  setBannerIndex(prev => (prev + 1) % activeOffers.length);
+                  setCountdownKey(k => k + 1);
+                } else {
+                  // swipe right → prev
+                  setBannerIndex(prev => (prev - 1 + activeOffers.length) % activeOffers.length);
+                  setCountdownKey(k => k + 1);
+                }
+              }
+            }}
+          >
             {activeOffers.map((offer, idx) => (
               <div key={offer._id} onClick={() => setSelectedOffer(offer)} style={{
                 background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(4px)',
@@ -350,7 +374,7 @@ export default function MenuView() {
           lang={lang}
           onConfirm={(selectedItems) => {
             for (const si of selectedItems) {
-              addItem(si.menuItemId, si.names, si.price);
+              addItem(si.menuItemId, si.names, si.price, si.options);
             }
             setSelectedOffer(null);
           }}
