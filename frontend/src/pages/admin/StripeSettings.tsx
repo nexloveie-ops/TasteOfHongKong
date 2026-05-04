@@ -2,6 +2,18 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 
+type StripeHealthBody = {
+  ok: boolean;
+  checks: {
+    publishableKeyFormatOk: boolean;
+    secretKeyFormatOk: boolean;
+    modeMatch: boolean;
+    publishableMode: string;
+    secretMode: string;
+  };
+  stripeApi: { ok: true } | { ok: false; code: string; message: string };
+};
+
 export default function StripeSettings() {
   const { t } = useTranslation();
   const { token } = useAuth();
@@ -15,6 +27,8 @@ export default function StripeSettings() {
   const [hasSecret, setHasSecret] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [health, setHealth] = useState<StripeHealthBody | null>(null);
+  const [checkRunning, setCheckRunning] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,6 +72,24 @@ export default function StripeSettings() {
       alert(t('common.error'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const runHealthCheck = async () => {
+    setCheckRunning(true);
+    setHealth(null);
+    try {
+      const res = await fetch('/api/admin/stripe-health', { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) {
+        const j = await res.json().catch(() => null);
+        alert(j?.error?.message || t('common.error'));
+        return;
+      }
+      setHealth((await res.json()) as StripeHealthBody);
+    } catch {
+      alert(t('common.error'));
+    } finally {
+      setCheckRunning(false);
     }
   };
 
@@ -125,6 +157,65 @@ export default function StripeSettings() {
           )}
         </div>
       </div>
+
+      <div className="card" style={{ padding: 20, maxWidth: 640, marginTop: 16 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>{t('admin.stripeCheckConnection')}</div>
+        <p style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 12, lineHeight: 1.5 }}>
+          {t('admin.stripeHealthIntro')}
+        </p>
+        <button type="button" className="btn btn-outline" onClick={runHealthCheck} disabled={checkRunning || !token}>
+          {checkRunning ? t('admin.stripeCheckRunning') : t('admin.stripeCheckConnection')}
+        </button>
+
+        {health && (
+          <div
+            style={{
+              marginTop: 16,
+              padding: 12,
+              borderRadius: 8,
+              background: health.ok ? 'rgba(46, 125, 50, 0.08)' : 'rgba(198, 40, 40, 0.06)',
+              border: `1px solid ${health.ok ? 'rgba(46, 125, 50, 0.35)' : 'rgba(198, 40, 40, 0.25)'}`,
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: health.ok ? '#2e7d32' : '#c62828' }}>
+              {health.ok ? t('admin.stripeHealthOk') : t('admin.stripeHealthFail')}
+            </div>
+            <HealthRow label={t('admin.stripeHealthCheckPublishable')} pass={health.checks.publishableKeyFormatOk} t={t} />
+            <HealthRow label={t('admin.stripeHealthCheckSecret')} pass={health.checks.secretKeyFormatOk} t={t} />
+            <HealthRow label={t('admin.stripeHealthCheckMode')} pass={health.checks.modeMatch} t={t} />
+            <HealthRow label={t('admin.stripeHealthCheckApi')} pass={health.stripeApi.ok} t={t} />
+            <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 10, fontFamily: 'monospace' }}>
+              pk:{health.checks.publishableMode} · sk:{health.checks.secretMode}
+            </div>
+            {!health.stripeApi.ok && (
+              <div style={{ fontSize: 12, color: '#c62828', marginTop: 10 }}>
+                <strong>{t('admin.stripeHealthError')}</strong>
+                {' '}
+                [{health.stripeApi.code}] {health.stripeApi.message}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HealthRow({
+  label,
+  pass,
+  t,
+}: {
+  label: string;
+  pass: boolean;
+  t: (k: string) => string;
+}) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, marginTop: 6 }}>
+      <span>{label}</span>
+      <span style={{ color: pass ? '#2e7d32' : '#c62828', whiteSpace: 'nowrap' }}>
+        {pass ? t('admin.stripeHealthYes') : t('admin.stripeHealthNo')}
+      </span>
     </div>
   );
 }

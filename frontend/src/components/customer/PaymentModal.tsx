@@ -10,15 +10,16 @@ interface PaymentModalProps {
   onClose: () => void;
 }
 
-let stripePromise: Promise<Stripe | null> | null = null;
-
-function getStripePromise() {
-  if (!stripePromise) {
-    stripePromise = fetch('/api/payments/config')
-      .then(r => r.json())
-      .then(data => loadStripe(data.publishableKey));
-  }
-  return stripePromise;
+function PaymentErrorBlock({ message }: { message: string }) {
+  const { t } = useTranslation();
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ color: '#F44336', fontSize: 13, textAlign: 'center', lineHeight: 1.45 }}>{message}</div>
+      <div style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center', marginTop: 10, lineHeight: 1.5 }}>
+        {t('customer.payAtCounterSuggestion')}
+      </div>
+    </div>
+  );
 }
 
 function PaymentContent({ orderId, amount, onSuccess, onClose }: PaymentModalProps) {
@@ -38,17 +39,27 @@ function PaymentContent({ orderId, amount, onSuccess, onClose }: PaymentModalPro
     fetch('/api/admin/config').then(r => r.ok ? r.json() : {}).then((c: Record<string, string>) => {
       setRestaurantLabel(c.restaurant_name_en || c.restaurant_name_zh || 'Restaurant');
     }).catch(() => {});
-    fetch('/api/payments/create-intent', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderId }),
-    })
-      .then(r => r.json())
-      .then(data => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/payments/create-intent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok) {
+          setError((data as { error?: { message?: string } }).error?.message || t('customer.paymentIntentFailed'));
+          return;
+        }
         if (data.clientSecret) setClientSecret(data.clientSecret);
-        else setError(data.error?.message || 'Failed');
-      })
-      .catch(() => setError(t('customer.paymentNetworkError')));
+        else setError((data as { error?: { message?: string } }).error?.message || t('customer.paymentIntentFailed'));
+      } catch {
+        if (!cancelled) setError(t('customer.paymentNetworkError'));
+      }
+    })();
+    return () => { cancelled = true; };
   }, [orderId, t]);
 
   // Setup Payment Request (Apple Pay / Google Pay)
@@ -80,7 +91,7 @@ function PaymentContent({ orderId, amount, onSuccess, onClose }: PaymentModalPro
 
       if (confirmError) {
         ev.complete('fail');
-        setError(confirmError.message || 'Payment failed');
+        setError(confirmError.message || t('customer.paymentIntentFailed'));
         setProcessing(false);
       } else if (paymentIntent) {
         ev.complete('success');
@@ -89,15 +100,22 @@ function PaymentContent({ orderId, amount, onSuccess, onClose }: PaymentModalPro
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ orderId, paymentIntentId: paymentIntent.id }),
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setError((data as { error?: { message?: string } }).error?.message || t('customer.paymentConfirmFailed'));
+          setProcessing(false);
+          return;
+        }
         if (data.orderId || data.checkoutId) {
           setSuccess(true);
           setTimeout(() => onSuccess(data.orderId || data.checkoutId), 1000);
+        } else {
+          setError(t('customer.paymentConfirmFailed'));
         }
         setProcessing(false);
       }
     });
-  }, [stripe, clientSecret, amount, orderId, onSuccess]);
+  }, [stripe, clientSecret, amount, orderId, onSuccess, restaurantLabel, t]);
 
   // Card payment handler
   const handleCardPay = async () => {
@@ -113,7 +131,7 @@ function PaymentContent({ orderId, amount, onSuccess, onClose }: PaymentModalPro
     });
 
     if (confirmError) {
-      setError(confirmError.message || 'Payment failed');
+      setError(confirmError.message || t('customer.paymentIntentFailed'));
       setProcessing(false);
       return;
     }
@@ -124,10 +142,17 @@ function PaymentContent({ orderId, amount, onSuccess, onClose }: PaymentModalPro
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId, paymentIntentId: paymentIntent.id }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError((data as { error?: { message?: string } }).error?.message || t('customer.paymentConfirmFailed'));
+        setProcessing(false);
+        return;
+      }
       if (data.orderId || data.checkoutId) {
         setSuccess(true);
         setTimeout(() => onSuccess(data.orderId || data.checkoutId), 1000);
+      } else {
+        setError(t('customer.paymentConfirmFailed'));
       }
     }
     setProcessing(false);
@@ -150,7 +175,7 @@ function PaymentContent({ orderId, amount, onSuccess, onClose }: PaymentModalPro
         </div>
       </div>
 
-      {error && <div style={{ color: '#F44336', fontSize: 13, textAlign: 'center', marginBottom: 12 }}>{error}</div>}
+      {error && <PaymentErrorBlock message={error} />}
 
       {/* Apple Pay / Google Pay button */}
       {canPay && paymentRequest && (
@@ -196,14 +221,37 @@ function PaymentContent({ orderId, amount, onSuccess, onClose }: PaymentModalPro
 
 export default function PaymentModal({ orderId, amount, onSuccess, onClose }: PaymentModalProps) {
   const { t } = useTranslation();
-  const [stripeLoaded, setStripeLoaded] = useState(false);
-  const [stripeInstance, setStripeInstance] = useState<Promise<Stripe | null> | null>(null);
+  const [stripeReady, setStripeReady] = useState(false);
+  const [stripePromiseForElements, setStripePromiseForElements] = useState<Promise<Stripe | null> | null>(null);
+  const [stripeBootError, setStripeBootError] = useState('');
 
   useEffect(() => {
-    const p = getStripePromise();
-    setStripeInstance(p);
-    p.then(() => setStripeLoaded(true));
-  }, []);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/payments/config');
+        const data = await res.json().catch(() => ({}));
+        const pk = typeof data.publishableKey === 'string' ? data.publishableKey.trim() : '';
+        if (!pk) {
+          if (!cancelled) {
+            setStripeBootError(t('customer.stripeNotConfigured'));
+            setStripeReady(true);
+          }
+          return;
+        }
+        const stripe = await loadStripe(pk);
+        if (cancelled) return;
+        setStripePromiseForElements(Promise.resolve(stripe));
+        setStripeReady(true);
+      } catch {
+        if (!cancelled) {
+          setStripeBootError(t('customer.paymentNetworkError'));
+          setStripeReady(true);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [t]);
 
   return (
     <div onClick={onClose} style={{
@@ -218,12 +266,21 @@ export default function PaymentModal({ orderId, amount, onSuccess, onClose }: Pa
           <div style={{ fontSize: 16, fontWeight: 700 }}>💳 {t('customer.payment')}</div>
         </div>
 
-        {stripeLoaded && stripeInstance ? (
-          <Elements stripe={stripeInstance}>
+        {!stripeReady && (
+          <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-light)' }}>{t('customer.paymentLoading')}</div>
+        )}
+        {stripeReady && stripeBootError && (
+          <div style={{ textAlign: 'center', padding: '12px 8px' }}>
+            <PaymentErrorBlock message={stripeBootError} />
+            <button onClick={onClose} className="btn btn-outline" style={{ padding: '10px 24px' }}>
+              {t('customer.payAtCounter')}
+            </button>
+          </div>
+        )}
+        {stripeReady && !stripeBootError && stripePromiseForElements && (
+          <Elements stripe={stripePromiseForElements}>
             <PaymentContent orderId={orderId} amount={amount} onSuccess={onSuccess} onClose={onClose} />
           </Elements>
-        ) : (
-          <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-light)' }}>{t('customer.paymentLoading')}</div>
         )}
       </div>
     </div>

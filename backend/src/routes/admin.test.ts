@@ -260,3 +260,32 @@ describe('PUT /api/admin/config', () => {
     expect(res.status).toBe(400);
   });
 });
+
+// --- Stripe health (no real Stripe network call when secret is missing) ---
+
+describe('GET /api/admin/stripe-health', () => {
+  it('should reject unauthenticated', async () => {
+    const res = await request(app).get('/api/admin/stripe-health');
+    expect(res.status).toBe(401);
+  });
+
+  it('should reject cashier role', async () => {
+    const res = await request(app)
+      .get('/api/admin/stripe-health')
+      .set('Authorization', `Bearer ${cashierToken}`);
+
+    expect(res.status).toBe(403);
+  });
+
+  it('should report not ok when keys are missing (no API call)', async () => {
+    const res = await request(app)
+      .get('/api/admin/stripe-health')
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(false);
+    expect(res.body.checks.hasSecret).toBe(false);
+    expect(res.body.stripeApi.ok).toBe(false);
+    expect(res.body.stripeApi.code).toBe('NO_SECRET');
+  });
+});

@@ -13,6 +13,7 @@ import { getBusinessStatus } from '../utils/businessHours';
 import {
   getStripePublishableFromDbOnly,
   hasStripeSecretInDb,
+  runStripeHealthCheck,
   STRIPE_KEYS_FILTER_FROM_PUBLIC_CONFIG,
   STRIPE_PUBLISHABLE_CONFIG_KEY,
   STRIPE_SECRET_CONFIG_KEY,
@@ -123,6 +124,16 @@ router.put('/stripe-config', authMiddleware, requirePermission('config:update'),
     const publishableKey = await getStripePublishableFromDbOnly();
     const hasSecret = await hasStripeSecretInDb();
     res.json({ publishableKey, hasSecret, message: 'Saved' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/admin/stripe-health — Validate DB keys + call Stripe API (balance.retrieve only; no payment)
+router.get('/stripe-health', authMiddleware, requirePermission('config:update'), async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await runStripeHealthCheck();
+    res.json(result);
   } catch (err) {
     next(err);
   }
