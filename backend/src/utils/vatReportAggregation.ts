@@ -54,6 +54,11 @@ export async function loadStoreInfoForVat(): Promise<StoreInfoForVat> {
   };
 }
 
+/** Same idea as detailed stats: hide-flag orders are excluded from revenue reports. */
+function isHiddenOrderStatus(status: unknown): boolean {
+  return String(status ?? '').includes('-hide');
+}
+
 function itemToLineLike(item: {
   _id: unknown;
   quantity: number;
@@ -156,6 +161,7 @@ export async function aggregateVatSalesByMonth(
     const scale = grandSum > 0 ? c.totalAmount / grandSum : 0;
 
     for (const { order, map } of perOrderMaps) {
+      if (isHiddenOrderStatus(order.status)) continue;
       for (const item of order.items) {
         const id = String((item as { _id: { toString(): string } })._id);
         const raw = map.get(id) ?? lineGrossEuro(itemToLineLike(item as Parameters<typeof itemToLineLike>[0]));
