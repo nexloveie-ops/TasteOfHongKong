@@ -27,7 +27,7 @@ export default function MenuView() {
   const { addItem, items: cartItems, decreaseQuantity, getItemKey, editOrderId } = useCart();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { displayName, displayNameEn, config } = useRestaurantConfig();
+  const { displayName, displayNameEn } = useRestaurantConfig();
   const { isOpen, reason, loading: statusLoading } = useBusinessStatus();
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItemData[]>([]);
@@ -208,8 +208,10 @@ export default function MenuView() {
             <div style={{ fontSize: 11, fontWeight: 300, letterSpacing: 5, color: '#F0D68A' }}>{displayNameEn}</div>
           </div>
           <div style={{ position: 'absolute', top: 8, right: 12, zIndex: 1, textAlign: 'right', color: 'rgba(255,255,255,0.7)', fontSize: 9, lineHeight: 1.5 }}>
-            {config.restaurant_website && <div>{config.restaurant_website}</div>}
-            {config.restaurant_email && <div>{config.restaurant_email}</div>}
+            <div>
+              Powered by <span style={{ fontWeight: 600, color: '#F0D68A' }}>L&Z techserve LTD</span>
+            </div>
+            <div>info@lztechserve.com</div>
           </div>
         </div>
         {/* Active offers — carousel */}
