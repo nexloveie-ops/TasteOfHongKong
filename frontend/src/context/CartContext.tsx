@@ -16,7 +16,8 @@ export interface CartItem {
   options?: CartItemOption[];
 }
 
-const STORAGE_KEY = 'cart_items';
+/** Bump when option group id strategy changes so stale groupId/choiceId are not reused */
+const STORAGE_KEY = 'cart_items_v2';
 
 function cartItemKey(menuItemId: string, options?: CartItemOption[]): string {
   if (!options || options.length === 0) return menuItemId;

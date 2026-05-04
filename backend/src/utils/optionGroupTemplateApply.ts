@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { OptionGroupTemplate } from '../models/OptionGroupTemplate';
 import { OptionGroupTemplateRule } from '../models/OptionGroupTemplateRule';
-import { cloneOptionGroupsWithNewIds, type LeanOptionGroup } from './optionGroups';
+import { cloneOptionGroupsPreservingSubdocIds, type LeanOptionGroup } from './optionGroups';
 
 export interface MenuItemLike {
   _id: mongoose.Types.ObjectId | string;
@@ -38,7 +38,7 @@ export function ruleMatchesItem(
 }
 
 export async function mergeTemplateOptionGroupsForItem(item: MenuItemLike): Promise<LeanOptionGroup[]> {
-  const own = cloneOptionGroupsWithNewIds((item.optionGroups || []) as unknown as LeanOptionGroup[]);
+  const own = cloneOptionGroupsPreservingSubdocIds((item.optionGroups || []) as unknown as LeanOptionGroup[]);
 
   const rules = await OptionGroupTemplateRule.find({ enabled: true })
     .sort({ priority: 1, createdAt: 1, _id: 1 })
@@ -56,7 +56,7 @@ export async function mergeTemplateOptionGroupsForItem(item: MenuItemLike): Prom
     if (!tpl) continue;
 
     const tplGroups = (tpl.optionGroups || []) as unknown as LeanOptionGroup[];
-    appended.push(...cloneOptionGroupsWithNewIds(tplGroups));
+    appended.push(...cloneOptionGroupsPreservingSubdocIds(tplGroups));
     seenTemplateIds.add(tid);
   }
 
@@ -83,14 +83,15 @@ export async function mergeTemplateOptionGroupsForItems<T extends Record<string,
       templateCache.set(templateId, null);
       return [];
     }
-    const groups = cloneOptionGroupsWithNewIds((tpl.optionGroups || []) as unknown as LeanOptionGroup[]);
+    const groups = cloneOptionGroupsPreservingSubdocIds((tpl.optionGroups || []) as unknown as LeanOptionGroup[]);
     templateCache.set(templateId, groups);
     return groups;
   }
 
   return Promise.all(
     items.map(async (item) => {
-      const own = cloneOptionGroupsWithNewIds((item.optionGroups || []) as unknown as LeanOptionGroup[]);
+      const row = item as unknown as MenuItemLike;
+      const own = cloneOptionGroupsPreservingSubdocIds((row.optionGroups || []) as unknown as LeanOptionGroup[]);
       const seen = new Set<string>();
       const appended: LeanOptionGroup[] = [];
 

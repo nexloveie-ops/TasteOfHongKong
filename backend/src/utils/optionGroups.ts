@@ -82,6 +82,34 @@ export function validateOptionGroups(optionGroups: unknown): asserts optionGroup
   }
 }
 
+function subdocObjectId(id: unknown): mongoose.Types.ObjectId {
+  if (id != null && mongoose.Types.ObjectId.isValid(String(id))) {
+    return new mongoose.Types.ObjectId(String(id));
+  }
+  return new mongoose.Types.ObjectId();
+}
+
+/**
+ * Clone option groups for merged menu + order validation: keep MongoDB subdocument `_id`s so
+ * `/api/menu/items` and `snapshotSelectedOptionsFromMenuItem` agree even when template rules or
+ * group ordering changes. Index-based synthetic IDs were unstable and caused "Unknown option group".
+ */
+export function cloneOptionGroupsPreservingSubdocIds(groups: LeanOptionGroup[]): LeanOptionGroup[] {
+  const flat = normalizeNestedOptionGroups(groups);
+  return flat.map((g) => ({
+    _id: subdocObjectId(g._id),
+    required: !!g.required,
+    translations: (g.translations || []).map((t) => ({ locale: t.locale, name: t.name })),
+    choices: (g.choices || []).map((c) => ({
+      _id: subdocObjectId(c._id),
+      extraPrice: typeof c.extraPrice === 'number' ? c.extraPrice : 0,
+      originalPrice: c.originalPrice,
+      translations: (c.translations || []).map((t) => ({ locale: t.locale, name: t.name })),
+    })),
+  }));
+}
+
+/** @deprecated Prefer cloneOptionGroupsPreservingSubdocIds for merged menus. */
 export function cloneOptionGroupsWithNewIds(groups: LeanOptionGroup[]): LeanOptionGroup[] {
   const flat = normalizeNestedOptionGroups(groups);
   return flat.map((g) => ({

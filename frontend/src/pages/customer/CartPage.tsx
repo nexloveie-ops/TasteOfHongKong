@@ -115,7 +115,11 @@ export default function CartPage() {
           body: JSON.stringify(body),
         });
       }
-      if (!res.ok) throw new Error('Failed');
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+        setError(j?.error?.message || t('customer.updateFailed'));
+        return;
+      }
       const order = await res.json();
       const navId = editOrderId || order._id;
       clearCart();

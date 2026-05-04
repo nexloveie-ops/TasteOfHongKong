@@ -33,6 +33,7 @@ function PaymentContent({ orderId, amount, onSuccess, onClose }: PaymentModalPro
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [restaurantLabel, setRestaurantLabel] = useState('Restaurant');
+  const [intentLoading, setIntentLoading] = useState(true);
 
   // Create payment intent
   useEffect(() => {
@@ -40,6 +41,11 @@ function PaymentContent({ orderId, amount, onSuccess, onClose }: PaymentModalPro
       setRestaurantLabel(c.restaurant_name_en || c.restaurant_name_zh || 'Restaurant');
     }).catch(() => {});
     let cancelled = false;
+    const intentTimer = window.setTimeout(() => {
+      if (cancelled) return;
+      setError(t('customer.paymentIntentFailed'));
+      setIntentLoading(false);
+    }, 35000);
     (async () => {
       try {
         const res = await fetch('/api/payments/create-intent', {
@@ -57,9 +63,17 @@ function PaymentContent({ orderId, amount, onSuccess, onClose }: PaymentModalPro
         else setError((data as { error?: { message?: string } }).error?.message || t('customer.paymentIntentFailed'));
       } catch {
         if (!cancelled) setError(t('customer.paymentNetworkError'));
+      } finally {
+        if (!cancelled) {
+          window.clearTimeout(intentTimer);
+          setIntentLoading(false);
+        }
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      window.clearTimeout(intentTimer);
+    };
   }, [orderId, t]);
 
   // Setup Payment Request (Apple Pay / Google Pay)
@@ -177,6 +191,10 @@ function PaymentContent({ orderId, amount, onSuccess, onClose }: PaymentModalPro
 
       {error && <PaymentErrorBlock message={error} />}
 
+      {intentLoading && !error && !clientSecret && (
+        <div style={{ textAlign: 'center', padding: 12, color: 'var(--text-light)' }}>{t('customer.paymentPreparingSession')}</div>
+      )}
+
       {/* Apple Pay / Google Pay button */}
       {canPay && paymentRequest && (
         <div style={{ marginBottom: 16 }}>
@@ -206,10 +224,6 @@ function PaymentContent({ orderId, amount, onSuccess, onClose }: PaymentModalPro
         </div>
       )}
 
-      {processing && !clientSecret && (
-        <div style={{ textAlign: 'center', padding: 12, color: 'var(--text-light)' }}>{t('customer.paymentProcessing')}</div>
-      )}
-
       <div style={{ textAlign: 'center', marginTop: 8 }}>
         <button onClick={onClose} className="btn btn-outline" style={{ padding: '10px 24px' }}>
           {t('customer.payAtCounter')}
@@ -219,6 +233,8 @@ function PaymentContent({ orderId, amount, onSuccess, onClose }: PaymentModalPro
   );
 }
 
+const STRIPE_BOOT_TIMEOUT_MS = 28000;
+
 export default function PaymentModal({ orderId, amount, onSuccess, onClose }: PaymentModalProps) {
   const { t } = useTranslation();
   const [stripeReady, setStripeReady] = useState(false);
@@ -227,30 +243,73 @@ export default function PaymentModal({ orderId, amount, onSuccess, onClose }: Pa
 
   useEffect(() => {
     let cancelled = false;
+    let bootFinished = false;
+
+    const finishBoot = (apply: () => void) => {
+      if (cancelled || bootFinished) return;
+      bootFinished = true;
+      apply();
+    };
+
+    const timer = window.setTimeout(() => {
+      finishBoot(() => {
+        setStripeBootError(t('customer.paymentBootTimeout'));
+        setStripePromiseForElements(null);
+        setStripeReady(true);
+      });
+    }, STRIPE_BOOT_TIMEOUT_MS);
+
     (async () => {
       try {
         const res = await fetch('/api/payments/config');
         const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok) {
+          window.clearTimeout(timer);
+          finishBoot(() => {
+            setStripeBootError((data as { error?: { message?: string } }).error?.message || t('customer.paymentNetworkError'));
+            setStripeReady(true);
+          });
+          return;
+        }
         const pk = typeof data.publishableKey === 'string' ? data.publishableKey.trim() : '';
         if (!pk) {
-          if (!cancelled) {
+          window.clearTimeout(timer);
+          finishBoot(() => {
             setStripeBootError(t('customer.stripeNotConfigured'));
             setStripeReady(true);
-          }
+          });
           return;
         }
         const stripe = await loadStripe(pk);
         if (cancelled) return;
-        setStripePromiseForElements(Promise.resolve(stripe));
-        setStripeReady(true);
+        if (!stripe) {
+          window.clearTimeout(timer);
+          finishBoot(() => {
+            setStripeBootError(t('customer.stripeJsLoadFailed'));
+            setStripeReady(true);
+          });
+          return;
+        }
+        window.clearTimeout(timer);
+        finishBoot(() => {
+          setStripePromiseForElements(Promise.resolve(stripe));
+          setStripeReady(true);
+        });
       } catch {
-        if (!cancelled) {
+        if (cancelled) return;
+        window.clearTimeout(timer);
+        finishBoot(() => {
           setStripeBootError(t('customer.paymentNetworkError'));
           setStripeReady(true);
-        }
+        });
       }
     })();
-    return () => { cancelled = true; };
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [t]);
 
   return (
