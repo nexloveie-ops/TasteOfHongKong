@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { buildReceiptHTML, printViaIframe } from '../../components/cashier/ReceiptPrint';
+import { bundleAdjustedLineTotals, lineGrossEuro, type AppliedBundleLite } from '../../utils/bundleLineAllocation';
 
 interface OrderItem {
   _id: string;
@@ -33,6 +34,7 @@ interface SearchResult {
     dailyOrderNumber?: number;
     dineInOrderNumber?: string;
     status?: string;
+    appliedBundles?: AppliedBundleLite[];
     items: OrderItem[];
   }[];
 }
@@ -132,13 +134,20 @@ export default function ReprintReceipt() {
     setSelectedItems(new Set(refundable.map(i => i._id)));
   };
 
-  const getRefundTotal = (r: SearchResult) => {
+  const buildLineNetByItemId = (r: SearchResult) => {
+    const m = new Map<string, number>();
+    for (const o of r.orders) {
+      bundleAdjustedLineTotals(o.items, o.appliedBundles).forEach((v, k) => m.set(k, v));
+    }
+    return m;
+  };
+
+  const getRefundTotal = (r: SearchResult, lineNets: Map<string, number>) => {
     let total = 0;
     for (const order of r.orders) {
       for (const item of order.items) {
         if (selectedItems.has(item._id)) {
-          const optExtra = (item.selectedOptions || []).reduce((s, o) => s + o.extraPrice, 0);
-          total += (item.unitPrice + optExtra) * item.quantity;
+          total += lineNets.get(item._id) ?? lineGrossEuro(item);
         }
       }
     }
@@ -147,7 +156,8 @@ export default function ReprintReceipt() {
 
   const handleRefund = async (r: SearchResult) => {
     if (selectedItems.size === 0) return;
-    const refundTotal = getRefundTotal(r);
+    const lineNets = buildLineNetByItemId(r);
+    const refundTotal = getRefundTotal(r, lineNets);
     if (!confirm(`确认退单？\n退单菜品: ${selectedItems.size} 项\n退款金额: €${refundTotal.toFixed(2)}\n此操作不可撤销。`)) return;
 
     setRefunding(true);
@@ -203,6 +213,7 @@ export default function ReprintReceipt() {
       {results.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {results.map(r => {
+            const lineNets = buildLineNetByItemId(r);
             const isDineIn = r.orders[0]?.type === 'dine_in';
             const typeLabel = isDineIn ? '堂食 Dine-in' : '外卖 Takeout';
             const orderNum = r.orders[0]?.dineInOrderNumber || (r.orders[0]?.dailyOrderNumber ? `#${r.orders[0].dailyOrderNumber}` : '');
@@ -262,7 +273,7 @@ export default function ReprintReceipt() {
                         {selectedItems.size > 0 && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <span style={{ fontSize: 13, fontWeight: 600 }}>
-                              已选 {selectedItems.size} 项 · 退款 €{getRefundTotal(r).toFixed(2)}
+                              已选 {selectedItems.size} 项 · 退款 €{getRefundTotal(r, lineNets).toFixed(2)}
                             </span>
                             <button className="btn" style={{
                               padding: '6px 16px', fontSize: 13,
@@ -279,8 +290,9 @@ export default function ReprintReceipt() {
 
                     {/* Item list */}
                     {allItems.map(item => {
-                      const optExtra = (item.selectedOptions || []).reduce((s, o) => s + o.extraPrice, 0);
-                      const itemTotal = (item.unitPrice + optExtra) * item.quantity;
+                      const gross = lineGrossEuro(item);
+                      const itemTotal = lineNets.get(item._id) ?? gross;
+                      const showStrike = Math.abs(itemTotal - gross) > 0.005;
                       const isRefunded = item.refunded;
                       const isSelected = selectedItems.has(item._id);
 
@@ -325,7 +337,14 @@ export default function ReprintReceipt() {
 
                           {/* Qty & price */}
                           <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: isRefunded ? '#999' : 'var(--red-primary)' }}>€{itemTotal.toFixed(2)}</div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: isRefunded ? '#999' : 'var(--red-primary)' }}>
+                              {showStrike && (
+                                <span style={{ textDecoration: 'line-through', color: 'var(--text-light)', fontWeight: 500, fontSize: 12, marginRight: 6 }}>
+                                  €{gross.toFixed(2)}
+                                </span>
+                              )}
+                              €{itemTotal.toFixed(2)}
+                            </div>
                             <div style={{ fontSize: 11, color: 'var(--text-light)' }}>×{item.quantity}</div>
                           </div>
                         </div>

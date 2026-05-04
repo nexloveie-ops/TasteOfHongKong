@@ -295,6 +295,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
             dailyOrderNumber: o.dailyOrderNumber,
             dineInOrderNumber: (o as Record<string, unknown>).dineInOrderNumber,
             status: o.status,
+            appliedBundles: ((o as Record<string, unknown>).appliedBundles as unknown[]) ?? [],
             items: o.items,
           })),
         };
