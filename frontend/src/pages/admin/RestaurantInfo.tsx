@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { refreshRestaurantConfig } from '../../hooks/useRestaurantConfig';
 
 const CONFIG_KEYS = [
   'restaurant_name_zh',
@@ -74,7 +75,10 @@ export default function RestaurantInfo() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(body),
       });
-      if (res.ok) setSaved(true);
+      if (res.ok) {
+        setSaved(true);
+        await refreshRestaurantConfig();
+      }
     } catch { /* ignore */ }
     finally { setSaving(false); }
   };

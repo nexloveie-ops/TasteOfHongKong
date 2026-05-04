@@ -14,6 +14,7 @@ import allergensRouter from './routes/allergens';
 import { createOrdersRouter } from './routes/orders';
 import { createCheckoutRouter } from './routes/checkout';
 import adminRouter from './routes/admin';
+import optionGroupTemplatesRouter from './routes/optionGroupTemplates';
 import reportsRouter from './routes/reports';
 import offersRouter from './routes/offers';
 import { createPaymentsRouter } from './routes/payments';
@@ -86,6 +87,7 @@ app.use('/api/checkout', createCheckoutRouter(io));
 
 // Admin routes
 app.use('/api/admin', adminRouter);
+app.use('/api/admin/option-group-templates', optionGroupTemplatesRouter);
 
 // Reports routes
 app.use('/api/reports', reportsRouter);

@@ -27,7 +27,7 @@ export default function CartPage() {
     let loaded = 0;
     const check = () => { loaded++; if (loaded >= 2) setOffersLoaded(true); };
     fetch('/api/offers').then(r => r.ok ? r.json() : []).then(d => { setOffers(d); check(); }).catch(() => check());
-    fetch('/api/menu/items').then(r => r.ok ? r.json() : []).then((data: { _id: string; categoryId: string }[]) => {
+    fetch('/api/menu/items?ownOptionGroups=1').then(r => r.ok ? r.json() : []).then((data: { _id: string; categoryId: string }[]) => {
       const map: Record<string, string> = {};
       for (const item of data) map[item._id] = item.categoryId;
       setMenuItemCategories(map);

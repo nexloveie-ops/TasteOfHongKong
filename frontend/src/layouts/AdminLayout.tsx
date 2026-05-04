@@ -9,6 +9,7 @@ const sidebarItems = [
   { path: '/admin/restaurant', icon: '🏪', key: 'admin.restaurantInfo' },
   { path: '/admin/categories', icon: '📂', key: 'admin.categories' },
   { path: '/admin/menu-items', icon: '🍽️', key: 'admin.menuItems' },
+  { path: '/admin/option-group-templates', icon: '🧩', key: 'admin.optionGroupTemplatesNav' },
   { path: '/admin/inventory', icon: '📦', key: 'admin.inventory' },
   { path: '/admin/allergens', icon: '⚠️', key: 'admin.allergens' },
   { path: '/admin/i18n', icon: '🌐', key: 'admin.i18nEditor' },
@@ -17,6 +18,7 @@ const sidebarItems = [
   { path: '/admin/coupons', icon: '🎟️', key: 'admin.coupons' },
   { path: '/admin/orders', icon: '📋', key: 'admin.orderHistory' },
   { path: '/admin/reports', icon: '📊', key: 'admin.reports' },
+  { path: '/admin/business-hours', icon: '🕒', key: 'admin.businessHours' },
   { path: '/admin/users', icon: '👥', key: 'admin.users' },
   { path: '/admin/config', icon: '⚙️', key: 'admin.systemConfig' },
 ];

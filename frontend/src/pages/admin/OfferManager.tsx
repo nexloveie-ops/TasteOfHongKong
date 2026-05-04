@@ -62,7 +62,7 @@ export default function OfferManager() {
       const [offersRes, catsRes, itemsRes] = await Promise.all([
         fetch('/api/offers/all', { headers: { Authorization: `Bearer ${token}` } }),
         fetch(`/api/menu/categories?lang=${lang}`),
-        fetch('/api/menu/items'),
+        fetch('/api/menu/items?ownOptionGroups=1'),
       ]);
       if (offersRes.ok) setOffers(await offersRes.json());
       if (catsRes.ok) {

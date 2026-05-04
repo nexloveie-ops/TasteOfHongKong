@@ -18,6 +18,7 @@ import TakeoutDelivery from './pages/cashier/TakeoutDelivery';
 import CheckoutFlow from './pages/cashier/CheckoutFlow';
 import CategoryManager from './pages/admin/CategoryManager';
 import MenuItemManager from './pages/admin/MenuItemManager';
+import OptionGroupTemplates from './pages/admin/OptionGroupTemplates';
 import InventoryManager from './pages/admin/InventoryManager';
 import AllergenManager from './pages/admin/AllergenManager';
 import I18nEditor from './pages/admin/I18nEditor';
@@ -29,6 +30,7 @@ import SystemConfig from './pages/admin/SystemConfig';
 import RestaurantInfo from './pages/admin/RestaurantInfo';
 import OfferManager from './pages/admin/OfferManager';
 import CouponManager from './pages/admin/CouponManager';
+import BusinessHours from './pages/admin/BusinessHours';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -70,12 +72,14 @@ export default function App() {
             <Route path="restaurant" element={<RestaurantInfo />} />
             <Route path="categories" element={<CategoryManager />} />
             <Route path="menu-items" element={<MenuItemManager />} />
+            <Route path="option-group-templates" element={<OptionGroupTemplates />} />
             <Route path="inventory" element={<InventoryManager />} />
             <Route path="allergens" element={<AllergenManager />} />
             <Route path="i18n" element={<I18nEditor />} />
             <Route path="qr-codes" element={<QRCodeManager />} />
             <Route path="orders" element={<OrderHistory />} />
             <Route path="reports" element={<ReportDashboard />} />
+            <Route path="business-hours" element={<BusinessHours />} />
             <Route path="users" element={<UserManager />} />
             <Route path="config" element={<SystemConfig />} />
             <Route path="offers" element={<OfferManager />} />

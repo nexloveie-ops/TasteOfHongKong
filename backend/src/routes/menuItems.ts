@@ -9,6 +9,8 @@ import { MenuCategory } from '../models/MenuCategory';
 import { authMiddleware, requirePermission } from '../middleware/auth';
 import { createAppError } from '../middleware/errorHandler';
 import { uploadFile } from '../storage';
+import { mergeTemplateOptionGroupsForItems } from '../utils/optionGroupTemplateApply';
+import { validateOptionGroups } from '../utils/optionGroups';
 
 const router = Router();
 
@@ -45,6 +47,10 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 
     const lang = req.query.lang as string | undefined;
     const category = req.query.category as string | undefined;
+    const ownOnly =
+      req.query.ownOptionGroups === '1' ||
+      req.query.ownOptionGroups === 'true' ||
+      req.query.mergeTemplates === 'false';
 
     const filter: Record<string, unknown> = {};
     if (category) {
@@ -55,9 +61,10 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     }
 
     const items = await MenuItem.find(filter).lean();
+    const baseItems = ownOnly ? items : await mergeTemplateOptionGroupsForItems(items);
 
     if (lang) {
-      const filtered = items.map((item) => {
+      const filtered = baseItems.map((item) => {
         const translation = item.translations.find(
           (t: { locale: string }) => t.locale === lang
         );
@@ -68,7 +75,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       });
       res.json(filtered);
     } else {
-      res.json(items);
+      res.json(baseItems);
     }
   } catch (err) {
     next(err);
@@ -110,6 +117,10 @@ router.post(
             'Each translation must have locale and name'
           );
         }
+      }
+
+      if (optionGroups !== undefined) {
+        validateOptionGroups(optionGroups);
       }
 
       const item = await MenuItem.create({
@@ -169,6 +180,10 @@ router.put(
             throw createAppError('VALIDATION_ERROR', 'Each translation must have locale and name');
           }
         }
+      }
+
+      if (optionGroups !== undefined) {
+        validateOptionGroups(optionGroups);
       }
 
       const updateData: Record<string, unknown> = {};

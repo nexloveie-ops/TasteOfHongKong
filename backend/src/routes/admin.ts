@@ -9,6 +9,7 @@ import { SystemConfig } from '../models/SystemConfig';
 import { authMiddleware, requirePermission } from '../middleware/auth';
 import { createAppError } from '../middleware/errorHandler';
 import { uploadFile } from '../storage';
+import { getBusinessStatus } from '../utils/businessHours';
 
 const router = Router();
 const tempUpload = multer({ dest: os.tmpdir(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -25,6 +26,16 @@ router.get('/config', async (_req: Request, res: Response, next: NextFunction) =
       configMap[c.key] = c.value;
     }
     res.json(configMap);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/admin/business-status — Public business opening status for customer entry
+router.get('/business-status', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const status = await getBusinessStatus();
+    res.json(status);
   } catch (err) {
     next(err);
   }

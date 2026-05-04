@@ -22,7 +22,7 @@ export default function CustomerLayout() {
 
   useEffect(() => {
     fetch('/api/offers').then(r => r.ok ? r.json() : []).then(setOffers).catch(() => {});
-    fetch('/api/menu/items').then(r => r.ok ? r.json() : []).then((data: { _id: string; categoryId: string }[]) => {
+    fetch('/api/menu/items?ownOptionGroups=1').then(r => r.ok ? r.json() : []).then((data: { _id: string; categoryId: string }[]) => {
       const map: Record<string, string> = {};
       for (const item of data) map[item._id] = item.categoryId;
       setMenuItemCats(map);

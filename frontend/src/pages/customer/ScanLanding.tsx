@@ -3,21 +3,40 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { parseQRParams } from '../../utils/qrCode';
 import { useRestaurantConfig } from '../../hooks/useRestaurantConfig';
+import { useBusinessStatus } from '../../hooks/useBusinessStatus';
 
 export default function ScanLanding() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { t } = useTranslation();
   const { displayName, displayNameEn } = useRestaurantConfig();
+  const { isOpen, reason, loading } = useBusinessStatus();
   const params = parseQRParams(searchParams);
 
   useEffect(() => {
+    if (loading || !isOpen) return;
     if (params.type === 'dine_in') {
       navigate(`/customer/menu?table=${params.tableNumber}&seat=${params.seatNumber}`, { replace: true });
     } else if (params.type === 'takeout') {
       navigate('/customer/menu?type=takeout', { replace: true });
     }
-  }, [params, navigate]);
+  }, [params, navigate, loading, isOpen]);
+
+  if (loading) {
+    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>{t('common.loading')}</div>;
+  }
+
+  if (!isOpen) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '70vh', padding: 20, textAlign: 'center' }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🕒</div>
+        <h2 style={{ marginBottom: 8 }}>{t('customer.storeClosedTitle')}</h2>
+        <p style={{ color: 'var(--text-light)', maxWidth: 320 }}>
+          {reason === 'closed_date' ? t('customer.storeClosedDate') : t('customer.storeOutsideHours')}
+        </p>
+      </div>
+    );
+  }
 
   if (params.type === 'invalid') {
     return (

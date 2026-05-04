@@ -6,6 +6,7 @@ import MenuItemCard from '../../components/customer/MenuItemCard';
 import OfferSelectModal from '../../components/customer/OfferSelectModal';
 import type { OfferData } from '../../utils/bundleMatcher';
 import { useRestaurantConfig } from '../../hooks/useRestaurantConfig';
+import { useBusinessStatus } from '../../hooks/useBusinessStatus';
 
 interface Category { _id: string; sortOrder: number; translations: { locale: string; name: string }[]; }
 interface AllergenData { _id: string; icon: string; }
@@ -22,11 +23,12 @@ interface MenuItemData {
 }
 
 export default function MenuView() {
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
   const { addItem, items: cartItems, decreaseQuantity, getItemKey, editOrderId } = useCart();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { displayName, displayNameEn, config } = useRestaurantConfig();
+  const { isOpen, reason, loading: statusLoading } = useBusinessStatus();
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItemData[]>([]);
   const [allergens, setAllergens] = useState<AllergenData[]>([]);
@@ -173,6 +175,22 @@ export default function MenuView() {
   for (const item of items) {
     if (!itemsByCategory.has(item.categoryId)) itemsByCategory.set(item.categoryId, []);
     itemsByCategory.get(item.categoryId)!.push(item);
+  }
+
+  if (statusLoading) {
+    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>{t('common.loading')}</div>;
+  }
+
+  if (!isOpen) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '70vh', textAlign: 'center', padding: 20 }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🕒</div>
+        <h2 style={{ marginBottom: 8 }}>{t('customer.storeClosedTitle')}</h2>
+        <p style={{ color: 'var(--text-light)', maxWidth: 320 }}>
+          {reason === 'closed_date' ? t('customer.storeClosedDate') : t('customer.storeOutsideHours')}
+        </p>
+      </div>
+    );
   }
 
   return (

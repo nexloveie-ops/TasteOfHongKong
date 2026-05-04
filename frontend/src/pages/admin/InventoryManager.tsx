@@ -17,7 +17,7 @@ export default function InventoryManager() {
   const [customTime, setCustomTime] = useState('');
 
   const fetchItems = useCallback(async () => {
-    const res = await fetch('/api/menu/items', { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch('/api/menu/items?ownOptionGroups=1', { headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) setItems(await res.json());
   }, [token]);
 

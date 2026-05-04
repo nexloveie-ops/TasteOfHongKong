@@ -35,7 +35,7 @@ export default function MenuItemManager() {
   const fetchData = useCallback(async () => {
     const [catRes, itemRes, allergenRes] = await Promise.all([
       fetch('/api/menu/categories', { headers: authHeaders }),
-      fetch('/api/menu/items', { headers: authHeaders }),
+      fetch('/api/menu/items?ownOptionGroups=1', { headers: authHeaders }),
       fetch('/api/allergens', { headers: authHeaders }),
     ]);
     if (catRes.ok) setCategories(await catRes.json());

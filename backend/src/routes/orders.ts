@@ -5,14 +5,110 @@ import { MenuItem } from '../models/MenuItem';
 import { Order } from '../models/Order';
 import { DailyOrderCounter } from '../models/DailyOrderCounter';
 import { createAppError } from '../middleware/errorHandler';
+import { getBusinessStatus } from '../utils/businessHours';
+import { mergeTemplateOptionGroupsForItem } from '../utils/optionGroupTemplateApply';
+import type { LeanOptionGroup } from '../utils/optionGroups';
 
 export function createOrdersRouter(io: SocketIOServer): Router {
   const router = Router();
+
+  type SelectedOptInput = { groupId: string; choiceId: string };
+
+  async function snapshotSelectedOptionsFromMenuItem(
+    menuItem: InstanceType<typeof MenuItem>,
+    selectedOptions: SelectedOptInput[] | undefined,
+  ): Promise<{ groupName: string; groupNameEn: string; choiceName: string; choiceNameEn: string; extraPrice: number }[]> {
+    if (!selectedOptions || !Array.isArray(selectedOptions) || selectedOptions.length === 0) return [];
+
+    const merged = await mergeTemplateOptionGroupsForItem({
+      _id: menuItem._id,
+      categoryId: menuItem.categoryId,
+      optionGroups: (menuItem.optionGroups || []) as unknown as LeanOptionGroup[],
+    });
+
+    const snapshots: { groupName: string; groupNameEn: string; choiceName: string; choiceNameEn: string; extraPrice: number }[] = [];
+    for (const sel of selectedOptions) {
+      if (!sel.groupId || !mongoose.Types.ObjectId.isValid(sel.groupId)) {
+        throw createAppError('VALIDATION_ERROR', `Invalid groupId: ${sel.groupId}`);
+      }
+      if (!sel.choiceId || !mongoose.Types.ObjectId.isValid(sel.choiceId)) {
+        throw createAppError('VALIDATION_ERROR', `Invalid choiceId: ${sel.choiceId}`);
+      }
+
+      const group = merged.find((g) => g._id && g._id.toString() === sel.groupId);
+      if (!group) {
+        throw createAppError('VALIDATION_ERROR', `Unknown option group: ${sel.groupId}`);
+      }
+      const choice = group.choices.find((c) => c._id && c._id.toString() === sel.choiceId);
+      if (!choice) {
+        throw createAppError('VALIDATION_ERROR', `Unknown option choice: ${sel.choiceId}`);
+      }
+
+      const groupName = group.translations.find((t) => t.locale === 'zh-CN')?.name || group.translations[0]?.name || '';
+      const groupNameEn = group.translations.find((t) => t.locale === 'en-US')?.name || groupName;
+      const choiceName = choice.translations.find((t) => t.locale === 'zh-CN')?.name || choice.translations[0]?.name || '';
+      const choiceNameEn = choice.translations.find((t) => t.locale === 'en-US')?.name || choiceName;
+
+      snapshots.push({
+        groupName,
+        groupNameEn,
+        choiceName,
+        choiceNameEn,
+        extraPrice: typeof choice.extraPrice === 'number' ? choice.extraPrice : 0,
+      });
+    }
+
+    return snapshots;
+  }
+
+  async function buildOrderItemsPayload(
+    items: { menuItemId: string; quantity: number; selectedOptions?: SelectedOptInput[] }[],
+    menuItemMap: Map<string, InstanceType<typeof MenuItem>>,
+  ) {
+    const orderItems: {
+      menuItemId: string;
+      quantity: number;
+      unitPrice: number;
+      itemName: string;
+      itemNameEn: string;
+      selectedOptions: { groupName: string; groupNameEn: string; choiceName: string; choiceNameEn: string; extraPrice: number }[];
+    }[] = [];
+
+    for (const item of items) {
+      const menuItem = menuItemMap.get(item.menuItemId)!;
+      const zhTrans = menuItem.translations?.find((t: { locale: string }) => t.locale === 'zh-CN');
+      const enTrans = menuItem.translations?.find((t: { locale: string }) => t.locale === 'en-US');
+      const itemName = zhTrans?.name || enTrans?.name || (menuItem.translations?.[0] as { name: string })?.name || 'Unknown';
+      const itemNameEn = enTrans?.name || zhTrans?.name || itemName;
+      const selectedOptions = await snapshotSelectedOptionsFromMenuItem(menuItem, item.selectedOptions);
+
+      orderItems.push({
+        menuItemId: item.menuItemId,
+        quantity: item.quantity,
+        unitPrice: menuItem.price,
+        itemName,
+        itemNameEn,
+        selectedOptions,
+      });
+    }
+
+    return orderItems;
+  }
 
   // POST /api/orders — Create a new order
   router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { type, tableNumber, seatNumber, items, appliedBundles } = req.body;
+
+      // Customer self-order channels follow business hour restrictions.
+      if (type === 'dine_in' || type === 'takeout') {
+        const status = await getBusinessStatus();
+        if (!status.isOpen) {
+          throw createAppError('VALIDATION_ERROR', 'Restaurant is currently closed', {
+            businessStatus: status,
+          });
+        }
+      }
 
       // Validate type
       if (!type || !['dine_in', 'takeout', 'phone'].includes(type)) {
@@ -66,42 +162,7 @@ export function createOrdersRouter(io: SocketIOServer): Router {
       const menuItemMap = new Map(menuItems.map((m) => [m._id.toString(), m]));
 
       // Build order items with price/name snapshots
-      const orderItems = items.map((item: { menuItemId: string; quantity: number; selectedOptions?: { groupId: string; choiceId: string }[] }) => {
-        const menuItem = menuItemMap.get(item.menuItemId)!;
-        // Use first translation name as snapshot, fallback to 'Unknown'
-        const zhTrans = menuItem.translations?.find((t: { locale: string }) => t.locale === 'zh-CN');
-        const enTrans = menuItem.translations?.find((t: { locale: string }) => t.locale === 'en-US');
-        const itemName = zhTrans?.name || enTrans?.name || (menuItem.translations?.[0] as { name: string })?.name || 'Unknown';
-        const itemNameEn = enTrans?.name || zhTrans?.name || itemName;
-
-        // Resolve selectedOptions from menuItem's optionGroups
-        const selectedOptions: { groupName: string; groupNameEn: string; choiceName: string; choiceNameEn: string; extraPrice: number }[] = [];
-        if (item.selectedOptions && Array.isArray(item.selectedOptions)) {
-          const groups = (menuItem as unknown as { optionGroups?: { _id: mongoose.Types.ObjectId; translations: { locale: string; name: string }[]; choices: { _id: mongoose.Types.ObjectId; translations: { locale: string; name: string }[]; extraPrice: number }[] }[] }).optionGroups || [];
-          for (const sel of item.selectedOptions) {
-            const group = groups.find((g) => g._id.toString() === sel.groupId);
-            if (group) {
-              const choice = group.choices.find((c) => c._id.toString() === sel.choiceId);
-              if (choice) {
-                const groupName = group.translations.find((t: { locale: string }) => t.locale === 'zh-CN')?.name || group.translations[0]?.name || '';
-                const groupNameEn = group.translations.find((t: { locale: string }) => t.locale === 'en-US')?.name || groupName;
-                const choiceName = choice.translations.find((t: { locale: string }) => t.locale === 'zh-CN')?.name || choice.translations[0]?.name || '';
-                const choiceNameEn = choice.translations.find((t: { locale: string }) => t.locale === 'en-US')?.name || choiceName;
-                selectedOptions.push({ groupName, groupNameEn, choiceName, choiceNameEn, extraPrice: choice.extraPrice || 0 });
-              }
-            }
-          }
-        }
-
-        return {
-          menuItemId: item.menuItemId,
-          quantity: item.quantity,
-          unitPrice: menuItem.price,
-          itemName,
-          itemNameEn,
-          selectedOptions,
-        };
-      });
+      const orderItems = await buildOrderItemsPayload(items, menuItemMap);
       const orderData: Record<string, unknown> = {
         type,
         status: 'pending',
@@ -311,41 +372,7 @@ export function createOrdersRouter(io: SocketIOServer): Router {
       const menuItemMap = new Map(menuItems.map((m) => [m._id.toString(), m]));
 
       // Build updated order items with price/name snapshots
-      const orderItems = items.map((item: { menuItemId: string; quantity: number; selectedOptions?: { groupId: string; choiceId: string }[] }) => {
-        const menuItem = menuItemMap.get(item.menuItemId)!;
-        const zhTrans2 = menuItem.translations?.find((t: { locale: string }) => t.locale === 'zh-CN');
-        const enTrans2 = menuItem.translations?.find((t: { locale: string }) => t.locale === 'en-US');
-        const itemName = zhTrans2?.name || enTrans2?.name || (menuItem.translations?.[0] as { name: string })?.name || 'Unknown';
-        const itemNameEn = enTrans2?.name || zhTrans2?.name || itemName;
-
-        // Resolve selectedOptions from menuItem's optionGroups
-        const selectedOptions: { groupName: string; groupNameEn: string; choiceName: string; choiceNameEn: string; extraPrice: number }[] = [];
-        if (item.selectedOptions && Array.isArray(item.selectedOptions)) {
-          const groups = (menuItem as unknown as { optionGroups?: { _id: mongoose.Types.ObjectId; translations: { locale: string; name: string }[]; choices: { _id: mongoose.Types.ObjectId; translations: { locale: string; name: string }[]; extraPrice: number }[] }[] }).optionGroups || [];
-          for (const sel of item.selectedOptions) {
-            const group = groups.find((g) => g._id.toString() === sel.groupId);
-            if (group) {
-              const choice = group.choices.find((c) => c._id.toString() === sel.choiceId);
-              if (choice) {
-                const groupName = choice.translations.find((t: { locale: string }) => t.locale === 'zh-CN')?.name || group.translations[0]?.name || '';
-                const groupNameEn = group.translations.find((t: { locale: string }) => t.locale === 'en-US')?.name || groupName;
-                const choiceName = choice.translations.find((t: { locale: string }) => t.locale === 'zh-CN')?.name || choice.translations[0]?.name || '';
-                const choiceNameEn = choice.translations.find((t: { locale: string }) => t.locale === 'en-US')?.name || choiceName;
-                selectedOptions.push({ groupName, groupNameEn, choiceName, choiceNameEn, extraPrice: choice.extraPrice || 0 });
-              }
-            }
-          }
-        }
-
-        return {
-          menuItemId: item.menuItemId,
-          quantity: item.quantity,
-          unitPrice: menuItem.price,
-          itemName,
-          itemNameEn,
-          selectedOptions,
-        };
-      });
+      const orderItems = await buildOrderItemsPayload(items, menuItemMap);
 
       // Update the order's items
       order.items = orderItems as unknown as typeof order.items;
