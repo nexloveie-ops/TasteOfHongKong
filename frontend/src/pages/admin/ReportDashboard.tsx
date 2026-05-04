@@ -91,6 +91,7 @@ export default function ReportDashboard() {
   const [endDate, setEndDate] = useState('');
   const [stats, setStats] = useState<DetailedStats | null>(null);
   const [loading, setLoading] = useState(false);
+  const [pdfExporting, setPdfExporting] = useState(false);
 
   // Modal state
   const [modalConfig, setModalConfig] = useState<ModalConfig | null>(null);
@@ -122,6 +123,48 @@ export default function ReportDashboard() {
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, [token, startDate, endDate]);
+
+  const exportVatPdf = useCallback(async () => {
+    if (!startDate || !endDate) return;
+    setPdfExporting(true);
+    try {
+      const params = new URLSearchParams({ startDate, endDate });
+      const res = await fetch(`/api/reports/vat-pdf?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        let detail = '';
+        try {
+          const ct = res.headers.get('content-type') ?? '';
+          if (ct.includes('application/json')) {
+            const data = (await res.json()) as { error?: { message?: string } };
+            detail = data?.error?.message?.trim() ?? '';
+          } else {
+            const text = (await res.text()).trim();
+            if (text.length > 0 && text.length < 500) detail = text;
+          }
+        } catch {
+          /* ignore parse errors */
+        }
+        alert(detail ? `${t('admin.exportVatPdfFailed')}\n${detail}` : t('admin.exportVatPdfFailed'));
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `vat-report-${startDate}_${endDate}.pdf`;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      alert(t('admin.exportVatPdfFailed'));
+    } finally {
+      setPdfExporting(false);
+    }
+  }, [token, startDate, endDate, t]);
 
   const openDetail = useCallback(async (config: ModalConfig) => {
     setModalConfig(config);
@@ -217,6 +260,14 @@ export default function ReportDashboard() {
         </div>
         <button className="btn btn-primary" onClick={fetchStats} disabled={loading || !startDate || !endDate}>
           {loading ? t('common.loading') : t('common.search')}
+        </button>
+        <button
+          type="button"
+          className="btn btn-outline"
+          onClick={exportVatPdf}
+          disabled={pdfExporting || !startDate || !endDate}
+        >
+          {pdfExporting ? t('common.loading') : t('admin.exportVatPdf')}
         </button>
       </div>
 

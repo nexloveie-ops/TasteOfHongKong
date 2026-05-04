@@ -4,9 +4,11 @@ import { useAuth } from '../../context/AuthContext';
 import { refreshRestaurantConfig } from '../../hooks/useRestaurantConfig';
 
 const CONFIG_KEYS = [
+  'account_number',
   'restaurant_name_zh',
   'restaurant_name_en',
   'restaurant_address',
+  'restaurant_address_en',
   'restaurant_phone',
   'restaurant_website',
   'restaurant_email',
@@ -16,9 +18,11 @@ const CONFIG_KEYS = [
 type ConfigKey = (typeof CONFIG_KEYS)[number];
 
 const FIELD_I18N: Record<ConfigKey, string> = {
+  account_number: 'admin.accountNumber',
   restaurant_name_zh: 'admin.restaurantNameZh',
   restaurant_name_en: 'admin.restaurantNameEn',
   restaurant_address: 'admin.restaurantAddress',
+  restaurant_address_en: 'admin.restaurantAddressEn',
   restaurant_phone: 'admin.restaurantPhone',
   restaurant_website: 'admin.restaurantWebsite',
   restaurant_email: 'admin.restaurantEmail',

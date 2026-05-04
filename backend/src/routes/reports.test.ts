@@ -201,12 +201,12 @@ describe('GET /api/reports/orders', () => {
     expect(res.body).toHaveLength(0);
   });
 
-  it('should reject cashier role', async () => {
+  it('should allow cashier with report:view', async () => {
     const res = await request(app)
       .get('/api/reports/orders')
       .set('Authorization', `Bearer ${cashierToken}`);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
   });
 
   it('should reject unauthenticated request', async () => {
@@ -296,11 +296,50 @@ describe('GET /api/reports/summary', () => {
     expect(res.body.cardTotal).toBe(0);
   });
 
-  it('should reject cashier role', async () => {
+  it('should allow cashier with report:view', async () => {
     const res = await request(app)
       .get('/api/reports/summary')
       .set('Authorization', `Bearer ${cashierToken}`);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
+  });
+});
+
+// --- VAT PDF ---
+
+describe('GET /api/reports/vat-pdf', () => {
+  it('should reject unauthenticated request', async () => {
+    const res = await request(app).get('/api/reports/vat-pdf?startDate=2024-06-01&endDate=2024-06-30');
+    expect(res.status).toBe(401);
+  });
+
+  it('should validate date query', async () => {
+    const res = await request(app)
+      .get('/api/reports/vat-pdf')
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(res.status).toBe(400);
+  });
+
+  it('should return application/pdf', async () => {
+    await createAndCheckoutOrder('dine_in', 25.5, 'cash', new Date('2024-06-10T12:00:00.000Z'));
+
+    const res = await request(app)
+      .get('/api/reports/vat-pdf?startDate=2024-06-01&endDate=2024-06-30')
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/application\/pdf/);
+    const raw = res.body as Buffer | string;
+    const len = Buffer.isBuffer(raw) ? raw.length : Buffer.byteLength(String(raw));
+    expect(len).toBeGreaterThan(500);
+  });
+
+  it('should return pdf when no checkouts in range', async () => {
+    const res = await request(app)
+      .get('/api/reports/vat-pdf?startDate=2020-01-01&endDate=2020-01-31')
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/application\/pdf/);
   });
 });

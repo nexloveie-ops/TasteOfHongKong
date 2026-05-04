@@ -3,6 +3,8 @@ import { Checkout } from '../models/Checkout';
 import { Order } from '../models/Order';
 import { authMiddleware, requirePermission } from '../middleware/auth';
 import { createAppError } from '../middleware/errorHandler';
+import { aggregateVatSalesByMonth } from '../utils/vatReportAggregation';
+import { buildVatReportPdfBuffer } from '../utils/vatReportPdf';
 
 const router = Router();
 
@@ -403,6 +405,24 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
       refundedAmount: Math.round(refundedAmount * 100) / 100,
       topItems,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/reports/vat-pdf?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD — VAT worksheet PDF (IE Food 13.5% / Drink 23%)
+router.get('/vat-pdf', authMiddleware, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { startDate, endDate } = req.query;
+    if (!startDate || !endDate || typeof startDate !== 'string' || typeof endDate !== 'string') {
+      throw createAppError('VALIDATION_ERROR', 'startDate and endDate are required (YYYY-MM-DD)');
+    }
+
+    const { byMonth, storeInfo } = await aggregateVatSalesByMonth(startDate, endDate);
+    const buf = await buildVatReportPdfBuffer(storeInfo, byMonth, `${startDate} - ${endDate}`);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="vat-report-${startDate}_${endDate}.pdf"`);
+    res.send(buf);
   } catch (err) {
     next(err);
   }
