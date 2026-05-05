@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { apiFetch } from '../../api/client';
 
 interface MenuItem {
   _id: string; isSoldOut?: boolean; soldOutUntil?: string;
@@ -17,14 +18,14 @@ export default function InventoryManager() {
   const [customTime, setCustomTime] = useState('');
 
   const fetchItems = useCallback(async () => {
-    const res = await fetch('/api/menu/items?ownOptionGroups=1', { headers: { Authorization: `Bearer ${token}` } });
+    const res = await apiFetch('/api/menu/items?ownOptionGroups=1', { headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) setItems(await res.json());
   }, [token]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
   const markSoldOut = async (id: string, soldOutUntil: string | null) => {
-    await fetch(`/api/menu/items/${id}/sold-out`, {
+    await apiFetch(`/api/menu/items/${id}/sold-out`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ isSoldOut: true, soldOutUntil }),
@@ -34,7 +35,7 @@ export default function InventoryManager() {
   };
 
   const restoreSupply = async (id: string) => {
-    await fetch(`/api/menu/items/${id}/sold-out`, {
+    await apiFetch(`/api/menu/items/${id}/sold-out`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ isSoldOut: false }),

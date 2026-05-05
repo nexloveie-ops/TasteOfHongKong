@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { apiFetch } from '../api/client';
+import { useStoreSlug } from '../context/StoreContext';
 
 interface BusinessStatus {
   isOpen: boolean;
@@ -6,12 +8,14 @@ interface BusinessStatus {
 }
 
 export function useBusinessStatus() {
+  const slug = useStoreSlug();
   const [status, setStatus] = useState<BusinessStatus>({ isOpen: true });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/admin/business-status')
+    setLoading(true);
+    apiFetch('/api/admin/business-status')
       .then((res) => (res.ok ? res.json() : { isOpen: true }))
       .then((data: BusinessStatus) => {
         if (!cancelled) setStatus(data);
@@ -25,7 +29,7 @@ export function useBusinessStatus() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [slug]);
 
   return { ...status, loading };
 }

@@ -1,15 +1,18 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
+import { apiFetch } from '../api/client';
 
 interface User {
   _id: string;
   username: string;
-  role: 'owner' | 'cashier';
+  role: 'owner' | 'cashier' | 'platform_owner';
+  storeId?: string | null;
 }
 
 interface AuthContextValue {
   user: User | null;
   token: string | null;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string, storeSlug: string) => Promise<void>;
+  platformLogin: (username: string, password: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -20,6 +23,17 @@ export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
+}
+
+function applyAuthPayload(data: { token: string; user: { id: string; username: string; role: User['role']; storeId?: unknown } }, setToken: (t: string) => void, setUser: (u: User) => void) {
+  const u = data.user;
+  setToken(data.token);
+  setUser({
+    _id: String(u.id),
+    username: u.username,
+    role: u.role,
+    storeId: u.storeId != null ? String(u.storeId) : undefined,
+  });
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -39,7 +53,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     else localStorage.removeItem('auth_user');
   }, [user]);
 
-  const login = useCallback(async (username: string, password: string) => {
+  const login = useCallback(async (username: string, password: string, storeSlug: string) => {
+    const res = await apiFetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password, slug: storeSlug }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || 'Login failed');
+    }
+    const data = await res.json();
+    applyAuthPayload(data, setToken, setUser);
+  }, []);
+
+  const platformLogin = useCallback(async (username: string, password: string) => {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -50,8 +78,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(err.error?.message || 'Login failed');
     }
     const data = await res.json();
-    setToken(data.token);
-    setUser(data.user);
+    const u = data.user as { role: string };
+    if (u.role !== 'platform_owner') {
+      throw new Error('此入口仅限平台管理员账号');
+    }
+    applyAuthPayload(data, setToken, setUser);
   }, []);
 
   const logout = useCallback(() => {
@@ -60,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isAuthenticated: !!token }}>
+    <AuthContext.Provider value={{ user, token, login, logout, platformLogin, isAuthenticated: !!token }}>
       {children}
     </AuthContext.Provider>
   );

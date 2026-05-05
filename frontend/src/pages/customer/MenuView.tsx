@@ -1,12 +1,13 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useParams } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import MenuItemCard from '../../components/customer/MenuItemCard';
 import OfferSelectModal from '../../components/customer/OfferSelectModal';
 import type { OfferData } from '../../utils/bundleMatcher';
 import { useRestaurantConfig } from '../../hooks/useRestaurantConfig';
 import { useBusinessStatus } from '../../hooks/useBusinessStatus';
+import { apiFetch } from '../../api/client';
 
 interface Category { _id: string; sortOrder: number; translations: { locale: string; name: string }[]; }
 interface AllergenData { _id: string; icon: string; }
@@ -27,7 +28,10 @@ export default function MenuView() {
   const { addItem, items: cartItems, decreaseQuantity, getItemKey, editOrderId } = useCart();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { storeSlug } = useParams<{ storeSlug: string }>();
   const { displayName, displayNameEn } = useRestaurantConfig();
+  const heroTitle = displayName || storeSlug;
+  const heroSub = displayNameEn || displayName || storeSlug;
   const { isOpen, reason, loading: statusLoading } = useBusinessStatus();
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItemData[]>([]);
@@ -43,16 +47,16 @@ export default function MenuView() {
   // Skip if we're in edit mode (user came back from modifying an order)
   useEffect(() => {
     if (!table || !seat || editOrderId) return;
-    fetch(`/api/orders/dine-in/active?table=${table}&seat=${seat}`)
+    apiFetch(`/api/orders/dine-in/active?table=${table}&seat=${seat}`)
       .then(r => r.ok ? r.json() : [])
       .then((orders: { _id: string }[]) => {
-        if (orders.length > 0) {
-          // Redirect to the most recent active order
-          navigate(`/customer/order/${orders[0]._id}?${qs}`, { replace: true });
+        if (orders.length > 0 && storeSlug) {
+          const search = qs ? `?${qs}` : '';
+          navigate(`/${storeSlug}/customer/order/${String(orders[0]._id)}${search}`, { replace: true });
         }
       })
       .catch(() => {});
-  }, [table, seat, qs, editOrderId, navigate]);
+  }, [table, seat, qs, editOrderId, navigate, storeSlug]);
 
   // Active offers for banner
   const [activeOffers, setActiveOffers] = useState<OfferData[]>([]);
@@ -78,17 +82,32 @@ export default function MenuView() {
   const tabsRef = useRef<HTMLDivElement>(null);
   const isUserClick = useRef(false);
 
+  const asArray = <T,>(data: unknown): T[] => (Array.isArray(data) ? data : []);
+
   useEffect(() => {
-    fetch(`/api/menu/categories?lang=${lang}`).then(r => r.json()).then((data: Category[]) => {
-      setCategories(data);
-      if (data.length > 0 && !activeCategory) setActiveCategory(data[0]._id);
-    }).catch(() => {});
+    apiFetch(`/api/menu/categories?lang=${lang}`)
+      .then((r) => r.json())
+      .then((data: unknown) => {
+        const list = asArray<Category>(data);
+        setCategories(list);
+        if (list.length > 0 && !activeCategory) setActiveCategory(list[0]._id);
+      })
+      .catch(() => {});
   }, [lang]);
 
   useEffect(() => {
-    fetch(`/api/menu/items?lang=${lang}`).then(r => r.json()).then(setItems).catch(() => {});
-    fetch('/api/allergens').then(r => r.json()).then(setAllergens).catch(() => {});
-    fetch('/api/offers').then(r => r.ok ? r.json() : []).then(setActiveOffers).catch(() => {});
+    apiFetch(`/api/menu/items?lang=${lang}`)
+      .then((r) => r.json())
+      .then((data: unknown) => setItems(asArray<MenuItemData>(data)))
+      .catch(() => {});
+    apiFetch('/api/allergens')
+      .then((r) => r.json())
+      .then((data: unknown) => setAllergens(asArray<AllergenData>(data)))
+      .catch(() => {});
+    apiFetch('/api/offers')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: unknown) => setActiveOffers(asArray<OfferData>(data)))
+      .catch(() => {});
   }, [lang]);
 
   const getName = (translations: { locale: string; name: string }[]) => {
@@ -204,8 +223,8 @@ export default function MenuView() {
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
           <div style={{ position: 'relative', zIndex: 1, color: '#fff' }}>
-            <h1 style={{ fontFamily: "'Noto Serif SC', serif", fontSize: 24, fontWeight: 700, letterSpacing: 3, marginBottom: 2 }}>{displayName}</h1>
-            <div style={{ fontSize: 11, fontWeight: 300, letterSpacing: 5, color: '#F0D68A' }}>{displayNameEn}</div>
+            <h1 style={{ fontFamily: "'Noto Serif SC', serif", fontSize: 24, fontWeight: 700, letterSpacing: 3, marginBottom: 2 }}>{heroTitle}</h1>
+            <div style={{ fontSize: 11, fontWeight: 300, letterSpacing: 5, color: '#F0D68A' }}>{heroSub}</div>
           </div>
           <div style={{ position: 'absolute', top: 8, right: 12, zIndex: 1, textAlign: 'right', color: 'rgba(255,255,255,0.7)', fontSize: 9, lineHeight: 1.5 }}>
             <div>

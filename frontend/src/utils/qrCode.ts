@@ -1,9 +1,9 @@
 /**
  * QR Code URL parameter encoding/decoding utilities.
  *
- * URL formats:
- *   Dine-in:  /customer?table={tableNumber}&seat={seatNumber}
- *   Takeout:  /customer?type=takeout
+ * URL formats (after store path prefix):
+ *   Dine-in:  /{storeSlug}/customer?table={tableNumber}&seat={seatNumber}
+ *   Takeout:  /{storeSlug}/customer?type=takeout
  */
 
 export interface DineInParams {

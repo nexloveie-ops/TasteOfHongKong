@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { apiFetch } from '../../api/client';
 
 type StripeHealthBody = {
   ok: boolean;
@@ -33,7 +34,7 @@ export default function StripeSettings() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/stripe-config', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await apiFetch('/api/admin/stripe-config', { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) return;
       const data = await res.json();
       setPublishableKey(typeof data.publishableKey === 'string' ? data.publishableKey : '');
@@ -59,7 +60,7 @@ export default function StripeSettings() {
       } else if (secretKeyDraft.trim().length > 0) {
         body.secretKey = secretKeyDraft.trim();
       }
-      const res = await fetch('/api/admin/stripe-config', { method: 'PUT', headers, body: JSON.stringify(body) });
+      const res = await apiFetch('/api/admin/stripe-config', { method: 'PUT', headers, body: JSON.stringify(body) });
       if (!res.ok) {
         const j = await res.json().catch(() => null);
         alert(j?.error?.message || t('common.error'));
@@ -79,7 +80,7 @@ export default function StripeSettings() {
     setCheckRunning(true);
     setHealth(null);
     try {
-      const res = await fetch('/api/admin/stripe-health', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await apiFetch('/api/admin/stripe-health', { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) {
         const j = await res.json().catch(() => null);
         alert(j?.error?.message || t('common.error'));

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { apiFetch } from '../../api/client';
 
 interface TopItem {
   itemName: string;
@@ -116,7 +117,7 @@ export default function ReportDashboard() {
       const params = new URLSearchParams();
       params.set('startDate', startDate);
       params.set('endDate', endDate);
-      const res = await fetch(`/api/reports/detailed?${params}`, {
+      const res = await apiFetch(`/api/reports/detailed?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) setStats(await res.json());
@@ -129,7 +130,7 @@ export default function ReportDashboard() {
     setPdfExporting(true);
     try {
       const params = new URLSearchParams({ startDate, endDate });
-      const res = await fetch(`/api/reports/vat-pdf?${params}`, {
+      const res = await apiFetch(`/api/reports/vat-pdf?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
@@ -177,7 +178,7 @@ export default function ReportDashboard() {
       for (const [k, v] of Object.entries(config.filters)) {
         if (v) params.set(k, v);
       }
-      const res = await fetch(`/api/reports/orders?${params}`, {
+      const res = await apiFetch(`/api/reports/orders?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) setModalOrders(await res.json());
@@ -192,7 +193,7 @@ export default function ReportDashboard() {
     setItemOptionStats(null);
     try {
       const params = new URLSearchParams({ itemName, startDate, endDate });
-      const res = await fetch(`/api/reports/item-options?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await apiFetch(`/api/reports/item-options?${params}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) setItemOptionStats(await res.json());
     } catch { /* ignore */ }
     finally { setItemOptionLoading(false); }

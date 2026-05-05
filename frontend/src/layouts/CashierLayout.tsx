@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useCallback } from 'react';
@@ -7,9 +7,11 @@ import { playDineInSound, playTakeoutSound, unlockAudio } from '../utils/orderSo
 import { printViaIframe } from '../components/cashier/ReceiptPrint';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useRestaurantConfig } from '../hooks/useRestaurantConfig';
+import { apiFetch } from '../api/client';
 
 export default function CashierLayout() {
   const { user, logout, token } = useAuth();
+  const { storeSlug } = useParams<{ storeSlug: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { displayName } = useRestaurantConfig();
@@ -36,23 +38,27 @@ export default function CashierLayout() {
   }, []);
 
   useEffect(() => {
-    const socket = io({ transports: ['websocket'] });
+    const query = user?.storeId ? { storeId: user.storeId } : {};
+    const socket = io({ transports: ['websocket'], query });
     socket.on('order:new', (order: { type?: string }) => {
       if (order?.type === 'takeout') playTakeoutSound();
       else playDineInSound();
     });
     return () => { socket.disconnect(); };
-  }, []);
+  }, [user?.storeId]);
 
-  const handleLogout = () => { logout(); navigate('/login'); };
+  const handleLogout = () => {
+    logout();
+    navigate(`/${storeSlug}/login`);
+  };
 
   const handleSettle = useCallback(async () => {
     setSettling(true);
     try {
       const today = new Date().toISOString().slice(0, 10);
       const [statsRes, configRes] = await Promise.all([
-        fetch(`/api/reports/detailed?startDate=${today}&endDate=${today}`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/admin/config'),
+        apiFetch(`/api/reports/detailed?startDate=${today}&endDate=${today}`, { headers: { Authorization: `Bearer ${token}` } }),
+        apiFetch('/api/admin/config'),
       ]);
       if (!statsRes.ok) { alert('Failed to load report'); return; }
       const stats = await statsRes.json();
@@ -141,13 +147,13 @@ export default function CashierLayout() {
         display: 'flex', gap: 0, background: 'var(--bg-white)',
         borderBottom: '2px solid var(--border)', flexShrink: 0, paddingLeft: 16,
       }}>
-        <NavLink to="/cashier" end style={({ isActive }) => tabStyle(isActive)}>{t('cashier.dineIn')}</NavLink>
-        <NavLink to="/cashier/takeout" style={({ isActive }) => tabStyle(isActive)}>{t('cashier.takeout')}</NavLink>
-        <NavLink to="/cashier/delivery" style={({ isActive }) => tabStyle(isActive)}>{t('cashier.delivery')}</NavLink>
-        <NavLink to="/cashier/phone" style={({ isActive }) => tabStyle(isActive)}>📞 {t('cashier.phone', 'Phone')}</NavLink>
-        <NavLink to="/cashier/order" style={({ isActive }) => tabStyle(isActive)}>{t('cashier.newOrder', '点单')}</NavLink>
-        <NavLink to="/cashier/reprint" style={({ isActive }) => tabStyle(isActive)}>{t('cashier.reprint', '重印小票')}</NavLink>
-        <NavLink to="/cashier/inventory" style={({ isActive }) => tabStyle(isActive)}>{t('admin.inventory', '库存')}</NavLink>
+        <NavLink to="." end style={({ isActive }) => tabStyle(isActive)}>{t('cashier.dineIn')}</NavLink>
+        <NavLink to="takeout" style={({ isActive }) => tabStyle(isActive)}>{t('cashier.takeout')}</NavLink>
+        <NavLink to="delivery" style={({ isActive }) => tabStyle(isActive)}>{t('cashier.delivery')}</NavLink>
+        <NavLink to="phone" style={({ isActive }) => tabStyle(isActive)}>📞 {t('cashier.phone', 'Phone')}</NavLink>
+        <NavLink to="order" style={({ isActive }) => tabStyle(isActive)}>{t('cashier.newOrder', '点单')}</NavLink>
+        <NavLink to="reprint" style={({ isActive }) => tabStyle(isActive)}>{t('cashier.reprint', '重印小票')}</NavLink>
+        <NavLink to="inventory" style={({ isActive }) => tabStyle(isActive)}>{t('admin.inventory', '库存')}</NavLink>
       </div>
 
       {/* Content */}

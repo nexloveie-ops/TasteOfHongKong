@@ -5,5 +5,4 @@ const SystemConfigSchema = new mongoose.Schema({
   value: { type: String, required: true },
 }, { timestamps: true });
 
-export const SystemConfig = mongoose.model('SystemConfig', SystemConfigSchema, 'system_configs');
 export { SystemConfigSchema };

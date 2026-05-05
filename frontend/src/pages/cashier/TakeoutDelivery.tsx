@@ -1,27 +1,38 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { io } from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
+import { apiFetch } from '../../api/client';
 
 interface OrderItem { _id: string; quantity: number; unitPrice: number; itemName: string; }
 interface PendingOrder { _id: string; dailyOrderNumber?: number; items: OrderItem[]; createdAt: string; }
 
 export default function TakeoutDelivery() {
   const { t } = useTranslation();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [orders, setOrders] = useState<PendingOrder[]>([]);
 
   const fetchPending = useCallback(async () => {
     try {
-      const res = await fetch('/api/orders/takeout/pending', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await apiFetch('/api/orders/takeout/pending', { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) setOrders(await res.json());
     } catch { /* ignore */ }
   }, [token]);
 
   useEffect(() => { fetchPending(); }, [fetchPending]);
 
+  useEffect(() => {
+    const query = user?.storeId ? { storeId: user.storeId } : {};
+    const socket = io({ transports: ['websocket'], query });
+    socket.on('order:new', fetchPending);
+    socket.on('order:updated', fetchPending);
+    socket.on('order:checked-out', fetchPending);
+    return () => { socket.disconnect(); };
+  }, [fetchPending, user?.storeId]);
+
   const markComplete = async (id: string) => {
     try {
-      await fetch(`/api/orders/takeout/${id}/complete`, {
+      await apiFetch(`/api/orders/takeout/${id}/complete`, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}` },
       });

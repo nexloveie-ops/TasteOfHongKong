@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useCart } from '../../context/CartContext';
 import type { CartItem } from '../../context/CartContext';
 import PaymentModal from '../../components/customer/PaymentModal';
+import { apiFetch } from '../../api/client';
 
 interface OrderItem { _id: string; menuItemId: string; quantity: number; unitPrice: number; itemName: string; itemNameEn?: string; selectedOptions?: { groupName: string; groupNameEn?: string; choiceName: string; choiceNameEn?: string; extraPrice: number }[]; }
 interface AppliedBundle { offerId?: string; name: string; nameEn?: string; discount: number; }
@@ -14,7 +15,7 @@ interface Order {
 }
 
 export default function OrderStatusPage() {
-  const { orderId } = useParams();
+  const { orderId, storeSlug } = useParams<{ orderId: string; storeSlug: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
@@ -24,10 +25,11 @@ export default function OrderStatusPage() {
   const [loading, setLoading] = useState(true);
   const [showPayment, setShowPayment] = useState(false);
   const qs = searchParams.toString();
+  const menuHref = storeSlug ? `/${storeSlug}/customer/menu${qs ? `?${qs}` : ''}` : '/';
 
   const fetchOrder = useCallback(async () => {
     try {
-      const res = await fetch(`/api/orders/${orderId}`);
+      const res = await apiFetch(`/api/orders/${orderId}`);
       if (!res.ok) throw new Error();
       setOrder(await res.json());
     } catch { setOrder(null); }
@@ -45,7 +47,7 @@ export default function OrderStatusPage() {
     if (!order) return;
     try {
       // Fetch menu items to resolve groupId/choiceId from stored groupName/choiceName
-      const menuRes = await fetch('/api/menu/items');
+      const menuRes = await apiFetch('/api/menu/items');
       const menuItems: {
         _id: string;
         optionGroups?: {
@@ -100,9 +102,9 @@ export default function OrderStatusPage() {
       clearCart();
       setItems(cartItems);
       setEditOrderId(order._id);
-      navigate(`/customer/menu?${qs}`);
+      navigate(menuHref);
     } catch {
-      navigate(`/customer/menu?${qs}`);
+      navigate(menuHref);
     }
   };
 
@@ -213,7 +215,7 @@ export default function OrderStatusPage() {
               <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleModifyOrder}>
                 {t('customer.modifyOrder')}
               </button>
-              <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => navigate(`/customer/menu?${qs}`)}>
+              <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => navigate(menuHref)}>
                 {t('customer.backToMenu')}
               </button>
             </div>
@@ -221,8 +223,8 @@ export default function OrderStatusPage() {
               onClick={async () => {
                 if (!confirm(t('customer.confirmCancel'))) return;
                 try {
-                  const res = await fetch(`/api/orders/${order._id}`, { method: 'DELETE' });
-                  if (res.ok) navigate(`/customer/menu?${qs}`, { replace: true });
+                  const res = await apiFetch(`/api/orders/${order._id}`, { method: 'DELETE' });
+                  if (res.ok) navigate(menuHref, { replace: true });
                 } catch { /* ignore */ }
               }}
               style={{
@@ -239,7 +241,7 @@ export default function OrderStatusPage() {
             <div style={{ padding: '12px 16px', background: '#E8F5E9', border: '2px solid #4CAF50', borderRadius: 10, textAlign: 'center', fontSize: 14, color: '#2E7D32', fontWeight: 600 }}>
               ✅ {t('customer.paymentSuccess')}
             </div>
-            <button className="btn btn-outline" style={{ width: '100%' }} onClick={() => navigate(`/customer/menu?${qs}`)}>
+            <button className="btn btn-outline" style={{ width: '100%' }} onClick={() => navigate(menuHref)}>
               {t('customer.backToMenu')}
             </button>
           </div>
@@ -249,7 +251,7 @@ export default function OrderStatusPage() {
             <p style={{ color: 'var(--text-light)', fontSize: 13, textAlign: 'center', width: '100%' }}>
               {t('customer.orderNotModifiable')}
             </p>
-            <button className="btn btn-outline" style={{ width: '100%' }} onClick={() => navigate(`/customer/menu?${qs}`)}>
+            <button className="btn btn-outline" style={{ width: '100%' }} onClick={() => navigate(menuHref)}>
               {t('customer.backToMenu')}
             </button>
           </div>

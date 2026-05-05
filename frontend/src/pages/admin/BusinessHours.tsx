@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { apiFetch } from '../../api/client';
 
 interface BusinessSlot {
   start: string;
@@ -41,7 +42,7 @@ export default function BusinessHours() {
   const [message, setMessage] = useState('');
 
   const fetchConfig = useCallback(async () => {
-    const res = await fetch('/api/admin/config', { headers: { Authorization: `Bearer ${token}` } });
+    const res = await apiFetch('/api/admin/config', { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) return;
     const data = await res.json() as Record<string, string>;
     setSlots(parseSlots(data.business_hours_slots));
@@ -60,7 +61,7 @@ export default function BusinessHours() {
         business_hours_slots: JSON.stringify(slots),
         business_closed_dates: JSON.stringify([...new Set(closedDates)].sort()),
       };
-      const res = await fetch('/api/admin/config', {
+      const res = await apiFetch('/api/admin/config', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

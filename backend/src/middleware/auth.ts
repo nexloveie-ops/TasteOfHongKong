@@ -8,7 +8,9 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-do-not-use-in-productio
 export interface JwtPayload {
   userId: string;
   username: string;
-  role: Role;
+  role: Role | 'platform_owner';
+  /** 店内账号；platform_owner 无此字段 */
+  storeId?: string;
 }
 
 declare global {
@@ -30,7 +32,8 @@ export function getJwtSecret(): string {
 export function authMiddleware(req: Request, _res: Response, next: NextFunction): void {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw createAppError('UNAUTHORIZED', 'Missing or invalid authorization token');
+    next(createAppError('UNAUTHORIZED', 'Missing or invalid authorization token'));
+    return;
   }
 
   const token = authHeader.slice(7);
@@ -39,7 +42,7 @@ export function authMiddleware(req: Request, _res: Response, next: NextFunction)
     req.user = decoded;
     next();
   } catch {
-    throw createAppError('UNAUTHORIZED', 'Invalid or expired token');
+    next(createAppError('UNAUTHORIZED', 'Invalid or expired token'));
   }
 }
 
@@ -50,11 +53,13 @@ export function authMiddleware(req: Request, _res: Response, next: NextFunction)
 export function requirePermission(permission: string) {
   return (req: Request, _res: Response, next: NextFunction): void => {
     if (!req.user) {
-      throw createAppError('UNAUTHORIZED', 'Authentication required');
+      next(createAppError('UNAUTHORIZED', 'Authentication required'));
+      return;
     }
 
     if (!hasPermission(req.user.role as Role, permission)) {
-      throw createAppError('FORBIDDEN', 'Insufficient permissions');
+      next(createAppError('FORBIDDEN', 'Insufficient permissions'));
+      return;
     }
 
     next();

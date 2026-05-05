@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { apiFetch } from '../../api/client';
 
 interface CouponData { _id: string; name: string; nameEn: string; amount: number; active: boolean; }
 
@@ -18,7 +19,7 @@ export default function CouponManager() {
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
 
   const fetchCoupons = useCallback(async () => {
-    const res = await fetch('/api/coupons/all', { headers: { Authorization: `Bearer ${token}` } });
+    const res = await apiFetch('/api/coupons/all', { headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) setCoupons(await res.json());
   }, [token]);
 
@@ -36,19 +37,19 @@ export default function CouponManager() {
     const body = { name, nameEn, amount: parseFloat(amount), active };
     const url = editing ? `/api/coupons/${editing._id}` : '/api/coupons';
     const method = editing ? 'PUT' : 'POST';
-    const res = await fetch(url, { method, headers, body: JSON.stringify(body) });
+    const res = await apiFetch(url, { method, headers, body: JSON.stringify(body) });
     if (res.ok) { setShowForm(false); resetForm(); fetchCoupons(); }
     else { const d = await res.json().catch(() => null); alert(d?.error?.message || 'Failed'); }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('确认删除？')) return;
-    await fetch(`/api/coupons/${id}`, { method: 'DELETE', headers });
+    await apiFetch(`/api/coupons/${id}`, { method: 'DELETE', headers });
     fetchCoupons();
   };
 
   const handleToggle = async (c: CouponData) => {
-    await fetch(`/api/coupons/${c._id}`, { method: 'PUT', headers, body: JSON.stringify({ active: !c.active }) });
+    await apiFetch(`/api/coupons/${c._id}`, { method: 'PUT', headers, body: JSON.stringify({ active: !c.active }) });
     fetchCoupons();
   };
 

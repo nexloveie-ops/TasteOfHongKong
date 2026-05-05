@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { apiFetch } from '../../api/client';
 
 interface Translation { locale: string; name: string; description?: string; }
 interface Category { _id: string; translations: Translation[]; }
@@ -34,9 +35,9 @@ export default function MenuItemManager() {
 
   const fetchData = useCallback(async () => {
     const [catRes, itemRes, allergenRes] = await Promise.all([
-      fetch('/api/menu/categories', { headers: authHeaders }),
-      fetch('/api/menu/items?ownOptionGroups=1', { headers: authHeaders }),
-      fetch('/api/allergens', { headers: authHeaders }),
+      apiFetch('/api/menu/categories', { headers: authHeaders }),
+      apiFetch('/api/menu/items?ownOptionGroups=1', { headers: authHeaders }),
+      apiFetch('/api/allergens', { headers: authHeaders }),
     ]);
     if (catRes.ok) setCategories(await catRes.json());
     if (itemRes.ok) setItems(await itemRes.json());
@@ -106,9 +107,9 @@ export default function MenuItemManager() {
     try {
       let res: Response;
       if (editingId) {
-        res = await fetch(`/api/menu/items/${editingId}`, { method: 'PUT', headers, body: JSON.stringify(body) });
+        res = await apiFetch(`/api/menu/items/${editingId}`, { method: 'PUT', headers, body: JSON.stringify(body) });
       } else {
-        res = await fetch('/api/menu/items', { method: 'POST', headers, body: JSON.stringify(body) });
+        res = await apiFetch('/api/menu/items', { method: 'POST', headers, body: JSON.stringify(body) });
       }
       if (!res.ok) {
         const data = await res.json().catch(() => null);
@@ -124,20 +125,20 @@ export default function MenuItemManager() {
 
   const handleDelete = async (id: string) => {
     if (!confirm(t('common.confirm') + '?')) return;
-    await fetch(`/api/menu/items/${id}`, { method: 'DELETE', headers });
+    await apiFetch(`/api/menu/items/${id}`, { method: 'DELETE', headers });
     fetchData();
   };
 
   const uploadPhoto = async (id: string, file: File) => {
     const fd = new FormData(); fd.append('photo', file);
-    await fetch(`/api/menu/items/${id}/photo`, { method: 'POST', headers: authHeaders, body: fd });
+    await apiFetch(`/api/menu/items/${id}/photo`, { method: 'POST', headers: authHeaders, body: fd });
     fetchData();
   };
 
   const uploadAR = async (id: string, file: File) => {
     const fd = new FormData(); fd.append('ar', file);
     try {
-      const res = await fetch(`/api/menu/items/${id}/ar`, { method: 'POST', headers: authHeaders, body: fd });
+      const res = await apiFetch(`/api/menu/items/${id}/ar`, { method: 'POST', headers: authHeaders, body: fd });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         alert(data?.error?.message || `AR upload failed (${res.status})`);

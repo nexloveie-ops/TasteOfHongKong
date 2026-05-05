@@ -10,5 +10,4 @@ const MenuCategorySchema = new mongoose.Schema({
   translations: [CategoryTranslationSchema],
 }, { timestamps: true });
 
-export const MenuCategory = mongoose.model('MenuCategory', MenuCategorySchema, 'menu_categories');
 export { MenuCategorySchema, CategoryTranslationSchema };

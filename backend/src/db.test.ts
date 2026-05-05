@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
-// Mock mongoose before importing db module
+jest.mock('./models-lzfood', () => ({
+  registerLZFoodModels: jest.fn(() => ({})),
+  ensureLZFoodIndexes: jest.fn().mockImplementation(async () => {}),
+}));
+
 jest.mock('mongoose', () => ({
   connect: jest.fn(),
 }));
@@ -14,7 +18,6 @@ describe('connectDB', () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
-    jest.resetModules();
     process.env = { ...originalEnv };
     mockedConnect.mockReset();
   });
@@ -23,16 +26,26 @@ describe('connectDB', () => {
     process.env = originalEnv;
   });
 
-  it('should throw if DBCON is not set', async () => {
+  it('should throw if no DB URI is set', async () => {
     delete process.env.DBCON;
-    await expect(connectDB()).rejects.toThrow('环境变量 DBCON 未设置');
+    delete process.env.LZFOOD_DBCON;
+    await expect(connectDB()).rejects.toThrow('环境变量 DBCON 或 LZFOOD_DBCON 至少设置其一');
   });
 
   it('should call mongoose.connect with DBCON value', async () => {
     process.env.DBCON = 'mongodb+srv://test:pass@host/?appName=test';
-    mockedConnect.mockResolvedValueOnce(mongoose);
+    delete process.env.LZFOOD_DBCON;
+    mockedConnect.mockResolvedValueOnce(mongoose as unknown as typeof mongoose);
     await connectDB();
     expect(mockedConnect).toHaveBeenCalledWith('mongodb+srv://test:pass@host/?appName=test');
+  });
+
+  it('should prefer LZFOOD_DBCON when set', async () => {
+    process.env.LZFOOD_DBCON = 'mongodb+srv://lz:food@host/?appName=LZ';
+    process.env.DBCON = 'mongodb+srv://other@host/';
+    mockedConnect.mockResolvedValueOnce(mongoose as unknown as typeof mongoose);
+    await connectDB();
+    expect(mockedConnect).toHaveBeenCalledWith('mongodb+srv://lz:food@host/?appName=LZ');
   });
 
   it('should propagate mongoose connection errors', async () => {

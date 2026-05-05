@@ -6,5 +6,4 @@ const AdminSchema = new mongoose.Schema({
   role: { type: String, enum: ['owner', 'cashier'], required: true },
 }, { timestamps: true });
 
-export const Admin = mongoose.model('Admin', AdminSchema, 'admins');
 export { AdminSchema };

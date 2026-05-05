@@ -1,5 +1,9 @@
 /// <reference types="vite/client" />
 
+interface ImportMetaEnv {
+  readonly VITE_DEFAULT_STORE_SLUG?: string;
+}
+
 /* Type declarations for @google/model-viewer web component */
 declare namespace React.JSX {
   interface IntrinsicElements {

@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { apiFetch } from '../../api/client';
 
 interface ReceiptOrderItem {
   _id: string;
@@ -238,8 +239,8 @@ export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, b
     async function fetchData() {
       try {
         const [receiptRes, configRes] = await Promise.all([
-          fetch(`/api/checkout/receipt/${checkoutId}`),
-          fetch('/api/admin/config'),
+          apiFetch(`/api/checkout/receipt/${checkoutId}`),
+          apiFetch('/api/admin/config'),
         ]);
         if (!receiptRes.ok) throw new Error('Failed to fetch receipt');
         setReceipt(await receiptRes.json());

@@ -1,19 +1,28 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { Checkout } from '../models/Checkout';
-import { Order } from '../models/Order';
-import { authMiddleware, requirePermission } from '../middleware/auth';
+import mongoose from 'mongoose';
+import { getModels } from '../getModels';
+import { requirePermission } from '../middleware/auth';
+import { requireAuthSameStore } from '../middleware/authForStore';
 import { createAppError } from '../middleware/errorHandler';
 import { aggregateVatSalesByMonth } from '../utils/vatReportAggregation';
 import { buildVatReportPdfBuffer } from '../utils/vatReportPdf';
 
+function reportModels() {
+  return getModels() as {
+    Order: mongoose.Model<any>;
+    Checkout: mongoose.Model<any>;
+  };
+}
+
 const router = Router();
 
 // GET /api/reports/orders — Order history query (requires auth + report:view)
-router.get('/orders', authMiddleware, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/orders', ...requireAuthSameStore, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { Order, Checkout } = reportModels();
     const { startDate, endDate, type, paymentMethod, source, status } = req.query;
 
-    const filter: Record<string, unknown> = {};
+    const filter: Record<string, unknown> = { storeId: req.storeId };
 
     if (status === 'refunded') {
       // Find orders that have ANY refunded items (partial or full)
@@ -51,7 +60,7 @@ router.get('/orders', authMiddleware, requirePermission('report:view'), async (r
 
     // Attach checkout info to each order
     const orderIds = orders.map(o => o._id);
-    const checkouts = await Checkout.find({ orderIds: { $in: orderIds } }).lean();
+    const checkouts = await Checkout.find({ storeId: req.storeId, orderIds: { $in: orderIds } }).lean();
 
     const orderCheckoutMap = new Map<string, typeof checkouts[0]>();
     for (const c of checkouts) {
@@ -61,7 +70,7 @@ router.get('/orders', authMiddleware, requirePermission('report:view'), async (r
     }
 
     let result = orders.map(order => {
-      const checkout = orderCheckoutMap.get(order._id.toString());
+      const checkout = orderCheckoutMap.get(String(order._id));
       return {
         ...order,
         checkout: checkout ? {
@@ -102,11 +111,12 @@ router.get('/orders', authMiddleware, requirePermission('report:view'), async (r
 });
 
 // GET /api/reports/summary — Revenue summary (requires auth + report:view)
-router.get('/summary', authMiddleware, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/summary', ...requireAuthSameStore, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { Checkout } = reportModels();
     const { startDate, endDate } = req.query;
 
-    const filter: Record<string, unknown> = {};
+    const filter: Record<string, unknown> = { storeId: req.storeId };
 
     if (startDate || endDate) {
       const dateFilter: Record<string, Date> = {};
@@ -150,8 +160,9 @@ router.get('/summary', authMiddleware, requirePermission('report:view'), async (
 });
 
 // GET /api/reports/detailed — Detailed stats with order breakdown and top items (requires auth + report:view)
-router.get('/detailed', authMiddleware, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { Order, Checkout } = reportModels();
     const { startDate, endDate } = req.query;
 
     const dateFilter: Record<string, Date> = {};
@@ -164,6 +175,7 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
 
     // Fetch ALL orders in date range (including refunded, excluding hidden)
     const orderFilter: Record<string, unknown> = {
+      storeId: req.storeId,
       status: { $in: ['checked_out', 'completed', 'refunded'] },
     };
     if (startDate || endDate) {
@@ -174,7 +186,7 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
 
     // Attach checkout info
     const orderIds = allOrders.map(o => o._id);
-    const checkouts = await Checkout.find({ orderIds: { $in: orderIds } }).lean();
+    const checkouts = await Checkout.find({ storeId: req.storeId, orderIds: { $in: orderIds } }).lean();
     const orderCheckoutMap = new Map<string, typeof checkouts[0]>();
     for (const c of checkouts) {
       for (const oid of c.orderIds) {
@@ -199,7 +211,7 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
     const countedCheckoutIds = new Set<string>();
 
     for (const order of allOrders) {
-      const checkout = orderCheckoutMap.get(order._id.toString());
+      const checkout = orderCheckoutMap.get(String(order._id));
       if (checkout) {
         const cid = (checkout as unknown as { _id: { toString(): string } })._id.toString();
         if (!countedCheckoutIds.has(cid)) {
@@ -258,7 +270,7 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
     let mixedRefund = 0;
     let onlineRefund = 0;
     for (const order of allOrders) {
-      const checkout = orderCheckoutMap.get(order._id.toString());
+      const checkout = orderCheckoutMap.get(String(order._id));
       const pm = checkout?.paymentMethod;
       const refundedItems = order.items.filter((item: { refunded?: boolean }) => (item as unknown as { refunded?: boolean }).refunded);
       if (refundedItems.length === 0) continue;
@@ -323,7 +335,7 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
     let phoneRevenue = 0;
 
     for (const order of activeOrders) {
-      const checkout = orderCheckoutMap.get(order._id.toString());
+      const checkout = orderCheckoutMap.get(String(order._id));
       const orderItemTotal = order.items.reduce((s: number, i: { unitPrice: number; quantity: number }) => s + i.unitPrice * i.quantity, 0);
       if (order.type === 'dine_in') {
         dineInCount++;
@@ -411,14 +423,14 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
 });
 
 // GET /api/reports/vat-pdf?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD — VAT worksheet PDF (IE Food 13.5% / Drink 23%)
-router.get('/vat-pdf', authMiddleware, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/vat-pdf', ...requireAuthSameStore, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { startDate, endDate } = req.query;
     if (!startDate || !endDate || typeof startDate !== 'string' || typeof endDate !== 'string') {
       throw createAppError('VALIDATION_ERROR', 'startDate and endDate are required (YYYY-MM-DD)');
     }
 
-    const { byMonth, storeInfo } = await aggregateVatSalesByMonth(startDate, endDate);
+    const { byMonth, storeInfo } = await aggregateVatSalesByMonth(req.storeId!, startDate, endDate);
     const buf = await buildVatReportPdfBuffer(storeInfo, byMonth, `${startDate} - ${endDate}`);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="vat-report-${startDate}_${endDate}.pdf"`);
@@ -430,12 +442,14 @@ router.get('/vat-pdf', authMiddleware, requirePermission('report:view'), async (
 
 // GET /api/reports/item-options?itemName=xxx&startDate=xxx&endDate=xxx
 // Returns option choice stats for a specific menu item (includes extraPrice === 0, e.g. combo sides)
-router.get('/item-options', authMiddleware, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/item-options', ...requireAuthSameStore, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { Order } = reportModels();
     const { itemName, startDate, endDate } = req.query;
     if (!itemName) throw createAppError('VALIDATION_ERROR', 'itemName is required');
 
     const filter: Record<string, unknown> = {
+      storeId: req.storeId,
       status: { $in: ['checked_out', 'completed', 'refunded'] },
       'items.itemName': itemName,
     };

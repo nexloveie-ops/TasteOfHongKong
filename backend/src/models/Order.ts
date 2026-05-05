@@ -35,5 +35,4 @@ const OrderSchema = new mongoose.Schema({
   completedAt: { type: Date },
 }, { timestamps: true });
 
-export const Order = mongoose.model('Order', OrderSchema, 'orders');
 export { OrderSchema, OrderItemSubdocSchema };

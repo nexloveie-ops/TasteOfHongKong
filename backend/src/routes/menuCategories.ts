@@ -1,25 +1,25 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
-import { MenuCategory } from '../models/MenuCategory';
-import { MenuItem } from '../models/MenuItem';
-import { authMiddleware, requirePermission } from '../middleware/auth';
+import { getModels } from '../getModels';
+import { requirePermission } from '../middleware/auth';
+import { requireAuthSameStore } from '../middleware/authForStore';
 import { createAppError } from '../middleware/errorHandler';
 
 const router = Router();
 
 /**
  * GET /api/menu/categories
- * Public endpoint — returns all categories sorted by sortOrder.
- * Supports optional ?lang query param to filter translations by locale.
+ * Public — requires store context (X-Store-Slug / DEFAULT_STORE_SLUG).
  */
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { MenuCategory } = getModels();
     const lang = req.query.lang as string | undefined;
-    const categories = await MenuCategory.find().sort({ sortOrder: 1 }).lean();
+    const categories = await MenuCategory.find({ storeId: req.storeId }).sort({ sortOrder: 1 }).lean();
 
     if (lang) {
-      const filtered = categories.map((cat) => {
-        const translation = cat.translations.find(
+      const filtered = (categories as { translations?: { locale: string; name: string }[] }[]).map((cat) => {
+        const translation = (cat.translations || []).find(
           (t: { locale: string; name: string }) => t.locale === lang
         );
         return {
@@ -36,16 +36,13 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
-/**
- * POST /api/menu/categories
- * Creates a new menu category. Requires auth + menu:write permission.
- */
 router.post(
   '/',
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('menu:write'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { MenuCategory } = getModels();
       const { sortOrder, translations } = req.body;
 
       if (sortOrder == null || !Array.isArray(translations) || translations.length === 0) {
@@ -64,7 +61,11 @@ router.post(
         }
       }
 
-      const category = await MenuCategory.create({ sortOrder, translations });
+      const category = await MenuCategory.create({
+        storeId: req.storeId,
+        sortOrder,
+        translations,
+      });
       res.status(201).json(category);
     } catch (err) {
       next(err);
@@ -72,26 +73,25 @@ router.post(
   }
 );
 
-/**
- * PUT /api/menu/categories/reorder
- * Batch update sort orders. Requires auth + menu:write permission.
- * Body: { order: [{ id: string, sortOrder: number }] }
- */
 router.put(
   '/reorder',
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('menu:write'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { MenuCategory } = getModels();
       const { order } = req.body;
       if (!Array.isArray(order)) {
         throw createAppError('VALIDATION_ERROR', 'order must be an array');
       }
       for (const item of order) {
         if (!item.id || item.sortOrder == null) continue;
-        await MenuCategory.findByIdAndUpdate(item.id, { sortOrder: item.sortOrder });
+        await MenuCategory.findOneAndUpdate(
+          { _id: item.id, storeId: req.storeId },
+          { sortOrder: item.sortOrder },
+        );
       }
-      const categories = await MenuCategory.find().sort({ sortOrder: 1 }).lean();
+      const categories = await MenuCategory.find({ storeId: req.storeId }).sort({ sortOrder: 1 }).lean();
       res.json(categories);
     } catch (err) {
       next(err);
@@ -99,16 +99,13 @@ router.put(
   }
 );
 
-/**
- * PUT /api/menu/categories/:id
- * Updates an existing menu category. Requires auth + menu:write permission.
- */
 router.put(
   '/:id',
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('menu:write'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { MenuCategory } = getModels();
       const id = req.params.id as string;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -136,10 +133,11 @@ router.put(
       if (sortOrder != null) updateData.sortOrder = sortOrder;
       if (translations) updateData.translations = translations;
 
-      const updated = await MenuCategory.findByIdAndUpdate(id, updateData, {
-        new: true,
-        runValidators: true,
-      });
+      const updated = await MenuCategory.findOneAndUpdate(
+        { _id: id, storeId: req.storeId },
+        updateData,
+        { new: true, runValidators: true },
+      );
 
       if (!updated) {
         throw createAppError('NOT_FOUND', 'Category not found');
@@ -152,36 +150,32 @@ router.put(
   }
 );
 
-/**
- * DELETE /api/menu/categories/:id
- * Deletes a menu category. Requires auth + menu:write permission.
- * Returns 409 CATEGORY_HAS_ITEMS if any MenuItem references this category.
- */
 router.delete(
   '/:id',
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('menu:write'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { MenuCategory, MenuItem } = getModels();
       const id = req.params.id as string;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
         throw createAppError('NOT_FOUND', 'Category not found');
       }
 
-      const category = await MenuCategory.findById(id);
+      const category = await MenuCategory.findOne({ _id: id, storeId: req.storeId });
       if (!category) {
         throw createAppError('NOT_FOUND', 'Category not found');
       }
 
-      const itemCount = await MenuItem.countDocuments({ categoryId: id });
+      const itemCount = await MenuItem.countDocuments({ categoryId: id, storeId: req.storeId });
       if (itemCount > 0) {
         throw createAppError('CATEGORY_HAS_ITEMS', 'Cannot delete category with associated menu items', {
           count: itemCount,
         });
       }
 
-      await MenuCategory.findByIdAndDelete(id);
+      await MenuCategory.findOneAndDelete({ _id: id, storeId: req.storeId });
       res.json({ message: 'Category deleted successfully' });
     } catch (err) {
       next(err);

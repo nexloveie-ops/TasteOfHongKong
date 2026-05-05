@@ -4,13 +4,20 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import { MenuItem } from '../models/MenuItem';
-import { MenuCategory } from '../models/MenuCategory';
-import { authMiddleware, requirePermission } from '../middleware/auth';
+import { getModels } from '../getModels';
+import { requirePermission } from '../middleware/auth';
+import { requireAuthSameStore } from '../middleware/authForStore';
 import { createAppError } from '../middleware/errorHandler';
 import { uploadFile } from '../storage';
 import { mergeTemplateOptionGroupsForItems } from '../utils/optionGroupTemplateApply';
 import { validateOptionGroups } from '../utils/optionGroups';
+
+function menuModels() {
+  return getModels() as {
+    MenuItem: mongoose.Model<any>;
+    MenuCategory: mongoose.Model<any>;
+  };
+}
 
 const router = Router();
 
@@ -39,9 +46,10 @@ const tempUpload = multer({
  */
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { MenuItem } = menuModels();
     // Auto-restore sold-out items whose soldOutUntil has passed
     await MenuItem.updateMany(
-      { isSoldOut: true, soldOutUntil: { $ne: null, $lte: new Date() } },
+      { storeId: req.storeId, isSoldOut: true, soldOutUntil: { $ne: null, $lte: new Date() } },
       { isSoldOut: false, soldOutUntil: null }
     );
 
@@ -52,7 +60,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       req.query.ownOptionGroups === 'true' ||
       req.query.mergeTemplates === 'false';
 
-    const filter: Record<string, unknown> = {};
+    const filter: Record<string, unknown> = { storeId: req.storeId };
     if (category) {
       if (!mongoose.Types.ObjectId.isValid(category)) {
         throw createAppError('VALIDATION_ERROR', 'Invalid category ID');
@@ -61,7 +69,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     }
 
     const items = await MenuItem.find(filter).lean();
-    const baseItems = ownOnly ? items : await mergeTemplateOptionGroupsForItems(items);
+    const baseItems = ownOnly ? items : await mergeTemplateOptionGroupsForItems(req.storeId!, items);
 
     if (lang) {
       const filtered = baseItems.map((item) => {
@@ -88,10 +96,11 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
  */
 router.post(
   '/',
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('menu:write'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { MenuItem, MenuCategory } = menuModels();
       const { categoryId, price, calories, avgWaitMinutes, photoUrl, arFileUrl, isSoldOut, translations, allergenIds, optionGroups } = req.body;
 
       if (!categoryId || price == null || !Array.isArray(translations) || translations.length === 0) {
@@ -105,7 +114,7 @@ router.post(
         throw createAppError('VALIDATION_ERROR', 'Invalid categoryId');
       }
 
-      const categoryExists = await MenuCategory.findById(categoryId);
+      const categoryExists = await MenuCategory.findOne({ _id: categoryId, storeId: req.storeId });
       if (!categoryExists) {
         throw createAppError('VALIDATION_ERROR', 'Category not found');
       }
@@ -124,6 +133,7 @@ router.post(
       }
 
       const item = await MenuItem.create({
+        storeId: req.storeId,
         categoryId,
         price,
         calories,
@@ -149,10 +159,11 @@ router.post(
  */
 router.put(
   '/:id',
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('menu:write'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { MenuItem, MenuCategory } = menuModels();
       const id = req.params.id as string;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -165,7 +176,7 @@ router.put(
         if (!mongoose.Types.ObjectId.isValid(categoryId)) {
           throw createAppError('VALIDATION_ERROR', 'Invalid categoryId');
         }
-        const categoryExists = await MenuCategory.findById(categoryId);
+        const categoryExists = await MenuCategory.findOne({ _id: categoryId, storeId: req.storeId });
         if (!categoryExists) {
           throw createAppError('VALIDATION_ERROR', 'Category not found');
         }
@@ -202,7 +213,7 @@ router.put(
         throw createAppError('VALIDATION_ERROR', 'At least one field must be provided for update');
       }
 
-      const updated = await MenuItem.findByIdAndUpdate(id, updateData, {
+      const updated = await MenuItem.findOneAndUpdate({ _id: id, storeId: req.storeId }, updateData, {
         new: true,
         runValidators: true,
       });
@@ -224,17 +235,18 @@ router.put(
  */
 router.delete(
   '/:id',
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('menu:write'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { MenuItem } = menuModels();
       const id = req.params.id as string;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
         throw createAppError('NOT_FOUND', 'Menu item not found');
       }
 
-      const deleted = await MenuItem.findByIdAndDelete(id);
+      const deleted = await MenuItem.findOneAndDelete({ _id: id, storeId: req.storeId });
       if (!deleted) {
         throw createAppError('NOT_FOUND', 'Menu item not found');
       }
@@ -253,7 +265,7 @@ router.delete(
  */
 router.put(
   '/:id/sold-out',
-  authMiddleware,
+  ...requireAuthSameStore,
   (req: Request, _res: Response, next: NextFunction) => {
     // Allow either menu:write (owner) or menu:sold-out (cashier)
     if (!req.user) { next(createAppError('UNAUTHORIZED', 'Authentication required')); return; }
@@ -263,6 +275,7 @@ router.put(
   },
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { MenuItem } = menuModels();
       const id = req.params.id as string;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -281,8 +294,8 @@ router.put(
         updateData.soldOutUntil = null;
       }
 
-      const updated = await MenuItem.findByIdAndUpdate(
-        id,
+      const updated = await MenuItem.findOneAndUpdate(
+        { _id: id, storeId: req.storeId },
         updateData,
         { new: true, runValidators: true }
       );
@@ -316,10 +329,11 @@ function cleanupFile(file: Express.Multer.File | undefined): void {
 router.post(
   '/:id/photo',
   tempUpload.single('photo'),
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('menu:write'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { MenuItem } = menuModels();
       const id = req.params.id as string;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -345,8 +359,8 @@ router.post(
 
       const photoUrl = await uploadFile(localDest, 'photos', filename);
 
-      const updated = await MenuItem.findByIdAndUpdate(
-        id,
+      const updated = await MenuItem.findOneAndUpdate(
+        { _id: id, storeId: req.storeId },
         { photoUrl },
         { new: true, runValidators: true }
       );
@@ -374,10 +388,11 @@ router.post(
 router.post(
   '/:id/ar',
   tempUpload.single('ar'),
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('menu:write'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { MenuItem } = menuModels();
       const id = req.params.id as string;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -403,8 +418,8 @@ router.post(
 
       const arFileUrl = await uploadFile(localDest, 'ar', filename);
 
-      const updated = await MenuItem.findByIdAndUpdate(
-        id,
+      const updated = await MenuItem.findOneAndUpdate(
+        { _id: id, storeId: req.storeId },
         { arFileUrl },
         { new: true, runValidators: true }
       );

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { apiFetch } from '../../api/client';
 
 interface AllergenTranslation { locale: string; name: string; }
 interface Allergen {
@@ -41,7 +42,7 @@ export default function AllergenManager() {
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
 
   const fetchAllergens = useCallback(async () => {
-    const res = await fetch('/api/allergens', { headers: { Authorization: `Bearer ${token}` } });
+    const res = await apiFetch('/api/allergens', { headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) setAllergens(await res.json());
   }, [token]);
 
@@ -78,8 +79,8 @@ export default function AllergenManager() {
       ],
     };
     const res = editingId
-      ? await fetch(`/api/allergens/${editingId}`, { method: 'PUT', headers, body: JSON.stringify(body) })
-      : await fetch('/api/allergens', { method: 'POST', headers, body: JSON.stringify(body) });
+      ? await apiFetch(`/api/allergens/${editingId}`, { method: 'PUT', headers, body: JSON.stringify(body) })
+      : await apiFetch('/api/allergens', { method: 'POST', headers, body: JSON.stringify(body) });
     if (res.ok) {
       setShowForm(false);
       fetchAllergens();
@@ -88,7 +89,7 @@ export default function AllergenManager() {
 
   const handleDelete = async (id: string) => {
     if (!confirm(t('common.confirm') + '?')) return;
-    const res = await fetch(`/api/allergens/${id}`, { method: 'DELETE', headers });
+    const res = await apiFetch(`/api/allergens/${id}`, { method: 'DELETE', headers });
     if (res.ok) {
       fetchAllergens();
     } else {

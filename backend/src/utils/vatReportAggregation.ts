@@ -1,9 +1,5 @@
 import mongoose from 'mongoose';
-import { Order } from '../models/Order';
-import { Checkout } from '../models/Checkout';
-import { MenuItem } from '../models/MenuItem';
-import { MenuCategory } from '../models/MenuCategory';
-import { SystemConfig } from '../models/SystemConfig';
+import { getModels } from '../getModels';
 import { bundleAdjustedLineTotals, lineGrossEuro, type LineLikeForBundle } from './bundleLineAllocation';
 
 export const FOOD_VAT_RATE = 0.135;
@@ -34,7 +30,8 @@ export interface StoreInfoForVat {
   storePhone: string;
 }
 
-export async function loadStoreInfoForVat(): Promise<StoreInfoForVat> {
+export async function loadStoreInfoForVat(storeId: mongoose.Types.ObjectId): Promise<StoreInfoForVat> {
+  const { SystemConfig } = getModels();
   const keys = [
     'account_number',
     'restaurant_name_en',
@@ -42,7 +39,10 @@ export async function loadStoreInfoForVat(): Promise<StoreInfoForVat> {
     'restaurant_address',
     'restaurant_phone',
   ];
-  const rows = await SystemConfig.find({ key: { $in: keys } }).lean();
+  const rows = (await SystemConfig.find({ storeId, key: { $in: keys } }).lean()) as unknown as {
+    key: string;
+    value: string;
+  }[];
   const map: Record<string, string> = {};
   for (const r of rows) map[r.key] = r.value;
   const address = (map.restaurant_address_en || map.restaurant_address || '').trim();
@@ -54,7 +54,6 @@ export async function loadStoreInfoForVat(): Promise<StoreInfoForVat> {
   };
 }
 
-/** Same idea as detailed stats: hide-flag orders are excluded from revenue reports. */
 function isHiddenOrderStatus(status: unknown): boolean {
   return String(status ?? '').includes('-hide');
 }
@@ -73,48 +72,54 @@ function itemToLineLike(item: {
   };
 }
 
-/**
- * Aggregate VAT-inclusive gross sales by Ireland calendar month (Europe/Dublin).
- * Amounts match checkout totals (bundle + coupon scaling per checkout).
- */
 export async function aggregateVatSalesByMonth(
+  storeId: mongoose.Types.ObjectId,
   startDate: string,
   endDate: string,
 ): Promise<{ byMonth: Map<string, MonthSalesBuckets>; storeInfo: StoreInfoForVat }> {
+  const { Checkout, Order, MenuItem, MenuCategory } = getModels() as {
+    Checkout: mongoose.Model<any>;
+    Order: mongoose.Model<any>;
+    MenuItem: mongoose.Model<any>;
+    MenuCategory: mongoose.Model<any>;
+  };
   const start = new Date(startDate + 'T00:00:00.000Z');
   const end = new Date(endDate + 'T23:59:59.999Z');
 
   const checkouts = await Checkout.find({
+    storeId,
     checkedOutAt: { $gte: start, $lte: end },
   }).lean();
 
-  const storeInfo = await loadStoreInfoForVat();
+  const storeInfo = await loadStoreInfoForVat(storeId);
   const byMonth = new Map<string, MonthSalesBuckets>();
 
   if (checkouts.length === 0) {
     return { byMonth, storeInfo };
   }
 
-  const rawOrderIds = [...new Set(checkouts.flatMap((c) => (c.orderIds || []).map((id) => id.toString())))];
+  const rawOrderIds = [...new Set(checkouts.flatMap((c) => (c.orderIds || []).map((id: mongoose.Types.ObjectId) => id.toString())))];
   const orderIds = rawOrderIds.filter((id) => mongoose.isValidObjectId(id));
   const orders =
     orderIds.length > 0
       ? await Order.find({
+          storeId,
           _id: { $in: orderIds.map((id) => new mongoose.Types.ObjectId(id)) },
         }).lean()
       : [];
 
-  const rawMenuIds = orders.flatMap((o) =>
-    o.items.map((i) => (i as { menuItemId: unknown }).menuItemId?.toString()).filter(Boolean),
+  const rawMenuIds = (orders as any[]).flatMap((o: { items: { menuItemId?: unknown }[] }) =>
+    o.items.map((i: { menuItemId?: unknown }) => i.menuItemId?.toString()).filter(Boolean),
   ) as string[];
   const allMenuItemIds = [...new Set(rawMenuIds.filter((id) => mongoose.isValidObjectId(id)))];
   const menuItems =
     allMenuItemIds.length > 0
       ? await MenuItem.find({
+          storeId,
           _id: { $in: allMenuItemIds.map((id) => new mongoose.Types.ObjectId(id)) },
         }).lean()
       : [];
-  const menuMap = new Map(menuItems.map((m) => [m._id.toString(), m]));
+  const menuMap = new Map((menuItems as any[]).map((m) => [String(m._id), m]));
 
   const catIds = [
     ...new Set(
@@ -125,11 +130,14 @@ export async function aggregateVatSalesByMonth(
   ];
   const categories =
     catIds.length > 0
-      ? await MenuCategory.find({ _id: { $in: catIds.map((id) => new mongoose.Types.ObjectId(id)) } }).lean()
+      ? await MenuCategory.find({
+          storeId,
+          _id: { $in: catIds.map((id) => new mongoose.Types.ObjectId(id)) },
+        }).lean()
       : [];
-  const catMap = new Map(categories.map((c) => [c._id.toString(), c]));
+  const catMap = new Map((categories as any[]).map((c) => [String(c._id), c]));
 
-  const orderById = new Map(orders.map((o) => [o._id.toString(), o]));
+  const orderById = new Map((orders as any[]).map((o) => [String(o._id), o]));
 
   function bump(monthKey: string, drink: boolean, delta: number) {
     if (!byMonth.has(monthKey)) byMonth.set(monthKey, { foodGross: 0, drinkGross: 0 });
@@ -140,8 +148,8 @@ export async function aggregateVatSalesByMonth(
 
   for (const c of checkouts) {
     const ordersHere = (c.orderIds || [])
-      .map((oid) => orderById.get(oid.toString()))
-      .filter((o): o is (typeof orders)[0] => !!o);
+      .map((oid: mongoose.Types.ObjectId) => orderById.get(oid.toString()))
+      .filter((o: unknown): o is (typeof orders)[0] => !!o);
 
     if (ordersHere.length === 0) continue;
 
@@ -152,7 +160,7 @@ export async function aggregateVatSalesByMonth(
     const perOrderMaps: { order: (typeof orders)[0]; map: Map<string, number> }[] = [];
     for (const order of ordersHere) {
       const applied = (order as unknown as { appliedBundles?: BundleDoc }).appliedBundles;
-      const items = order.items.map((it) => itemToLineLike(it as Parameters<typeof itemToLineLike>[0]));
+      const items = order.items.map((it: Parameters<typeof itemToLineLike>[0]) => itemToLineLike(it));
       const m = bundleAdjustedLineTotals(items, applied);
       perOrderMaps.push({ order, map: m });
       for (const v of m.values()) grandSum += v;
@@ -170,7 +178,10 @@ export async function aggregateVatSalesByMonth(
         if (Math.abs(signed) < 1e-9) continue;
         const mid = (item as { menuItemId?: unknown }).menuItemId?.toString();
         const mi = mid ? menuMap.get(mid) : undefined;
-        const cat = mi?.categoryId ? catMap.get(mi.categoryId.toString()) : undefined;
+        const cat =
+          mi && (mi as { categoryId?: { toString(): string } }).categoryId
+            ? catMap.get((mi as { categoryId: { toString(): string } }).categoryId.toString())
+            : undefined;
         const drink = isDrinkCategory(cat);
         bump(monthKey, drink, signed);
       }

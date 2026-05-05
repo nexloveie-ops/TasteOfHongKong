@@ -7,5 +7,4 @@ const CouponSchema = new mongoose.Schema({
   active: { type: Boolean, default: true },
 }, { timestamps: true });
 
-export const Coupon = mongoose.model('Coupon', CouponSchema, 'coupons');
 export { CouponSchema };

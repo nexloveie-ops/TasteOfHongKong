@@ -1,13 +1,26 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import { Server as SocketIOServer } from 'socket.io';
-import { MenuItem } from '../models/MenuItem';
-import { Order } from '../models/Order';
-import { DailyOrderCounter } from '../models/DailyOrderCounter';
+import { getModels } from '../getModels';
 import { createAppError } from '../middleware/errorHandler';
 import { getBusinessStatus } from '../utils/businessHours';
-import { mergeTemplateOptionGroupsForItem } from '../utils/optionGroupTemplateApply';
+import { mergeTemplateOptionGroupsForItem, type MenuItemLike } from '../utils/optionGroupTemplateApply';
 import type { LeanOptionGroup } from '../utils/optionGroups';
+import { storeIoRoom } from '../socketRooms';
+
+function orderModels() {
+  return getModels() as {
+    MenuItem: mongoose.Model<any>;
+    Order: mongoose.Model<any>;
+    DailyOrderCounter: mongoose.Model<any>;
+  };
+}
+
+type MenuItemForOrder = MenuItemLike & {
+  translations?: { locale: string; name: string }[];
+  price: number;
+  isSoldOut?: boolean;
+};
 
 export function createOrdersRouter(io: SocketIOServer): Router {
   const router = Router();
@@ -15,12 +28,13 @@ export function createOrdersRouter(io: SocketIOServer): Router {
   type SelectedOptInput = { groupId: string; choiceId: string };
 
   async function snapshotSelectedOptionsFromMenuItem(
-    menuItem: InstanceType<typeof MenuItem>,
+    storeId: mongoose.Types.ObjectId,
+    menuItem: MenuItemForOrder,
     selectedOptions: SelectedOptInput[] | undefined,
   ): Promise<{ groupName: string; groupNameEn: string; choiceName: string; choiceNameEn: string; extraPrice: number }[]> {
     if (!selectedOptions || !Array.isArray(selectedOptions) || selectedOptions.length === 0) return [];
 
-    const merged = await mergeTemplateOptionGroupsForItem({
+    const merged = await mergeTemplateOptionGroupsForItem(storeId, {
       _id: menuItem._id,
       categoryId: menuItem.categoryId,
       optionGroups: (menuItem.optionGroups || []) as unknown as LeanOptionGroup[],
@@ -62,8 +76,9 @@ export function createOrdersRouter(io: SocketIOServer): Router {
   }
 
   async function buildOrderItemsPayload(
+    storeId: mongoose.Types.ObjectId,
     items: { menuItemId: string; quantity: number; selectedOptions?: SelectedOptInput[] }[],
-    menuItemMap: Map<string, InstanceType<typeof MenuItem>>,
+    menuItemMap: Map<string, MenuItemForOrder>,
   ) {
     const orderItems: {
       menuItemId: string;
@@ -80,7 +95,7 @@ export function createOrdersRouter(io: SocketIOServer): Router {
       const enTrans = menuItem.translations?.find((t: { locale: string }) => t.locale === 'en-US');
       const itemName = zhTrans?.name || enTrans?.name || (menuItem.translations?.[0] as { name: string })?.name || 'Unknown';
       const itemNameEn = enTrans?.name || zhTrans?.name || itemName;
-      const selectedOptions = await snapshotSelectedOptionsFromMenuItem(menuItem, item.selectedOptions);
+      const selectedOptions = await snapshotSelectedOptionsFromMenuItem(storeId, menuItem, item.selectedOptions);
 
       orderItems.push({
         menuItemId: item.menuItemId,
@@ -98,11 +113,12 @@ export function createOrdersRouter(io: SocketIOServer): Router {
   // POST /api/orders — Create a new order
   router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { MenuItem, Order, DailyOrderCounter } = orderModels();
       const { type, tableNumber, seatNumber, items, appliedBundles } = req.body;
 
       // Customer self-order channels follow business hour restrictions.
       if (type === 'dine_in' || type === 'takeout') {
-        const status = await getBusinessStatus();
+        const status = await getBusinessStatus(req.storeId!);
         if (!status.isOpen) {
           throw createAppError('VALIDATION_ERROR', 'Restaurant is currently closed', {
             businessStatus: status,
@@ -141,7 +157,7 @@ export function createOrdersRouter(io: SocketIOServer): Router {
 
       // Fetch all referenced menu items
       const menuItemIds = items.map((i: { menuItemId: string }) => i.menuItemId);
-      const menuItems = await MenuItem.find({ _id: { $in: menuItemIds } });
+      const menuItems = await MenuItem.find({ storeId: req.storeId, _id: { $in: menuItemIds } });
 
       // Check all items exist
       const foundIds = new Set(menuItems.map((m) => m._id.toString()));
@@ -159,11 +175,12 @@ export function createOrdersRouter(io: SocketIOServer): Router {
       }
 
       // Build a lookup map for menu items
-      const menuItemMap = new Map(menuItems.map((m) => [m._id.toString(), m]));
+      const menuItemMap = new Map(menuItems.map((m) => [m._id.toString(), m as MenuItemForOrder]));
 
       // Build order items with price/name snapshots
-      const orderItems = await buildOrderItemsPayload(items, menuItemMap);
+      const orderItems = await buildOrderItemsPayload(req.storeId!, items, menuItemMap);
       const orderData: Record<string, unknown> = {
+        storeId: req.storeId,
         type,
         status: 'pending',
         items: orderItems,
@@ -184,8 +201,8 @@ export function createOrdersRouter(io: SocketIOServer): Router {
       if (type === 'takeout' || type === 'phone') {
         const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
         const counter = await DailyOrderCounter.findOneAndUpdate(
-          { date: todayStr },
-          { $inc: { currentNumber: 1 } },
+          { storeId: req.storeId, date: todayStr },
+          { $inc: { currentNumber: 1 }, $setOnInsert: { storeId: req.storeId, date: todayStr } },
           { upsert: true, returnDocument: 'after' }
         );
         orderData.dailyOrderNumber = counter!.currentNumber;
@@ -193,8 +210,7 @@ export function createOrdersRouter(io: SocketIOServer): Router {
 
       const order = await Order.create(orderData);
 
-      // Emit Socket.IO event
-      io.emit('order:new', order);
+      io.to(storeIoRoom(req.storeId!)).emit('order:new', order);
 
       res.status(201).json(order);
     } catch (err) {
@@ -203,9 +219,10 @@ export function createOrdersRouter(io: SocketIOServer): Router {
   });
 
   // GET /api/orders/dine-in — Get pending and paid_online dine-in orders
-  router.get('/dine-in', async (_req: Request, res: Response, next: NextFunction) => {
+  router.get('/dine-in', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const orders = await Order.find({ type: 'dine_in', status: { $in: ['pending', 'paid_online'] } }).sort({ tableNumber: 1, seatNumber: 1 });
+      const { Order } = orderModels();
+      const orders = await Order.find({ storeId: req.storeId, type: 'dine_in', status: { $in: ['pending', 'paid_online'] } }).sort({ tableNumber: 1, seatNumber: 1 });
       res.json(orders);
     } catch (err) {
       next(err);
@@ -219,7 +236,9 @@ export function createOrdersRouter(io: SocketIOServer): Router {
       if (!table || !seat) {
         return res.json([]);
       }
+      const { Order } = orderModels();
       const orders = await Order.find({
+        storeId: req.storeId,
         type: 'dine_in',
         tableNumber: Number(table),
         seatNumber: Number(seat),
@@ -232,9 +251,10 @@ export function createOrdersRouter(io: SocketIOServer): Router {
   });
 
   // GET /api/orders/takeout — Get pending (not checked out) takeout orders sorted by dailyOrderNumber ASC
-  router.get('/takeout', async (_req: Request, res: Response, next: NextFunction) => {
+  router.get('/takeout', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const orders = await Order.find({ type: 'takeout', status: { $in: ['pending', 'paid_online'] } }).sort({ dailyOrderNumber: 1 });
+      const { Order } = orderModels();
+      const orders = await Order.find({ storeId: req.storeId, type: 'takeout', status: { $in: ['pending', 'paid_online'] } }).sort({ dailyOrderNumber: 1 });
       res.json(orders);
     } catch (err) {
       next(err);
@@ -242,9 +262,10 @@ export function createOrdersRouter(io: SocketIOServer): Router {
   });
 
   // GET /api/orders/phone — Get pending phone orders sorted by dailyOrderNumber ASC
-  router.get('/phone', async (_req: Request, res: Response, next: NextFunction) => {
+  router.get('/phone', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const orders = await Order.find({ type: 'phone', status: 'pending' }).sort({ dailyOrderNumber: 1 });
+      const { Order } = orderModels();
+      const orders = await Order.find({ storeId: req.storeId, type: 'phone', status: 'pending' }).sort({ dailyOrderNumber: 1 });
       res.json(orders);
     } catch (err) {
       next(err);
@@ -252,9 +273,10 @@ export function createOrdersRouter(io: SocketIOServer): Router {
   });
 
   // GET /api/orders/takeout/pending — Get checked_out (not completed) takeout orders
-  router.get('/takeout/pending', async (_req: Request, res: Response, next: NextFunction) => {
+  router.get('/takeout/pending', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const orders = await Order.find({ type: 'takeout', status: 'checked_out' }).sort({ dailyOrderNumber: 1 });
+      const { Order } = orderModels();
+      const orders = await Order.find({ storeId: req.storeId, type: 'takeout', status: 'checked_out' }).sort({ dailyOrderNumber: 1 });
       res.json(orders);
     } catch (err) {
       next(err);
@@ -264,12 +286,13 @@ export function createOrdersRouter(io: SocketIOServer): Router {
   // PUT /api/orders/takeout/:id/complete — Mark takeout order as completed
   router.put('/takeout/:id/complete', async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { Order } = orderModels();
       const id = req.params.id as string;
       if (!mongoose.Types.ObjectId.isValid(id)) {
         throw createAppError('VALIDATION_ERROR', 'Invalid order ID');
       }
 
-      const order = await Order.findById(id);
+      const order = await Order.findOne({ _id: id, storeId: req.storeId });
       if (!order) {
         throw createAppError('NOT_FOUND', 'Order not found');
       }
@@ -284,11 +307,12 @@ export function createOrdersRouter(io: SocketIOServer): Router {
         });
       }
 
-      order.status = 'completed';
-      order.completedAt = new Date();
-      await order.save();
-
-      res.json(order);
+      const updated = await Order.findOneAndUpdate(
+        { _id: id, storeId: req.storeId },
+        { $set: { status: 'completed', completedAt: new Date() } },
+        { new: true },
+      );
+      res.json(updated);
     } catch (err) {
       next(err);
     }
@@ -297,12 +321,13 @@ export function createOrdersRouter(io: SocketIOServer): Router {
   // GET /api/orders/:id — Get order details
   router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { Order } = orderModels();
       const id = req.params.id as string;
       if (!mongoose.Types.ObjectId.isValid(id)) {
         throw createAppError('VALIDATION_ERROR', 'Invalid order ID');
       }
 
-      const order = await Order.findById(id);
+      const order = await Order.findOne({ _id: id, storeId: req.storeId });
       if (!order) {
         throw createAppError('NOT_FOUND', 'Order not found');
       }
@@ -316,12 +341,13 @@ export function createOrdersRouter(io: SocketIOServer): Router {
   // PUT /api/orders/:id/items — Modify order items
   router.put('/:id/items', async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { MenuItem, Order } = orderModels();
       const id = req.params.id as string;
       if (!mongoose.Types.ObjectId.isValid(id)) {
         throw createAppError('VALIDATION_ERROR', 'Invalid order ID');
       }
 
-      const order = await Order.findById(id);
+      const order = await Order.findOne({ _id: id, storeId: req.storeId });
       if (!order) {
         throw createAppError('NOT_FOUND', 'Order not found');
       }
@@ -351,7 +377,7 @@ export function createOrdersRouter(io: SocketIOServer): Router {
 
       // Fetch all referenced menu items
       const menuItemIds = items.map((i: { menuItemId: string }) => i.menuItemId);
-      const menuItems = await MenuItem.find({ _id: { $in: menuItemIds } });
+      const menuItems = await MenuItem.find({ storeId: req.storeId, _id: { $in: menuItemIds } });
 
       // Check all items exist
       const foundIds = new Set(menuItems.map((m) => m._id.toString()));
@@ -369,19 +395,20 @@ export function createOrdersRouter(io: SocketIOServer): Router {
       }
 
       // Build a lookup map for menu items
-      const menuItemMap = new Map(menuItems.map((m) => [m._id.toString(), m]));
+      const menuItemMap = new Map(menuItems.map((m) => [m._id.toString(), m as MenuItemForOrder]));
 
       // Build updated order items with price/name snapshots
-      const orderItems = await buildOrderItemsPayload(items, menuItemMap);
+      const orderItems = await buildOrderItemsPayload(req.storeId!, items, menuItemMap);
 
-      // Update the order's items
-      order.items = orderItems as unknown as typeof order.items;
-      await order.save();
+      const updated = await Order.findOneAndUpdate(
+        { _id: id, storeId: req.storeId },
+        { $set: { items: orderItems } },
+        { new: true },
+      );
 
-      // Emit Socket.IO event
-      io.emit('order:updated', order);
+      io.to(storeIoRoom(req.storeId!)).emit('order:updated', updated);
 
-      res.json(order);
+      res.json(updated);
     } catch (err) {
       next(err);
     }
@@ -390,12 +417,13 @@ export function createOrdersRouter(io: SocketIOServer): Router {
   // DELETE /api/orders/:id — Cancel/delete a pending order
   router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { Order } = orderModels();
       const id = req.params.id as string;
       if (!mongoose.Types.ObjectId.isValid(id)) {
         throw createAppError('VALIDATION_ERROR', 'Invalid order ID');
       }
 
-      const order = await Order.findById(id);
+      const order = await Order.findOne({ _id: id, storeId: req.storeId });
       if (!order) {
         throw createAppError('NOT_FOUND', 'Order not found');
       }
@@ -406,10 +434,9 @@ export function createOrdersRouter(io: SocketIOServer): Router {
         });
       }
 
-      await Order.findByIdAndDelete(id);
+      await Order.findOneAndDelete({ _id: id, storeId: req.storeId });
 
-      // Emit Socket.IO event
-      io.emit('order:cancelled', { orderId: id, tableNumber: order.tableNumber });
+      io.to(storeIoRoom(req.storeId!)).emit('order:cancelled', { orderId: id, tableNumber: order.tableNumber });
 
       res.json({ message: 'Order cancelled successfully' });
     } catch (err) {
@@ -420,12 +447,13 @@ export function createOrdersRouter(io: SocketIOServer): Router {
   // PUT /api/orders/:id/toggle-hide — Toggle hide status for cash orders
   router.put('/:id/toggle-hide', async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { Order } = orderModels();
       const id = req.params.id as string;
       if (!mongoose.Types.ObjectId.isValid(id)) {
         throw createAppError('VALIDATION_ERROR', 'Invalid order ID');
       }
 
-      const order = await Order.findById(id);
+      const order = await Order.findOne({ _id: id, storeId: req.storeId });
       if (!order) {
         throw createAppError('NOT_FOUND', 'Order not found');
       }
@@ -445,10 +473,13 @@ export function createOrdersRouter(io: SocketIOServer): Router {
         });
       }
 
-      order.status = newStatus as typeof order.status;
-      await order.save();
+      const updated = await Order.findOneAndUpdate(
+        { _id: id, storeId: req.storeId },
+        { $set: { status: newStatus } },
+        { new: true },
+      );
 
-      res.json(order);
+      res.json(updated);
     } catch (err) {
       next(err);
     }

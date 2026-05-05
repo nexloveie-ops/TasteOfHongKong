@@ -1,16 +1,18 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
-import { Offer } from '../models/Offer';
-import { authMiddleware, requirePermission } from '../middleware/auth';
+import { getModels } from '../getModels';
+import { requirePermission } from '../middleware/auth';
+import { requireAuthSameStore } from '../middleware/authForStore';
 import { createAppError } from '../middleware/errorHandler';
 
 const router = Router();
 
-// GET /api/offers — List all offers (public, for customer/cashier matching)
-router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
+router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { Offer } = getModels();
     const now = new Date();
     const offers = await Offer.find({
+      storeId: req.storeId,
       active: true,
       $or: [
         { startDate: { $exists: false } },
@@ -19,8 +21,7 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
       ],
     }).lean();
 
-    // Filter out expired offers
-    const valid = offers.filter(o => {
+    const valid = (offers as { endDate?: Date }[]).filter((o) => {
       if (o.endDate && new Date(o.endDate) < now) return false;
       return true;
     });
@@ -31,19 +32,19 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
   }
 });
 
-// GET /api/offers/all — List all offers including inactive (admin)
-router.get('/all', authMiddleware, requirePermission('admin:manage'), async (_req: Request, res: Response, next: NextFunction) => {
+router.get('/all', ...requireAuthSameStore, requirePermission('admin:manage'), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const offers = await Offer.find().sort({ createdAt: -1 }).lean();
+    const { Offer } = getModels();
+    const offers = await Offer.find({ storeId: req.storeId }).sort({ createdAt: -1 }).lean();
     res.json(offers);
   } catch (err) {
     next(err);
   }
 });
 
-// POST /api/offers — Create offer (admin)
-router.post('/', authMiddleware, requirePermission('admin:manage'), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/', ...requireAuthSameStore, requirePermission('admin:manage'), async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { Offer } = getModels();
     const { name, nameEn, description, descriptionEn, bundlePrice, slots, excludedItemIds, active, startDate, endDate } = req.body;
 
     if (!name || typeof name !== 'string') {
@@ -66,7 +67,13 @@ router.post('/', authMiddleware, requirePermission('admin:manage'), async (req: 
     }
 
     const offer = await Offer.create({
-      name, nameEn, description, descriptionEn, bundlePrice, slots,
+      storeId: req.storeId,
+      name,
+      nameEn,
+      description,
+      descriptionEn,
+      bundlePrice,
+      slots,
       excludedItemIds: excludedItemIds || [],
       active: active !== false,
       startDate: startDate || undefined,
@@ -79,31 +86,31 @@ router.post('/', authMiddleware, requirePermission('admin:manage'), async (req: 
   }
 });
 
-// PUT /api/offers/:id — Update offer (admin)
-router.put('/:id', authMiddleware, requirePermission('admin:manage'), async (req: Request, res: Response, next: NextFunction) => {
+router.put('/:id', ...requireAuthSameStore, requirePermission('admin:manage'), async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { Offer } = getModels();
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id as string)) {
       throw createAppError('VALIDATION_ERROR', 'Invalid offer ID');
     }
 
-    const offer = await Offer.findById(id);
+    const offer = await Offer.findOne({ _id: id, storeId: req.storeId });
     if (!offer) {
       throw createAppError('NOT_FOUND', 'Offer not found');
     }
 
     const { name, nameEn, description, descriptionEn, bundlePrice, slots, excludedItemIds, active, startDate, endDate } = req.body;
 
-    if (name !== undefined) offer.name = name;
-    if (nameEn !== undefined) offer.nameEn = nameEn;
-    if (description !== undefined) offer.description = description;
-    if (descriptionEn !== undefined) offer.descriptionEn = descriptionEn;
-    if (bundlePrice !== undefined) offer.bundlePrice = bundlePrice;
-    if (slots !== undefined) offer.slots = slots;
-    if (excludedItemIds !== undefined) offer.excludedItemIds = excludedItemIds;
-    if (active !== undefined) offer.active = active;
-    if (startDate !== undefined) offer.startDate = startDate || undefined;
-    if (endDate !== undefined) offer.endDate = endDate || undefined;
+    if (name !== undefined) offer.set('name', name);
+    if (nameEn !== undefined) offer.set('nameEn', nameEn);
+    if (description !== undefined) offer.set('description', description);
+    if (descriptionEn !== undefined) offer.set('descriptionEn', descriptionEn);
+    if (bundlePrice !== undefined) offer.set('bundlePrice', bundlePrice);
+    if (slots !== undefined) offer.set('slots', slots);
+    if (excludedItemIds !== undefined) offer.set('excludedItemIds', excludedItemIds);
+    if (active !== undefined) offer.set('active', active);
+    if (startDate !== undefined) offer.set('startDate', startDate || undefined);
+    if (endDate !== undefined) offer.set('endDate', endDate || undefined);
 
     await offer.save();
     res.json(offer);
@@ -112,15 +119,15 @@ router.put('/:id', authMiddleware, requirePermission('admin:manage'), async (req
   }
 });
 
-// DELETE /api/offers/:id — Delete offer (admin)
-router.delete('/:id', authMiddleware, requirePermission('admin:manage'), async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/:id', ...requireAuthSameStore, requirePermission('admin:manage'), async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { Offer } = getModels();
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id as string)) {
       throw createAppError('VALIDATION_ERROR', 'Invalid offer ID');
     }
 
-    const offer = await Offer.findByIdAndDelete(id);
+    const offer = await Offer.findOneAndDelete({ _id: id, storeId: req.storeId });
     if (!offer) {
       throw createAppError('NOT_FOUND', 'Offer not found');
     }

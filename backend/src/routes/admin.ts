@@ -4,9 +4,10 @@ import multer from 'multer';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
-import { Admin } from '../models/Admin';
-import { SystemConfig } from '../models/SystemConfig';
-import { authMiddleware, requirePermission } from '../middleware/auth';
+import mongoose from 'mongoose';
+import { getModels } from '../getModels';
+import { requirePermission } from '../middleware/auth';
+import { requireAuthSameStore } from '../middleware/authForStore';
 import { createAppError } from '../middleware/errorHandler';
 import { uploadFile } from '../storage';
 import { getBusinessStatus } from '../utils/businessHours';
@@ -19,6 +20,14 @@ import {
   STRIPE_SECRET_CONFIG_KEY,
 } from '../utils/stripeConfig';
 
+function adminModels() {
+  return getModels() as {
+    SystemConfig: mongoose.Model<any>;
+    Admin: mongoose.Model<any>;
+    Store: mongoose.Model<any>;
+  };
+}
+
 const router = Router();
 const tempUpload = multer({ dest: os.tmpdir(), limits: { fileSize: 5 * 1024 * 1024 } });
 const UPLOAD_BASE = path.resolve(__dirname, '../../uploads');
@@ -26,13 +35,20 @@ const LOGO_DIR = path.join(UPLOAD_BASE, 'logo');
 fs.mkdirSync(LOGO_DIR, { recursive: true });
 
 // GET /api/admin/config — Get all system configs (Stripe keys never included — use GET /stripe-config for admin)
-router.get('/config', async (_req: Request, res: Response, next: NextFunction) => {
+router.get('/config', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const configs = await SystemConfig.find({}).lean();
+    const { SystemConfig, Store } = adminModels();
+    const configs = await SystemConfig.find({ storeId: req.storeId }).lean();
     const configMap: Record<string, string> = {};
     for (const c of configs) {
       if (STRIPE_KEYS_FILTER_FROM_PUBLIC_CONFIG.has(c.key)) continue;
       configMap[c.key] = c.value;
+    }
+    const storeDoc = (await Store.findById(req.storeId).lean()) as { displayName?: string } | null;
+    const dn = storeDoc?.displayName?.trim();
+    if (dn) {
+      if (!configMap.restaurant_name_zh?.trim()) configMap.restaurant_name_zh = dn;
+      if (!configMap.restaurant_name_en?.trim()) configMap.restaurant_name_en = dn;
     }
     res.json(configMap);
   } catch (err) {
@@ -41,9 +57,9 @@ router.get('/config', async (_req: Request, res: Response, next: NextFunction) =
 });
 
 // GET /api/admin/business-status — Public business opening status for customer entry
-router.get('/business-status', async (_req: Request, res: Response, next: NextFunction) => {
+router.get('/business-status', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const status = await getBusinessStatus();
+    const status = await getBusinessStatus(req.storeId!);
     res.json(status);
   } catch (err) {
     next(err);
@@ -51,8 +67,9 @@ router.get('/business-status', async (_req: Request, res: Response, next: NextFu
 });
 
 // PUT /api/admin/config — Update system configs (requires auth + config:update)
-router.put('/config', authMiddleware, requirePermission('config:update'), async (req: Request, res: Response, next: NextFunction) => {
+router.put('/config', ...requireAuthSameStore, requirePermission('config:update'), async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { SystemConfig } = adminModels();
     const updates = req.body;
     if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
       throw createAppError('VALIDATION_ERROR', 'Request body must be a key-value object');
@@ -67,8 +84,8 @@ router.put('/config', authMiddleware, requirePermission('config:update'), async 
         throw createAppError('VALIDATION_ERROR', `Value for key "${key}" must be a string`);
       }
       const doc = await SystemConfig.findOneAndUpdate(
-        { key },
-        { key, value },
+        { storeId: req.storeId, key },
+        { storeId: req.storeId, key, value },
         { upsert: true, new: true },
       );
       results[doc.key] = doc.value;
@@ -81,10 +98,10 @@ router.put('/config', authMiddleware, requirePermission('config:update'), async 
 });
 
 // GET /api/admin/stripe-config — Admin-only; publishable from DB + whether secret exists (never returns secret)
-router.get('/stripe-config', authMiddleware, requirePermission('config:update'), async (_req: Request, res: Response, next: NextFunction) => {
+router.get('/stripe-config', ...requireAuthSameStore, requirePermission('config:update'), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const publishableKey = await getStripePublishableFromDbOnly();
-    const hasSecret = await hasStripeSecretInDb();
+    const publishableKey = await getStripePublishableFromDbOnly(req.storeId!);
+    const hasSecret = await hasStripeSecretInDb(req.storeId!);
     res.json({ publishableKey, hasSecret });
   } catch (err) {
     next(err);
@@ -92,8 +109,9 @@ router.get('/stripe-config', authMiddleware, requirePermission('config:update'),
 });
 
 // PUT /api/admin/stripe-config — Save Stripe keys to DB (secret optional; never echoed back)
-router.put('/stripe-config', authMiddleware, requirePermission('config:update'), async (req: Request, res: Response, next: NextFunction) => {
+router.put('/stripe-config', ...requireAuthSameStore, requirePermission('config:update'), async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { SystemConfig } = adminModels();
     const body = req.body as { publishableKey?: string; secretKey?: string; clearSecret?: boolean };
     if (body.publishableKey !== undefined) {
       if (typeof body.publishableKey !== 'string') {
@@ -101,28 +119,28 @@ router.put('/stripe-config', authMiddleware, requirePermission('config:update'),
       }
       const p = body.publishableKey.trim();
       if (p === '') {
-        await SystemConfig.deleteMany({ key: STRIPE_PUBLISHABLE_CONFIG_KEY });
+        await SystemConfig.deleteMany({ storeId: req.storeId, key: STRIPE_PUBLISHABLE_CONFIG_KEY });
       } else {
         await SystemConfig.findOneAndUpdate(
-          { key: STRIPE_PUBLISHABLE_CONFIG_KEY },
-          { key: STRIPE_PUBLISHABLE_CONFIG_KEY, value: p },
+          { storeId: req.storeId, key: STRIPE_PUBLISHABLE_CONFIG_KEY },
+          { storeId: req.storeId, key: STRIPE_PUBLISHABLE_CONFIG_KEY, value: p },
           { upsert: true, new: true },
         );
       }
     }
 
     if (body.clearSecret === true) {
-      await SystemConfig.deleteMany({ key: STRIPE_SECRET_CONFIG_KEY });
+      await SystemConfig.deleteMany({ storeId: req.storeId, key: STRIPE_SECRET_CONFIG_KEY });
     } else if (typeof body.secretKey === 'string' && body.secretKey.length > 0) {
       await SystemConfig.findOneAndUpdate(
-        { key: STRIPE_SECRET_CONFIG_KEY },
-        { key: STRIPE_SECRET_CONFIG_KEY, value: body.secretKey.trim() },
+        { storeId: req.storeId, key: STRIPE_SECRET_CONFIG_KEY },
+        { storeId: req.storeId, key: STRIPE_SECRET_CONFIG_KEY, value: body.secretKey.trim() },
         { upsert: true, new: true },
       );
     }
 
-    const publishableKey = await getStripePublishableFromDbOnly();
-    const hasSecret = await hasStripeSecretInDb();
+    const publishableKey = await getStripePublishableFromDbOnly(req.storeId!);
+    const hasSecret = await hasStripeSecretInDb(req.storeId!);
     res.json({ publishableKey, hasSecret, message: 'Saved' });
   } catch (err) {
     next(err);
@@ -130,9 +148,9 @@ router.put('/stripe-config', authMiddleware, requirePermission('config:update'),
 });
 
 // GET /api/admin/stripe-health — Validate DB keys + call Stripe API (balance.retrieve only; no payment)
-router.get('/stripe-health', authMiddleware, requirePermission('config:update'), async (_req: Request, res: Response, next: NextFunction) => {
+router.get('/stripe-health', ...requireAuthSameStore, requirePermission('config:update'), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const result = await runStripeHealthCheck();
+    const result = await runStripeHealthCheck(req.storeId!);
     res.json(result);
   } catch (err) {
     next(err);
@@ -142,10 +160,11 @@ router.get('/stripe-health', authMiddleware, requirePermission('config:update'),
 // POST /api/admin/logo — Upload restaurant logo
 router.post('/logo',
   tempUpload.single('logo'),
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('config:update'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { SystemConfig } = adminModels();
       if (!req.file) {
         throw createAppError('VALIDATION_ERROR', 'No file provided');
       }
@@ -162,8 +181,8 @@ router.post('/logo',
 
       // Save logo URL to config
       await SystemConfig.findOneAndUpdate(
-        { key: 'restaurant_logo' },
-        { key: 'restaurant_logo', value: logoUrl },
+        { storeId: req.storeId, key: 'restaurant_logo' },
+        { storeId: req.storeId, key: 'restaurant_logo', value: logoUrl },
         { upsert: true, new: true },
       );
 
@@ -175,9 +194,10 @@ router.post('/logo',
 );
 
 // GET /api/admin/users — List admins (requires auth + admin:users)
-router.get('/users', authMiddleware, requirePermission('admin:users'), async (_req: Request, res: Response, next: NextFunction) => {
+router.get('/users', ...requireAuthSameStore, requirePermission('admin:users'), async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    const admins = await Admin.find({}).select('-passwordHash').lean();
+    const { Admin } = adminModels();
+    const admins = await Admin.find({ storeId: _req.storeId }).select('-passwordHash').lean();
     res.json(admins);
   } catch (err) {
     next(err);
@@ -185,8 +205,9 @@ router.get('/users', authMiddleware, requirePermission('admin:users'), async (_r
 });
 
 // POST /api/admin/users — Create admin (requires auth + admin:users)
-router.post('/users', authMiddleware, requirePermission('admin:users'), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/users', ...requireAuthSameStore, requirePermission('admin:users'), async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { Admin } = adminModels();
     const { username, password, role } = req.body;
 
     if (!username || !password || !role) {
@@ -197,7 +218,7 @@ router.post('/users', authMiddleware, requirePermission('admin:users'), async (r
       throw createAppError('VALIDATION_ERROR', 'role must be owner or cashier');
     }
 
-    const existing = await Admin.findOne({ username });
+    const existing = await Admin.findOne({ storeId: req.storeId, username });
     if (existing) {
       throw createAppError('CONFLICT', 'Username already exists');
     }
@@ -205,7 +226,7 @@ router.post('/users', authMiddleware, requirePermission('admin:users'), async (r
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    const admin = await Admin.create({ username, passwordHash, role });
+    const admin = await Admin.create({ storeId: req.storeId, username, passwordHash, role });
     const result = admin.toObject();
     const { passwordHash: _ph, ...safeResult } = result;
     res.status(201).json(safeResult);
@@ -215,12 +236,17 @@ router.post('/users', authMiddleware, requirePermission('admin:users'), async (r
 });
 
 // PUT /api/admin/users/:id — Update admin (requires auth + admin:users)
-router.put('/users/:id', authMiddleware, requirePermission('admin:users'), async (req: Request, res: Response, next: NextFunction) => {
+router.put('/users/:id', ...requireAuthSameStore, requirePermission('admin:users'), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const { Admin } = adminModels();
+    const { id: rawId } = req.params;
+    const id = typeof rawId === 'string' ? rawId : rawId[0];
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw createAppError('VALIDATION_ERROR', 'Invalid admin ID');
+    }
     const { username, password, role } = req.body;
 
-    const admin = await Admin.findById(id);
+    const admin = await Admin.findOne({ _id: id, storeId: req.storeId });
     if (!admin) {
       throw createAppError('NOT_FOUND', 'Admin not found');
     }
@@ -247,10 +273,15 @@ router.put('/users/:id', authMiddleware, requirePermission('admin:users'), async
 });
 
 // DELETE /api/admin/users/:id — Delete admin (requires auth + admin:users)
-router.delete('/users/:id', authMiddleware, requirePermission('admin:users'), async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/users/:id', ...requireAuthSameStore, requirePermission('admin:users'), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
-    const admin = await Admin.findByIdAndDelete(id);
+    const { Admin } = adminModels();
+    const { id: rawId } = req.params;
+    const id = typeof rawId === 'string' ? rawId : rawId[0];
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw createAppError('VALIDATION_ERROR', 'Invalid admin ID');
+    }
+    const admin = await Admin.findOneAndDelete({ _id: id, storeId: req.storeId });
     if (!admin) {
       throw createAppError('NOT_FOUND', 'Admin not found');
     }

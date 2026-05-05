@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { apiFetch } from '../../api/client';
 
 interface Translation { locale: string; name: string; }
 interface Category { _id: string; sortOrder: number; translations: Translation[]; }
@@ -22,7 +23,7 @@ export default function CategoryManager() {
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
 
   const fetchCategories = useCallback(async () => {
-    const res = await fetch('/api/menu/categories', { headers: { Authorization: `Bearer ${token}` } });
+    const res = await apiFetch('/api/menu/categories', { headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) {
       const data: Category[] = await res.json();
       setCategories(data.sort((a, b) => a.sortOrder - b.sortOrder));
@@ -52,10 +53,13 @@ export default function CategoryManager() {
         { locale: 'en-US', name: nameEn },
       ],
     };
-    if (editingId) {
-      await fetch(`/api/menu/categories/${editingId}`, { method: 'PUT', headers, body: JSON.stringify(body) });
-    } else {
-      await fetch('/api/menu/categories', { method: 'POST', headers, body: JSON.stringify(body) });
+    const res = editingId
+      ? await apiFetch(`/api/menu/categories/${editingId}`, { method: 'PUT', headers, body: JSON.stringify(body) })
+      : await apiFetch('/api/menu/categories', { method: 'POST', headers, body: JSON.stringify(body) });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      alert(data?.error?.message || `保存失败（${res.status}）`);
+      return;
     }
     setShowForm(false);
     fetchCategories();
@@ -63,7 +67,7 @@ export default function CategoryManager() {
 
   const handleDelete = async (id: string) => {
     if (!confirm(t('common.confirm') + '?')) return;
-    const res = await fetch(`/api/menu/categories/${id}`, { method: 'DELETE', headers });
+    const res = await apiFetch(`/api/menu/categories/${id}`, { method: 'DELETE', headers });
     if (!res.ok) {
       const data = await res.json().catch(() => null);
       alert(data?.error?.message || '删除失败');
@@ -102,10 +106,15 @@ export default function CategoryManager() {
     setCategories(reordered);
 
     // Save to backend
-    await fetch('/api/menu/categories/reorder', {
+    const res = await apiFetch('/api/menu/categories/reorder', {
       method: 'PUT', headers,
       body: JSON.stringify({ order: reordered.map(c => ({ id: c._id, sortOrder: c.sortOrder })) }),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      alert(data?.error?.message || `排序保存失败（${res.status}）`);
+      fetchCategories();
+    }
   };
 
   const handleDragEnd = () => {

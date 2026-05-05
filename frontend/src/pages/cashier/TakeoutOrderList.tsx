@@ -4,6 +4,7 @@ import { io } from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
 import ReceiptPrint from '../../components/cashier/ReceiptPrint';
 import { buildReceiptHTML, printViaIframe } from '../../components/cashier/ReceiptPrint';
+import { apiFetch } from '../../api/client';
 
 interface OrderItem { _id: string; menuItemId: string; quantity: number; unitPrice: number; itemName: string; selectedOptions?: { groupName: string; choiceName: string; extraPrice: number }[]; }
 interface TakeoutOrder {
@@ -14,7 +15,7 @@ interface TakeoutOrder {
 
 export default function TakeoutOrderList() {
   const { t } = useTranslation();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [orders, setOrders] = useState<TakeoutOrder[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [checkingOut, setCheckingOut] = useState(false);
@@ -30,7 +31,7 @@ export default function TakeoutOrderList() {
 
   const fetchOrders = useCallback(async () => {
     try {
-      const res = await fetch('/api/orders/takeout', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await apiFetch('/api/orders/takeout', { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) setOrders(await res.json());
     } catch { /* ignore */ }
   }, [token]);
@@ -38,15 +39,18 @@ export default function TakeoutOrderList() {
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
   useEffect(() => {
-    fetch('/api/admin/config').then(r => r.ok ? r.json() : {}).then(setConfig).catch(() => {});
+    apiFetch('/api/admin/config').then(r => r.ok ? r.json() : {}).then(setConfig).catch(() => {});
   }, []);
 
   useEffect(() => {
-    const socket = io({ transports: ['websocket'] });
+    const query = user?.storeId ? { storeId: user.storeId } : {};
+    const socket = io({ transports: ['websocket'], query });
     socket.on('order:new', fetchOrders);
     socket.on('order:updated', fetchOrders);
+    socket.on('order:checked-out', fetchOrders);
+    socket.on('order:cancelled', fetchOrders);
     return () => { socket.disconnect(); };
-  }, [fetchOrders]);
+  }, [fetchOrders, user?.storeId]);
 
   const selectedOrder = orders.find(o => o._id === selected);
   const orderTotal = (o: TakeoutOrder) => {
@@ -71,7 +75,7 @@ export default function TakeoutOrderList() {
   const handleFinalizePaid = async (order: TakeoutOrder) => {
     setFinalizing(true);
     try {
-      const res = await fetch('/api/payments/finalize', {
+      const res = await apiFetch('/api/payments/finalize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ orderId: order._id }),
@@ -113,7 +117,7 @@ export default function TakeoutOrderList() {
       else if (paymentMethod === 'card') body.cardAmount = total;
       else { body.cashAmount = Number(cashAmount); body.cardAmount = Number(cardAmount); }
 
-      const res = await fetch(`/api/checkout/seat/${selectedOrder._id}`, {
+      const res = await apiFetch(`/api/checkout/seat/${selectedOrder._id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(body),
@@ -138,7 +142,7 @@ export default function TakeoutOrderList() {
   const handleCancelOrder = async (orderId: string) => {
     if (!confirm('确认取消此订单？Cancel this order?')) return;
     try {
-      const res = await fetch(`/api/orders/${orderId}`, {
+      const res = await apiFetch(`/api/orders/${orderId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });

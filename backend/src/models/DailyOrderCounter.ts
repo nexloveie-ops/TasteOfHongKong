@@ -5,5 +5,4 @@ const DailyOrderCounterSchema = new mongoose.Schema({
   currentNumber: { type: Number, default: 0 },
 });
 
-export const DailyOrderCounter = mongoose.model('DailyOrderCounter', DailyOrderCounterSchema, 'daily_order_counters');
 export { DailyOrderCounterSchema };

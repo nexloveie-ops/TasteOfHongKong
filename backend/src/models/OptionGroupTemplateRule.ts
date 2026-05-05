@@ -9,8 +9,4 @@ const OptionGroupTemplateRuleSchema = new mongoose.Schema({
   excludedMenuItemIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'MenuItem' }],
 }, { timestamps: true });
 
-export const OptionGroupTemplateRule = mongoose.model(
-  'OptionGroupTemplateRule',
-  OptionGroupTemplateRuleSchema,
-  'option_group_template_rules',
-);
+export { OptionGroupTemplateRuleSchema };

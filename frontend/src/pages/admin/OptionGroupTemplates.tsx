@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { apiFetch } from '../../api/client';
 
 interface Translation { locale: string; name: string; }
 interface Category { _id: string; translations: Translation[]; }
@@ -266,10 +267,10 @@ export default function OptionGroupTemplates() {
 
   const fetchAll = useCallback(async () => {
     const [catRes, itemRes, tplRes, ruleRes] = await Promise.all([
-      fetch('/api/menu/categories', { headers: { Authorization: `Bearer ${token}` } }),
-      fetch('/api/menu/items?ownOptionGroups=1', { headers: { Authorization: `Bearer ${token}` } }),
-      fetch('/api/admin/option-group-templates', { headers: { Authorization: `Bearer ${token}` } }),
-      fetch('/api/admin/option-group-templates/rules', { headers: { Authorization: `Bearer ${token}` } }),
+      apiFetch('/api/menu/categories', { headers: { Authorization: `Bearer ${token}` } }),
+      apiFetch('/api/menu/items?ownOptionGroups=1', { headers: { Authorization: `Bearer ${token}` } }),
+      apiFetch('/api/admin/option-group-templates', { headers: { Authorization: `Bearer ${token}` } }),
+      apiFetch('/api/admin/option-group-templates/rules', { headers: { Authorization: `Bearer ${token}` } }),
     ]);
     if (catRes.ok) setCategories(await catRes.json());
     if (itemRes.ok) setMenuItems(await itemRes.json());
@@ -342,8 +343,8 @@ export default function OptionGroupTemplates() {
         optionGroups: fromFormGroups(templateForm.optionGroups),
       };
       const res = templateForm._id
-        ? await fetch(`/api/admin/option-group-templates/${encodeURIComponent(templateForm._id)}`, { method: 'PUT', headers, body: JSON.stringify(body) })
-        : await fetch('/api/admin/option-group-templates', { method: 'POST', headers, body: JSON.stringify(body) });
+        ? await apiFetch(`/api/admin/option-group-templates/${encodeURIComponent(templateForm._id)}`, { method: 'PUT', headers, body: JSON.stringify(body) })
+        : await apiFetch('/api/admin/option-group-templates', { method: 'POST', headers, body: JSON.stringify(body) });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         alert(data?.error?.message || '保存失败');
@@ -361,7 +362,7 @@ export default function OptionGroupTemplates() {
 
   const deleteTemplate = async (id: string) => {
     if (!confirm(t('common.confirm') + '?')) return;
-    const res = await fetch(`/api/admin/option-group-templates/${encodeURIComponent(id)}`, { method: 'DELETE', headers });
+    const res = await apiFetch(`/api/admin/option-group-templates/${encodeURIComponent(id)}`, { method: 'DELETE', headers });
     if (!res.ok) {
       const data = await res.json().catch(() => null);
       alert(data?.error?.message || t('common.error'));
@@ -394,8 +395,8 @@ export default function OptionGroupTemplates() {
         excludedMenuItemIds: ruleForm.excludedMenuItemIds,
       };
       const res = ruleForm._id
-        ? await fetch(`/api/admin/option-group-templates/rules/${encodeURIComponent(ruleForm._id)}`, { method: 'PUT', headers, body: JSON.stringify(body) })
-        : await fetch('/api/admin/option-group-templates/rules', { method: 'POST', headers, body: JSON.stringify(body) });
+        ? await apiFetch(`/api/admin/option-group-templates/rules/${encodeURIComponent(ruleForm._id)}`, { method: 'PUT', headers, body: JSON.stringify(body) })
+        : await apiFetch('/api/admin/option-group-templates/rules', { method: 'POST', headers, body: JSON.stringify(body) });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         alert(data?.error?.message || '保存失败');
@@ -413,7 +414,7 @@ export default function OptionGroupTemplates() {
 
   const deleteRule = async (id: string) => {
     if (!confirm(t('common.confirm') + '?')) return;
-    const res = await fetch(`/api/admin/option-group-templates/rules/${encodeURIComponent(id)}`, { method: 'DELETE', headers });
+    const res = await apiFetch(`/api/admin/option-group-templates/rules/${encodeURIComponent(id)}`, { method: 'DELETE', headers });
     if (!res.ok) {
       const data = await res.json().catch(() => null);
       alert(data?.error?.message || t('common.error'));
@@ -460,7 +461,7 @@ export default function OptionGroupTemplates() {
                   optionGroups: toFormGroups(tpl.optionGroups),
                 });
                 try {
-                  const res = await fetch(`/api/admin/option-group-templates/${encodeURIComponent(tid)}`, {
+                  const res = await apiFetch(`/api/admin/option-group-templates/${encodeURIComponent(tid)}`, {
                     headers: { Authorization: `Bearer ${token}` },
                   });
                   if (!res.ok) return;

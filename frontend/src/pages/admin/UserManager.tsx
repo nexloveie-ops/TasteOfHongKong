@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { apiFetch } from '../../api/client';
 
 interface AdminUser { _id: string; username: string; role: string; }
 
@@ -17,7 +18,7 @@ export default function UserManager() {
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
 
   const fetchUsers = useCallback(async () => {
-    const res = await fetch('/api/admin/users', { headers: { Authorization: `Bearer ${token}` } });
+    const res = await apiFetch('/api/admin/users', { headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) setUsers(await res.json());
   }, [token]);
 
@@ -42,9 +43,9 @@ export default function UserManager() {
     const body: Record<string, string> = { username, role };
     if (password) body.password = password;
     if (editingId) {
-      await fetch(`/api/admin/users/${editingId}`, { method: 'PUT', headers, body: JSON.stringify(body) });
+      await apiFetch(`/api/admin/users/${editingId}`, { method: 'PUT', headers, body: JSON.stringify(body) });
     } else {
-      await fetch('/api/admin/users', { method: 'POST', headers, body: JSON.stringify(body) });
+      await apiFetch('/api/admin/users', { method: 'POST', headers, body: JSON.stringify(body) });
     }
     setShowForm(false);
     fetchUsers();
@@ -52,7 +53,7 @@ export default function UserManager() {
 
   const handleDelete = async (id: string) => {
     if (!confirm(t('common.confirm') + '?')) return;
-    await fetch(`/api/admin/users/${id}`, { method: 'DELETE', headers });
+    await apiFetch(`/api/admin/users/${id}`, { method: 'DELETE', headers });
     fetchUsers();
   };
 

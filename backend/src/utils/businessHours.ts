@@ -1,4 +1,5 @@
-import { SystemConfig } from '../models/SystemConfig';
+import type mongoose from 'mongoose';
+import { getModels } from '../getModels';
 
 export interface BusinessSlot {
   start: string;
@@ -46,11 +47,12 @@ function parseJsonArray<T>(input?: string): T[] {
   }
 }
 
-export async function getBusinessStatus(now = new Date()): Promise<BusinessStatus> {
-  const [slotsConfig, closedDatesConfig] = await Promise.all([
-    SystemConfig.findOne({ key: 'business_hours_slots' }).lean(),
-    SystemConfig.findOne({ key: 'business_closed_dates' }).lean(),
-  ]);
+export async function getBusinessStatus(storeId: mongoose.Types.ObjectId, now = new Date()): Promise<BusinessStatus> {
+  const { SystemConfig } = getModels();
+  const [slotsConfig, closedDatesConfig] = (await Promise.all([
+    SystemConfig.findOne({ storeId, key: 'business_hours_slots' }).lean(),
+    SystemConfig.findOne({ storeId, key: 'business_closed_dates' }).lean(),
+  ])) as [{ value?: string } | null, { value?: string } | null];
 
   const slots = parseJsonArray<BusinessSlot>(slotsConfig?.value).filter(
     (slot) => typeof slot?.start === 'string' && typeof slot?.end === 'string',

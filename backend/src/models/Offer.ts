@@ -29,5 +29,4 @@ const OfferSchema = new mongoose.Schema({
   endDate: { type: Date },
 }, { timestamps: true });
 
-export const Offer = mongoose.model('Offer', OfferSchema, 'offers');
 export { OfferSchema, OfferSlotSchema };

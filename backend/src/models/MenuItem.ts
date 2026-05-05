@@ -38,5 +38,4 @@ const MenuItemSchema = new mongoose.Schema({
   optionGroups: [OptionGroupSchema],
 }, { timestamps: true });
 
-export const MenuItem = mongoose.model('MenuItem', MenuItemSchema, 'menu_items');
 export { MenuItemSchema, ItemTranslationSchema };

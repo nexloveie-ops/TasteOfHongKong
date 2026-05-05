@@ -1,8 +1,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
-import { OptionGroupTemplate } from '../models/OptionGroupTemplate';
-import { OptionGroupTemplateRule } from '../models/OptionGroupTemplateRule';
-import { authMiddleware, requirePermission } from '../middleware/auth';
+import { getModels } from '../getModels';
+import { requirePermission } from '../middleware/auth';
+import { requireAuthSameStore } from '../middleware/authForStore';
 import { createAppError } from '../middleware/errorHandler';
 import { normalizeNestedOptionGroups, validateOptionGroups } from '../utils/optionGroups';
 
@@ -28,15 +28,14 @@ function parseObjectIdArray(arr: unknown, label: string): mongoose.Types.ObjectI
   });
 }
 
-// --- Templates ---
-
 router.get(
   '/',
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('menu:write'),
-  async (_req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const templates = await OptionGroupTemplate.find({}).sort({ updatedAt: -1 }).lean();
+      const { OptionGroupTemplate } = getModels();
+      const templates = await OptionGroupTemplate.find({ storeId: req.storeId }).sort({ updatedAt: -1 }).lean();
       res.json(templates);
     } catch (err) {
       next(err);
@@ -46,10 +45,11 @@ router.get(
 
 router.post(
   '/',
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('menu:write'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { OptionGroupTemplate } = getModels();
       const { name, enabled, optionGroups } = req.body;
       if (!name || typeof name !== 'string') {
         throw createAppError('VALIDATION_ERROR', 'name is required');
@@ -58,6 +58,7 @@ router.post(
       validateOptionGroups(flatGroups);
 
       const tpl = await OptionGroupTemplate.create({
+        storeId: req.storeId,
         name: name.trim(),
         enabled: typeof enabled === 'boolean' ? enabled : true,
         optionGroups: flatGroups,
@@ -69,15 +70,14 @@ router.post(
   },
 );
 
-// --- Rules (register before /:id so paths like /rules are never captured as template id) ---
-
 router.get(
   '/rules',
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('menu:write'),
-  async (_req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const rules = await OptionGroupTemplateRule.find({})
+      const { OptionGroupTemplateRule } = getModels();
+      const rules = await OptionGroupTemplateRule.find({ storeId: req.storeId })
         .sort({ priority: 1, createdAt: 1, _id: 1 })
         .lean();
       res.json(rules);
@@ -89,17 +89,18 @@ router.get(
 
 router.post(
   '/rules',
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('menu:write'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { OptionGroupTemplate, OptionGroupTemplateRule } = getModels();
       const { templateId, enabled, priority, categoryIds, menuItemIds, excludedMenuItemIds } = req.body;
       if (!templateId || typeof templateId !== 'string') {
         throw createAppError('VALIDATION_ERROR', 'templateId is required');
       }
       const tid = parseObjectId(templateId, 'templateId');
 
-      const tpl = await OptionGroupTemplate.findById(tid);
+      const tpl = await OptionGroupTemplate.findOne({ _id: tid, storeId: req.storeId });
       if (!tpl) {
         throw createAppError('VALIDATION_ERROR', 'Template not found');
       }
@@ -113,6 +114,7 @@ router.post(
       }
 
       const rule = await OptionGroupTemplateRule.create({
+        storeId: req.storeId,
         templateId: tid,
         enabled: typeof enabled === 'boolean' ? enabled : true,
         priority: typeof priority === 'number' && Number.isFinite(priority) ? priority : 100,
@@ -130,14 +132,15 @@ router.post(
 
 router.put(
   '/rules/:id',
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('menu:write'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { OptionGroupTemplate, OptionGroupTemplateRule } = getModels();
       const id = req.params.id as string;
       parseObjectId(id, 'rule id');
 
-      const existing = await OptionGroupTemplateRule.findById(id);
+      const existing = await OptionGroupTemplateRule.findOne({ _id: id, storeId: req.storeId });
       if (!existing) {
         throw createAppError('NOT_FOUND', 'Rule not found');
       }
@@ -150,7 +153,7 @@ router.put(
           throw createAppError('VALIDATION_ERROR', 'templateId must be a string');
         }
         const tid = parseObjectId(templateId, 'templateId');
-        const tpl = await OptionGroupTemplate.findById(tid);
+        const tpl = await OptionGroupTemplate.findOne({ _id: tid, storeId: req.storeId });
         if (!tpl) {
           throw createAppError('VALIDATION_ERROR', 'Template not found');
         }
@@ -185,15 +188,21 @@ router.put(
         throw createAppError('VALIDATION_ERROR', 'No fields to update');
       }
 
-      const nextCats =
-        (update.categoryIds as mongoose.Types.ObjectId[] | undefined) ?? existing.categoryIds;
-      const nextItems =
-        (update.menuItemIds as mongoose.Types.ObjectId[] | undefined) ?? existing.menuItemIds;
+      const ex = existing as unknown as {
+        categoryIds?: mongoose.Types.ObjectId[];
+        menuItemIds?: mongoose.Types.ObjectId[];
+      };
+      const nextCats = (update.categoryIds as mongoose.Types.ObjectId[] | undefined) ?? ex.categoryIds;
+      const nextItems = (update.menuItemIds as mongoose.Types.ObjectId[] | undefined) ?? ex.menuItemIds;
       if ((!nextCats || nextCats.length === 0) && (!nextItems || nextItems.length === 0)) {
         throw createAppError('VALIDATION_ERROR', 'At least one categoryId or menuItemId is required');
       }
 
-      const updated = await OptionGroupTemplateRule.findByIdAndUpdate(id, update, { new: true, runValidators: true });
+      const updated = await OptionGroupTemplateRule.findOneAndUpdate(
+        { _id: id, storeId: req.storeId },
+        update,
+        { new: true, runValidators: true },
+      );
       if (!updated) {
         throw createAppError('NOT_FOUND', 'Rule not found');
       }
@@ -206,14 +215,15 @@ router.put(
 
 router.delete(
   '/rules/:id',
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('menu:write'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { OptionGroupTemplateRule } = getModels();
       const id = req.params.id as string;
       parseObjectId(id, 'rule id');
 
-      const deleted = await OptionGroupTemplateRule.findByIdAndDelete(id);
+      const deleted = await OptionGroupTemplateRule.findOneAndDelete({ _id: id, storeId: req.storeId });
       if (!deleted) {
         throw createAppError('NOT_FOUND', 'Rule not found');
       }
@@ -226,13 +236,14 @@ router.delete(
 
 router.get(
   '/:id',
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('menu:write'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { OptionGroupTemplate } = getModels();
       const id = req.params.id as string;
       parseObjectId(id, 'template id');
-      const doc = await OptionGroupTemplate.findById(id).lean();
+      const doc = await OptionGroupTemplate.findOne({ _id: id, storeId: req.storeId }).lean();
       if (!doc) {
         throw createAppError('NOT_FOUND', 'Template not found');
       }
@@ -245,10 +256,11 @@ router.get(
 
 router.put(
   '/:id',
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('menu:write'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { OptionGroupTemplate } = getModels();
       const id = req.params.id as string;
       parseObjectId(id, 'template id');
 
@@ -276,7 +288,11 @@ router.put(
         throw createAppError('VALIDATION_ERROR', 'No fields to update');
       }
 
-      const updated = await OptionGroupTemplate.findByIdAndUpdate(id, update, { new: true, runValidators: true });
+      const updated = await OptionGroupTemplate.findOneAndUpdate(
+        { _id: id, storeId: req.storeId },
+        update,
+        { new: true, runValidators: true },
+      );
       if (!updated) {
         throw createAppError('NOT_FOUND', 'Template not found');
       }
@@ -289,19 +305,20 @@ router.put(
 
 router.delete(
   '/:id',
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('menu:write'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { OptionGroupTemplate, OptionGroupTemplateRule } = getModels();
       const id = req.params.id as string;
       parseObjectId(id, 'template id');
 
-      const deleted = await OptionGroupTemplate.findByIdAndDelete(id);
+      const deleted = await OptionGroupTemplate.findOneAndDelete({ _id: id, storeId: req.storeId });
       if (!deleted) {
         throw createAppError('NOT_FOUND', 'Template not found');
       }
 
-      await OptionGroupTemplateRule.deleteMany({ templateId: id });
+      await OptionGroupTemplateRule.deleteMany({ templateId: new mongoose.Types.ObjectId(id), storeId: req.storeId });
 
       res.json({ message: 'Template deleted and related rules removed' });
     } catch (err) {

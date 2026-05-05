@@ -1,42 +1,41 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
-import { Allergen } from '../models/Allergen';
-import { MenuItem } from '../models/MenuItem';
-import { authMiddleware, requirePermission } from '../middleware/auth';
+import { getModels } from '../getModels';
+import { requirePermission } from '../middleware/auth';
+import { requireAuthSameStore } from '../middleware/authForStore';
 import { createAppError } from '../middleware/errorHandler';
 
 const router = Router();
 
-/**
- * GET /api/allergens
- * Public endpoint — returns all allergens.
- */
-router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
+router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const allergens = await Allergen.find().lean();
+    const { Allergen } = getModels();
+    const allergens = await Allergen.find({ storeId: req.storeId }).lean();
     res.json(allergens);
   } catch (err) {
     next(err);
   }
 });
 
-/**
- * POST /api/allergens
- * Creates a new allergen. Requires auth + menu:write permission.
- */
 router.post(
   '/',
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('menu:write'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { Allergen } = getModels();
       const { name, icon, translations } = req.body;
 
       if (!name) {
         throw createAppError('VALIDATION_ERROR', 'name is required');
       }
 
-      const allergen = await Allergen.create({ name, icon, translations: translations || [] });
+      const allergen = await Allergen.create({
+        storeId: req.storeId,
+        name,
+        icon,
+        translations: translations || [],
+      });
       res.status(201).json(allergen);
     } catch (err) {
       next(err);
@@ -44,16 +43,13 @@ router.post(
   }
 );
 
-/**
- * PUT /api/allergens/:id
- * Updates an existing allergen. Requires auth + menu:write permission.
- */
 router.put(
   '/:id',
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('menu:write'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { Allergen } = getModels();
       const id = req.params.id as string;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -71,7 +67,7 @@ router.put(
         throw createAppError('VALIDATION_ERROR', 'At least one field must be provided for update');
       }
 
-      const updated = await Allergen.findByIdAndUpdate(id, updateData, {
+      const updated = await Allergen.findOneAndUpdate({ _id: id, storeId: req.storeId }, updateData, {
         new: true,
         runValidators: true,
       });
@@ -87,36 +83,32 @@ router.put(
   }
 );
 
-/**
- * DELETE /api/allergens/:id
- * Deletes an allergen. Requires auth + menu:write permission.
- * Returns 409 if any MenuItem references it.
- */
 router.delete(
   '/:id',
-  authMiddleware,
+  ...requireAuthSameStore,
   requirePermission('menu:write'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { Allergen, MenuItem } = getModels();
       const id = req.params.id as string;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
         throw createAppError('NOT_FOUND', 'Allergen not found');
       }
 
-      const allergen = await Allergen.findById(id);
+      const allergen = await Allergen.findOne({ _id: id, storeId: req.storeId });
       if (!allergen) {
         throw createAppError('NOT_FOUND', 'Allergen not found');
       }
 
-      const itemCount = await MenuItem.countDocuments({ allergenIds: id });
+      const itemCount = await MenuItem.countDocuments({ storeId: req.storeId, allergenIds: id });
       if (itemCount > 0) {
         throw createAppError('CONFLICT', 'This allergen is in use by menu items and cannot be deleted', {
           count: itemCount,
         });
       }
 
-      await Allergen.findByIdAndDelete(id);
+      await Allergen.findOneAndDelete({ _id: id, storeId: req.storeId });
       res.json({ message: 'Allergen deleted successfully' });
     } catch (err) {
       next(err);

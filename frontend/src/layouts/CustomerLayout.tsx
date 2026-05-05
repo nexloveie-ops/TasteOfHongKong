@@ -4,13 +4,17 @@ import { useCart } from '../context/CartContext';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { matchBundles, calcBundleTotal, type OfferData } from '../utils/bundleMatcher';
 import { useRestaurantConfig } from '../hooks/useRestaurantConfig';
+import { apiFetch } from '../api/client';
+import { useStoreSlug } from '../context/StoreContext';
 
 export default function CustomerLayout() {
+  const storeSlug = useStoreSlug();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { totalItems, totalAmount, items: cartItems, getItemKey } = useCart();
-  const { displayName } = useRestaurantConfig();
+  const { displayName, config } = useRestaurantConfig();
+  const logoUrl = config.restaurant_logo?.trim();
   const table = searchParams.get('table');
   const seat = searchParams.get('seat');
   const qs = searchParams.toString();
@@ -21,12 +25,19 @@ export default function CustomerLayout() {
   const [menuItemCats, setMenuItemCats] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    fetch('/api/offers').then(r => r.ok ? r.json() : []).then(setOffers).catch(() => {});
-    fetch('/api/menu/items?ownOptionGroups=1').then(r => r.ok ? r.json() : []).then((data: { _id: string; categoryId: string }[]) => {
-      const map: Record<string, string> = {};
-      for (const item of data) map[item._id] = item.categoryId;
-      setMenuItemCats(map);
-    }).catch(() => {});
+    apiFetch('/api/offers')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: unknown) => setOffers(Array.isArray(data) ? data : []))
+      .catch(() => {});
+    apiFetch('/api/menu/items?ownOptionGroups=1')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: unknown) => {
+        const list = Array.isArray(data) ? data : [];
+        const map: Record<string, string> = {};
+        for (const item of list as { _id: string; categoryId: string }[]) map[item._id] = item.categoryId;
+        setMenuItemCats(map);
+      })
+      .catch(() => {});
   }, []);
 
   const finalTotal = useMemo(() => {
@@ -46,7 +57,7 @@ export default function CustomerLayout() {
   const hasDiscount = finalTotal < totalAmount;
 
   const goToCart = () => {
-    navigate(`/customer/cart${qs ? '?' + qs : ''}`);
+    navigate(`cart${qs ? '?' + qs : ''}`);
   };
 
   return (
@@ -58,8 +69,11 @@ export default function CustomerLayout() {
         borderBottom: '1px solid var(--border-light)', flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {logoUrl ? (
+            <img src={logoUrl} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+          ) : null}
           <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 16, color: 'var(--red-primary)' }}>
-            {displayName}
+            {displayName || storeSlug}
           </span>
           {table && seat && (
             <span style={{ fontSize: 12, color: 'var(--text-light)' }}>
@@ -99,6 +113,29 @@ export default function CustomerLayout() {
       <div style={{ flex: 1, overflow: 'auto' }}>
         <Outlet />
       </div>
+
+      <footer style={{
+        flexShrink: 0,
+        padding: '12px 14px 16px',
+        textAlign: 'center',
+        fontSize: 11,
+        color: 'var(--text-light)',
+        borderTop: '1px solid var(--border-light)',
+        background: 'var(--bg-white)',
+      }}>
+        {config.restaurant_phone?.trim() ? (
+          <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+            {config.restaurant_phone}
+          </div>
+        ) : null}
+        <div style={{ lineHeight: 1.5 }}>
+          Powered by L&amp;Z techserve LTD
+          <br />
+          <a href="mailto:info@lztechserve.com" style={{ color: 'var(--text-light)', textDecoration: 'none' }}>
+            info@lztechserve.com
+          </a>
+        </div>
+      </footer>
     </div>
   );
 }

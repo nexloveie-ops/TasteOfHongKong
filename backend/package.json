@@ -6,7 +6,8 @@
     "dev": "ts-node src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "test": "jest"
+    "test": "jest",
+    "seed:store": "ts-node scripts/seed-lzfood-store.ts"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.19.0",

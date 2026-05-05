@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import i18n from '../i18n';
+import { apiFetch } from '../api/client';
+import { useStoreSlug } from '../context/StoreContext';
 
 export interface RestaurantConfig {
   restaurant_name_zh?: string;
@@ -13,10 +15,9 @@ export interface RestaurantConfig {
   receipt_print_copies?: string;
 }
 
-let cachedConfig: RestaurantConfig | null = null;
-let fetchPromise: Promise<RestaurantConfig> | null = null;
+const configBySlug = new Map<string, RestaurantConfig>();
+const promiseBySlug = new Map<string, Promise<RestaurantConfig>>();
 
-/** Single restaurant name for the tab, matching UI language with sensible fallback. */
 function pickDocumentTitleName(cfg: RestaurantConfig): string {
   const zh = cfg.restaurant_name_zh?.trim();
   const en = cfg.restaurant_name_en?.trim();
@@ -25,55 +26,64 @@ function pickDocumentTitleName(cfg: RestaurantConfig): string {
   return en || zh || '';
 }
 
-function applyDocumentTitle(cfg: RestaurantConfig) {
-  const title = pickDocumentTitleName(cfg);
-  if (title) document.title = title;
+export function applyDocumentTitle(cfg: RestaurantConfig, slug: string) {
+  const name = pickDocumentTitleName(cfg).trim();
+  document.title = name || slug || 'Restaurant';
 }
 
-i18n.on('languageChanged', () => {
-  if (cachedConfig) applyDocumentTitle(cachedConfig);
-});
-
-function fetchConfig(): Promise<RestaurantConfig> {
-  if (cachedConfig) return Promise.resolve(cachedConfig);
-  if (fetchPromise) return fetchPromise;
-  fetchPromise = fetch('/api/admin/config')
-    .then(r => r.ok ? r.json() : {})
-    .then(data => {
-      const cfg = (data || {}) as RestaurantConfig;
-      cachedConfig = cfg;
-      applyDocumentTitle(cfg);
-      return cfg;
-    })
-    .catch(() => {
-      const cfg = {} as RestaurantConfig;
-      cachedConfig = cfg;
-      return cfg;
-    })
-    .finally(() => {
-      fetchPromise = null;
-    });
-  return fetchPromise;
+function fetchConfigForSlug(slug: string): Promise<RestaurantConfig> {
+  const hit = configBySlug.get(slug);
+  if (hit) return Promise.resolve(hit);
+  let p = promiseBySlug.get(slug);
+  if (!p) {
+    p = apiFetch('/api/admin/config')
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((data) => {
+        const cfg = (data || {}) as RestaurantConfig;
+        configBySlug.set(slug, cfg);
+        applyDocumentTitle(cfg, slug);
+        return cfg;
+      })
+      .catch(() => {
+        const cfg = {} as RestaurantConfig;
+        configBySlug.set(slug, cfg);
+        applyDocumentTitle(cfg, slug);
+        return cfg;
+      })
+      .finally(() => {
+        promiseBySlug.delete(slug);
+      });
+    promiseBySlug.set(slug, p);
+  }
+  return p;
 }
 
-/** Clear cached config (e.g. after admin updates) and refetch. */
-export async function refreshRestaurantConfig(): Promise<RestaurantConfig> {
-  cachedConfig = null;
-  fetchPromise = null;
-  const cfg = await fetchConfig();
+export async function refreshRestaurantConfig(slug: string): Promise<RestaurantConfig> {
+  configBySlug.delete(slug);
+  promiseBySlug.delete(slug);
+  const cfg = await fetchConfigForSlug(slug);
   return cfg;
 }
 
 export function useRestaurantConfig() {
-  const [config, setConfig] = useState<RestaurantConfig>(cachedConfig || {});
+  const slug = useStoreSlug();
+  const [config, setConfig] = useState<RestaurantConfig>(() => configBySlug.get(slug) || {});
 
   useEffect(() => {
-    fetchConfig().then(setConfig);
-  }, []);
+    fetchConfigForSlug(slug).then(setConfig);
+  }, [slug]);
+
+  useEffect(() => {
+    const syncTitle = () => applyDocumentTitle(config, slug);
+    syncTitle();
+    i18n.on('languageChanged', syncTitle);
+    return () => {
+      i18n.off('languageChanged', syncTitle);
+    };
+  }, [config, slug]);
 
   const nameZh = config.restaurant_name_zh || '';
   const nameEn = config.restaurant_name_en || '';
-  // Display name: prefer zh for Chinese contexts, en for English
   const displayName = nameZh || nameEn || '';
   const displayNameEn = nameEn || nameZh || '';
 

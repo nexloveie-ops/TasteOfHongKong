@@ -1,37 +1,41 @@
 import { useState } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useRestaurantConfig } from '../hooks/useRestaurantConfig';
 
 const sidebarItems = [
-  { path: '/admin/restaurant', icon: '🏪', key: 'admin.restaurantInfo' },
-  { path: '/admin/categories', icon: '📂', key: 'admin.categories' },
-  { path: '/admin/menu-items', icon: '🍽️', key: 'admin.menuItems' },
-  { path: '/admin/option-group-templates', icon: '🧩', key: 'admin.optionGroupTemplatesNav' },
-  { path: '/admin/inventory', icon: '📦', key: 'admin.inventory' },
-  { path: '/admin/allergens', icon: '⚠️', key: 'admin.allergens' },
-  { path: '/admin/i18n', icon: '🌐', key: 'admin.i18nEditor' },
-  { path: '/admin/qr-codes', icon: '📱', key: 'admin.qrCodes' },
-  { path: '/admin/offers', icon: '🎁', key: 'admin.offers' },
-  { path: '/admin/coupons', icon: '🎟️', key: 'admin.coupons' },
-  { path: '/admin/orders', icon: '📋', key: 'admin.orderHistory' },
-  { path: '/admin/reports', icon: '📊', key: 'admin.reports' },
-  { path: '/admin/business-hours', icon: '🕒', key: 'admin.businessHours' },
-  { path: '/admin/users', icon: '👥', key: 'admin.users' },
-  { path: '/admin/config', icon: '⚙️', key: 'admin.systemConfig' },
-  { path: '/admin/stripe', icon: '💳', key: 'admin.stripeSettings' },
+  { path: 'restaurant', icon: '🏪', key: 'admin.restaurantInfo' },
+  { path: 'categories', icon: '📂', key: 'admin.categories' },
+  { path: 'menu-items', icon: '🍽️', key: 'admin.menuItems' },
+  { path: 'option-group-templates', icon: '🧩', key: 'admin.optionGroupTemplatesNav' },
+  { path: 'inventory', icon: '📦', key: 'admin.inventory' },
+  { path: 'allergens', icon: '⚠️', key: 'admin.allergens' },
+  { path: 'i18n', icon: '🌐', key: 'admin.i18nEditor' },
+  { path: 'qr-codes', icon: '📱', key: 'admin.qrCodes' },
+  { path: 'offers', icon: '🎁', key: 'admin.offers' },
+  { path: 'coupons', icon: '🎟️', key: 'admin.coupons' },
+  { path: 'orders', icon: '📋', key: 'admin.orderHistory' },
+  { path: 'reports', icon: '📊', key: 'admin.reports' },
+  { path: 'business-hours', icon: '🕒', key: 'admin.businessHours' },
+  { path: 'users', icon: '👥', key: 'admin.users' },
+  { path: 'config', icon: '⚙️', key: 'admin.systemConfig' },
+  { path: 'stripe', icon: '💳', key: 'admin.stripeSettings' },
 ];
 
 export default function AdminLayout() {
   const { user, logout } = useAuth();
+  const { storeSlug } = useParams<{ storeSlug: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { displayName } = useRestaurantConfig();
   const [collapsed, setCollapsed] = useState(false);
 
-  const handleLogout = () => { logout(); navigate('/login'); };
+  const handleLogout = () => {
+    logout();
+    navigate(`/${storeSlug}/login`);
+  };
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>

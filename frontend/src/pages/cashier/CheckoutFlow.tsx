@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { type Order, type OrderItem } from '../../components/cashier/OrderDetail';
 import ReceiptPrint from '../../components/cashier/ReceiptPrint';
+import { apiFetch } from '../../api/client';
 
 interface EditableItem extends OrderItem {
   editPrice: number; // editable unit price (for discount)
@@ -79,7 +80,7 @@ export default function CheckoutFlow() {
 
   const fetchOrders = useCallback(async () => {
     if (orderId) {
-      const res = await fetch(`/api/orders/${orderId}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await apiFetch(`/api/orders/${orderId}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const o = await res.json();
         setOrders([o]);
@@ -87,7 +88,7 @@ export default function CheckoutFlow() {
         setSelectedSeat(o.seatNumber ?? 0);
       }
     } else if (tableNumber) {
-      const res = await fetch('/api/orders/dine-in', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await apiFetch('/api/orders/dine-in', { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const allOrders: Order[] = await res.json();
         setOrders(allOrders.filter(o => o.tableNumber === Number(tableNumber)));
@@ -146,7 +147,7 @@ export default function CheckoutFlow() {
       const meta = { total: displayTotal, cashReceived: cashReceivedNum, change: changeAmount };
 
       if (mode === 'table') {
-        const res = await fetch(`/api/checkout/table/${tableNumber}`, {
+        const res = await apiFetch(`/api/checkout/table/${tableNumber}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify(body),
@@ -161,7 +162,7 @@ export default function CheckoutFlow() {
         if (!activeSG) return;
         let lastId = '';
         for (const order of activeSG.orders) {
-          const res = await fetch(`/api/checkout/seat/${order._id}`, {
+          const res = await apiFetch(`/api/checkout/seat/${order._id}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify(body),
@@ -200,7 +201,7 @@ export default function CheckoutFlow() {
               </div>
             </div>
           )}
-          <button className="btn btn-outline" onClick={() => navigate('/cashier')} style={{ marginBottom: 20 }}>
+          <button className="btn btn-outline" onClick={() => navigate('..', { relative: 'path' })} style={{ marginBottom: 20 }}>
             {t('common.back')}
           </button>
           <button className="btn btn-primary" onClick={() => window.print()} style={{ marginBottom: 20, marginLeft: 8 }}>
@@ -220,7 +221,7 @@ export default function CheckoutFlow() {
         <h2 style={{ fontSize: 18, fontWeight: 700 }}>
           {t('cashier.checkout')} — {tableNumber ? `${t('cashier.table')} ${tableNumber}` : 'Order'}
         </h2>
-        <button className="btn btn-outline" onClick={() => navigate('/cashier')}>{t('common.back')}</button>
+        <button className="btn btn-outline" onClick={() => navigate('..', { relative: 'path' })}>{t('common.back')}</button>
       </div>
 
       {/* Mode selector */}

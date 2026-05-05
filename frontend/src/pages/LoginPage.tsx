@@ -1,11 +1,13 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useStoreSlug } from '../context/StoreContext';
 import { useTranslation } from 'react-i18next';
 import { useRestaurantConfig } from '../hooks/useRestaurantConfig';
 
 export default function LoginPage() {
   const { login, user, isAuthenticated } = useAuth();
+  const storeSlug = useStoreSlug();
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { displayName, displayNameEn, config } = useRestaurantConfig();
@@ -13,12 +15,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const logoUrl = config.restaurant_logo || '/logo.jpg';
+  const titleMain = displayName || storeSlug;
+  const titleSub = displayNameEn || displayName || storeSlug;
+  const logoUrl = config.restaurant_logo?.trim();
 
   useEffect(() => {
     if (isAuthenticated && user) {
-      const target = user.role === 'owner' ? '/admin' : '/cashier';
-      navigate(target, { replace: true });
+      const isAdmin = user.role === 'owner' || user.role === 'platform_owner';
+      navigate(isAdmin ? '../admin' : '../cashier', { replace: true, relative: 'path' });
     }
   }, [isAuthenticated, user, navigate]);
 
@@ -27,7 +31,7 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await login(username, password);
+      await login(username, password, storeSlug);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
@@ -46,15 +50,23 @@ export default function LoginPage() {
         boxShadow: '0 8px 32px rgba(0,0,0,0.2)', textAlign: 'center',
       }}>
         <div style={{ marginBottom: 8 }}>
-          <img src={logoUrl} alt="Logo" style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover' }} />
+          {logoUrl ? (
+            <img src={logoUrl} alt="" style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover' }} />
+          ) : (
+            <div style={{
+              width: 80, height: 80, margin: '0 auto', borderRadius: '50%', background: '#FFEBEE',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 28, fontWeight: 700, color: '#D32F2F', fontFamily: "'Noto Serif SC', serif",
+            }}>{titleMain.slice(0, 2)}</div>
+          )}
         </div>
         <h1 style={{
           fontFamily: "'Noto Serif SC', serif", fontSize: 28, fontWeight: 700,
           color: '#D32F2F', letterSpacing: 3, marginBottom: 4,
-        }}>{displayName}</h1>
+        }}>{titleMain}</h1>
         <div style={{
           fontSize: 11, letterSpacing: 4, color: '#999', marginBottom: 24, textTransform: 'uppercase',
-        }}>{displayNameEn}</div>
+        }}>{titleSub}</div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <input

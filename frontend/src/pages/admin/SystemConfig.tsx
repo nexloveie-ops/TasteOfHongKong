@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { apiFetch } from '../../api/client';
 
 interface ConfigEntry { key: string; value: string; }
 
@@ -14,7 +15,7 @@ export default function SystemConfig() {
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
 
   const fetchConfig = useCallback(async () => {
-    const res = await fetch('/api/admin/config', { headers: { Authorization: `Bearer ${token}` } });
+    const res = await apiFetch('/api/admin/config', { headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) {
       const data = await res.json();
       // data could be an object or array
@@ -36,7 +37,7 @@ export default function SystemConfig() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await fetch('/api/admin/config', { method: 'PUT', headers, body: JSON.stringify(edits) });
+      await apiFetch('/api/admin/config', { method: 'PUT', headers, body: JSON.stringify(edits) });
       fetchConfig();
     } catch { /* ignore */ }
     finally { setSaving(false); }

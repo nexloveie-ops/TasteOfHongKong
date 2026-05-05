@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { apiFetch } from '../../api/client';
 
 interface Translation { locale: string; name: string; description?: string; }
 interface RawEntry { _id: string; translations: Translation[]; }
@@ -16,8 +17,8 @@ export default function I18nEditor() {
 
   const fetchData = useCallback(async () => {
     const [catRes, itemRes] = await Promise.all([
-      fetch('/api/menu/categories', { headers: { Authorization: `Bearer ${token}` } }),
-      fetch('/api/menu/items?ownOptionGroups=1', { headers: { Authorization: `Bearer ${token}` } }),
+      apiFetch('/api/menu/categories', { headers: { Authorization: `Bearer ${token}` } }),
+      apiFetch('/api/menu/items?ownOptionGroups=1', { headers: { Authorization: `Bearer ${token}` } }),
     ]);
     const cats: Translatable[] = catRes.ok ? (await catRes.json()).map((c: RawEntry) => ({ ...c, kind: 'category' as const })) : [];
     const items: Translatable[] = itemRes.ok ? (await itemRes.json()).map((i: RawEntry) => ({ ...i, kind: 'item' as const })) : [];
@@ -52,7 +53,7 @@ export default function I18nEditor() {
     const url = entry.kind === 'category'
       ? `/api/menu/categories/${entry._id}`
       : `/api/menu/items/${entry._id}`;
-    await fetch(url, { method: 'PUT', headers, body: JSON.stringify({ translations }) });
+    await apiFetch(url, { method: 'PUT', headers, body: JSON.stringify({ translations }) });
     fetchData();
   };
 

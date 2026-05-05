@@ -1,12 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useCart } from '../../context/CartContext';
 import { matchBundles, calcBundleTotal, type OfferData, type MatchedBundle } from '../../utils/bundleMatcher';
+import { apiFetch } from '../../api/client';
 
 export default function CartPage() {
   const { items, increaseQuantity, decreaseQuantity, removeItem, clearCart, totalAmount, totalItems, getItemKey, editOrderId, setEditOrderId } = useCart();
   const navigate = useNavigate();
+  const { storeSlug } = useParams<{ storeSlug: string }>();
   const [searchParams] = useSearchParams();
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
@@ -26,8 +28,8 @@ export default function CartPage() {
   useEffect(() => {
     let loaded = 0;
     const check = () => { loaded++; if (loaded >= 2) setOffersLoaded(true); };
-    fetch('/api/offers').then(r => r.ok ? r.json() : []).then(d => { setOffers(d); check(); }).catch(() => check());
-    fetch('/api/menu/items?ownOptionGroups=1').then(r => r.ok ? r.json() : []).then((data: { _id: string; categoryId: string }[]) => {
+    apiFetch('/api/offers').then(r => r.ok ? r.json() : []).then(d => { setOffers(d); check(); }).catch(() => check());
+    apiFetch('/api/menu/items?ownOptionGroups=1').then(r => r.ok ? r.json() : []).then((data: { _id: string; categoryId: string }[]) => {
       const map: Record<string, string> = {};
       for (const item of data) map[item._id] = item.categoryId;
       setMenuItemCategories(map);
@@ -85,7 +87,7 @@ export default function CartPage() {
       let res: Response;
       if (editOrderId) {
         // Update existing order
-        res = await fetch(`/api/orders/${editOrderId}/items`, {
+        res = await apiFetch(`/api/orders/${editOrderId}/items`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ items: itemsPayload }),
@@ -109,7 +111,7 @@ export default function CartPage() {
             discount: b.savings,
           }));
         }
-        res = await fetch('/api/orders', {
+        res = await apiFetch('/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -121,10 +123,16 @@ export default function CartPage() {
         return;
       }
       const order = await res.json();
-      const navId = editOrderId || order._id;
+      const rawId = editOrderId ?? order._id;
+      const navId = typeof rawId === 'string' ? rawId : String(rawId);
       clearCart();
       setEditOrderId(null);
-      navigate(`/customer/order/${navId}?${qs}`);
+      if (!storeSlug) {
+        setError(t('customer.updateFailed'));
+        return;
+      }
+      const search = qs ? `?${qs}` : '';
+      navigate(`/${storeSlug}/customer/order/${navId}${search}`);
     } catch {
       setError(t('customer.updateFailed'));
     } finally {
@@ -137,7 +145,7 @@ export default function CartPage() {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 16 }}>
         <span style={{ fontSize: 48, opacity: 0.3 }}>🛒</span>
         <p style={{ color: 'var(--text-light)' }}>{t('customer.emptyCart')}</p>
-        <button className="btn btn-primary" onClick={() => navigate(`/customer/menu?${qs}`)}>
+        <button className="btn btn-primary" onClick={() => navigate(`/${storeSlug}/customer/menu${qs ? `?${qs}` : ''}`)}>
           {t('customer.backToMenu')}
         </button>
       </div>
@@ -147,7 +155,7 @@ export default function CartPage() {
   return (
     <div style={{ padding: 16, paddingBottom: 120 }}>
       <h2 style={{ fontFamily: "'Noto Serif SC', serif", fontSize: 20, marginBottom: 16, color: 'var(--text-dark)', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button onClick={() => navigate(`/customer/menu?${qs}`)} style={{
+        <button onClick={() => navigate(`/${storeSlug}/customer/menu${qs ? `?${qs}` : ''}`)} style={{
           background: 'none', border: 'none', cursor: 'pointer', fontSize: 18,
           color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', padding: 0,
         }}>←</button>

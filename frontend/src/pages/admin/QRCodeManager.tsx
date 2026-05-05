@@ -1,13 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { useStoreSlug } from '../../context/StoreContext';
 import QRCode from 'qrcode';
+import { apiFetch } from '../../api/client';
 
 interface QRItem { label: string; url: string; dataUrl: string; }
 
 export default function QRCodeManager() {
   const { t } = useTranslation();
   const { token } = useAuth();
+  const storeSlug = useStoreSlug();
   const [tables, setTables] = useState(5);
   const [seatsPerTable, setSeatsPerTable] = useState(4);
   const [qrItems, setQrItems] = useState<QRItem[]>([]);
@@ -19,7 +22,7 @@ export default function QRCodeManager() {
 
   // Load saved config on mount
   useEffect(() => {
-    fetch('/api/admin/config').then(r => r.ok ? r.json() : {}).then((cfg: Record<string, string>) => {
+    apiFetch('/api/admin/config').then(r => r.ok ? r.json() : {}).then((cfg: Record<string, string>) => {
       if (cfg.qr_tables) setTables(parseInt(cfg.qr_tables, 10) || 5);
       if (cfg.qr_seats_per_table) setSeatsPerTable(parseInt(cfg.qr_seats_per_table, 10) || 4);
       setConfigLoaded(true);
@@ -32,13 +35,13 @@ export default function QRCodeManager() {
 
     for (let table = 1; table <= tables; table++) {
       for (let seat = 1; seat <= seatsPerTable; seat++) {
-        const url = `${baseUrl}/customer?table=${table}&seat=${seat}`;
+        const url = `${baseUrl}/${storeSlug}/customer?table=${table}&seat=${seat}`;
         const dataUrl = await QRCode.toDataURL(url, { width: 200, margin: 1 });
         items.push({ label: `Table ${table} · Seat ${seat}`, url, dataUrl });
       }
     }
 
-    const takeoutUrl = `${baseUrl}/customer?type=takeout`;
+    const takeoutUrl = `${baseUrl}/${storeSlug}/customer?type=takeout`;
     const takeoutDataUrl = await QRCode.toDataURL(takeoutUrl, { width: 200, margin: 1 });
     items.push({ label: 'Take Away', url: takeoutUrl, dataUrl: takeoutDataUrl });
 
@@ -46,12 +49,12 @@ export default function QRCodeManager() {
     setGenerating(false);
 
     // Save config to backend
-    fetch('/api/admin/config', {
+    apiFetch('/api/admin/config', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ qr_tables: String(tables), qr_seats_per_table: String(seatsPerTable) }),
     }).catch(() => {});
-  }, [tables, seatsPerTable, baseUrl, token]);
+  }, [tables, seatsPerTable, baseUrl, token, storeSlug]);
 
   // Auto-generate after config loaded
   useEffect(() => { if (configLoaded) generate(); }, [configLoaded]);

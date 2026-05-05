@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { buildReceiptHTML, printViaIframe } from '../../components/cashier/ReceiptPrint';
 import { bundleAdjustedLineTotals, lineGrossEuro, type AppliedBundleLite } from '../../utils/bundleLineAllocation';
+import { apiFetch } from '../../api/client';
 
 interface OrderItem {
   _id: string;
@@ -56,7 +57,7 @@ export default function ReprintReceipt() {
   const [refunding, setRefunding] = useState(false);
 
   useEffect(() => {
-    fetch('/api/admin/config').then(r => r.ok ? r.json() : {}).then(setConfig).catch(() => {});
+    apiFetch('/api/admin/config').then(r => r.ok ? r.json() : {}).then(setConfig).catch(() => {});
   }, []);
 
   const handleSearch = useCallback(async (searchNum?: string) => {
@@ -69,7 +70,7 @@ export default function ReprintReceipt() {
     try {
       const params = new URLSearchParams({ date });
       if (num.trim()) params.set('orderNumber', num.trim());
-      const res = await fetch(`/api/checkout/search?${params.toString()}`, {
+      const res = await apiFetch(`/api/checkout/search?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -162,7 +163,7 @@ export default function ReprintReceipt() {
 
     setRefunding(true);
     try {
-      const res = await fetch(`/api/checkout/${r.checkoutId}/refund`, {
+      const res = await apiFetch(`/api/checkout/${r.checkoutId}/refund`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ itemIds: [...selectedItems] }),

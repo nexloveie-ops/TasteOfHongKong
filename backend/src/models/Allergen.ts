@@ -11,5 +11,4 @@ const AllergenSchema = new mongoose.Schema({
   translations: [AllergenTranslationSchema],
 }, { timestamps: true });
 
-export const Allergen = mongoose.model('Allergen', AllergenSchema, 'allergens');
 export { AllergenSchema, AllergenTranslationSchema };

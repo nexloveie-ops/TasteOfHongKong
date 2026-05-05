@@ -3,22 +3,26 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { parseQRParams } from '../../utils/qrCode';
 import { useRestaurantConfig } from '../../hooks/useRestaurantConfig';
+import { useStoreSlug } from '../../context/StoreContext';
 import { useBusinessStatus } from '../../hooks/useBusinessStatus';
 
 export default function ScanLanding() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { t } = useTranslation();
+  const storeSlug = useStoreSlug();
   const { displayName, displayNameEn } = useRestaurantConfig();
+  const titleZh = displayName || storeSlug;
+  const titleEn = displayNameEn || displayName || storeSlug;
   const { isOpen, reason, loading } = useBusinessStatus();
   const params = parseQRParams(searchParams);
 
   useEffect(() => {
     if (loading || !isOpen) return;
     if (params.type === 'dine_in') {
-      navigate(`/customer/menu?table=${params.tableNumber}&seat=${params.seatNumber}`, { replace: true });
+      navigate(`menu?table=${params.tableNumber}&seat=${params.seatNumber}`, { replace: true });
     } else if (params.type === 'takeout') {
-      navigate('/customer/menu?type=takeout', { replace: true });
+      navigate('menu?type=takeout', { replace: true });
     }
   }, [params, navigate, loading, isOpen]);
 
@@ -49,10 +53,10 @@ export default function ScanLanding() {
         }}>
           <div style={{ position: 'relative', zIndex: 1 }}>
             <h1 style={{ fontFamily: "'Noto Serif SC', serif", fontSize: 26, fontWeight: 700, letterSpacing: 3, marginBottom: 4 }}>
-              {displayName}
+              {titleZh}
             </h1>
             <div style={{ fontSize: 12, fontWeight: 300, letterSpacing: 6, color: '#F0D68A', textTransform: 'uppercase' }}>
-              {displayNameEn}
+              {titleEn}
             </div>
             <div style={{
               display: 'inline-block', marginTop: 10, padding: '4px 14px',

@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { useStoreSlug } from '../../context/StoreContext';
 import { refreshRestaurantConfig } from '../../hooks/useRestaurantConfig';
+import { apiFetch } from '../../api/client';
 
 const CONFIG_KEYS = [
   'account_number',
@@ -32,6 +34,7 @@ const FIELD_I18N: Record<ConfigKey, string> = {
 export default function RestaurantInfo() {
   const { t } = useTranslation();
   const { token } = useAuth();
+  const storeSlug = useStoreSlug();
   const [values, setValues] = useState<Record<ConfigKey, string>>(() => {
     const init: Record<string, string> = {};
     CONFIG_KEYS.forEach(k => { init[k] = ''; });
@@ -44,7 +47,7 @@ export default function RestaurantInfo() {
 
   const fetchConfig = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/config', {
+      const res = await apiFetch('/api/admin/config', {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -74,14 +77,14 @@ export default function RestaurantInfo() {
     try {
       const body: Record<string, string> = {};
       CONFIG_KEYS.forEach(k => { body[k] = values[k]; });
-      const res = await fetch('/api/admin/config', {
+      const res = await apiFetch('/api/admin/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(body),
       });
       if (res.ok) {
         setSaved(true);
-        await refreshRestaurantConfig();
+        await refreshRestaurantConfig(storeSlug);
       }
     } catch { /* ignore */ }
     finally { setSaving(false); }
@@ -92,7 +95,7 @@ export default function RestaurantInfo() {
     try {
       const fd = new FormData();
       fd.append('logo', file);
-      const res = await fetch('/api/admin/logo', {
+      const res = await apiFetch('/api/admin/logo', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: fd,

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { io } from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
 import ReceiptPrint from '../../components/cashier/ReceiptPrint';
+import { apiFetch } from '../../api/client';
 
 interface OrderItem {
   _id: string; menuItemId: string; quantity: number; unitPrice: number;
@@ -18,7 +19,7 @@ interface PhoneOrder {
 
 export default function PhoneOrderList() {
   const { t } = useTranslation();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [orders, setOrders] = useState<PhoneOrder[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -37,7 +38,7 @@ export default function PhoneOrderList() {
 
   const fetchOrders = useCallback(async () => {
     try {
-      const res = await fetch('/api/orders/phone', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await apiFetch('/api/orders/phone', { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) setOrders(await res.json());
     } catch { /* ignore */ }
   }, [token]);
@@ -45,11 +46,14 @@ export default function PhoneOrderList() {
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
   useEffect(() => {
-    const socket = io({ transports: ['websocket'] });
+    const query = user?.storeId ? { storeId: user.storeId } : {};
+    const socket = io({ transports: ['websocket'], query });
     socket.on('order:new', fetchOrders);
+    socket.on('order:updated', fetchOrders);
     socket.on('order:checked-out', fetchOrders);
+    socket.on('order:cancelled', fetchOrders);
     return () => { socket.disconnect(); };
-  }, [fetchOrders]);
+  }, [fetchOrders, user?.storeId]);
 
   const orderTotal = (o: PhoneOrder) => {
     const itemsSum = o.items.reduce((s, i) => {
@@ -82,7 +86,7 @@ export default function PhoneOrderList() {
       else if (paymentMethod === 'card') checkoutBody.cardAmount = selectedTotal;
       else { checkoutBody.cashAmount = Number(mixedCash); checkoutBody.cardAmount = Number(mixedCard); }
 
-      const res = await fetch(`/api/checkout/seat/${selected}`, {
+      const res = await apiFetch(`/api/checkout/seat/${selected}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(checkoutBody),
@@ -103,7 +107,7 @@ export default function PhoneOrderList() {
 
   const handleCancelOrder = async (orderId: string) => {
     if (!confirm('确认取消此电话订单？')) return;
-    await fetch(`/api/orders/${orderId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    await apiFetch(`/api/orders/${orderId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
     fetchOrders();
   };
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { apiFetch } from '../../api/client';
 
 interface SlotData {
   _id?: string;
@@ -60,9 +61,9 @@ export default function OfferManager() {
     setLoading(true);
     try {
       const [offersRes, catsRes, itemsRes] = await Promise.all([
-        fetch('/api/offers/all', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`/api/menu/categories?lang=${lang}`),
-        fetch('/api/menu/items?ownOptionGroups=1'),
+        apiFetch('/api/offers/all', { headers: { Authorization: `Bearer ${token}` } }),
+        apiFetch(`/api/menu/categories?lang=${lang}`),
+        apiFetch('/api/menu/items?ownOptionGroups=1'),
       ]);
       if (offersRes.ok) setOffers(await offersRes.json());
       if (catsRes.ok) {
@@ -137,7 +138,7 @@ export default function OfferManager() {
 
       const url = editing ? `/api/offers/${editing._id}` : '/api/offers';
       const method = editing ? 'PUT' : 'POST';
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(body),
       });
@@ -155,12 +156,12 @@ export default function OfferManager() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('确认删除此优惠？')) return;
-    await fetch(`/api/offers/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    await apiFetch(`/api/offers/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
     fetchData();
   };
 
   const handleToggle = async (offer: OfferData) => {
-    await fetch(`/api/offers/${offer._id}`, {
+    await apiFetch(`/api/offers/${offer._id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ active: !offer.active }),

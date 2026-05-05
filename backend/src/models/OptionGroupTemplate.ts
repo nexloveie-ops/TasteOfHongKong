@@ -9,8 +9,4 @@ const OptionGroupTemplateSchema = new mongoose.Schema({
   optionGroups: { type: [OptionGroupSchema], default: [] },
 }, { timestamps: true });
 
-export const OptionGroupTemplate = mongoose.model(
-  'OptionGroupTemplate',
-  OptionGroupTemplateSchema,
-  'option_group_templates',
-);
+export { OptionGroupTemplateSchema };

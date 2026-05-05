@@ -5,6 +5,7 @@ import { io } from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
 import OrderDetail, { type Order } from '../../components/cashier/OrderDetail';
 import { buildReceiptHTML, printViaIframe } from '../../components/cashier/ReceiptPrint';
+import { apiFetch } from '../../api/client';
 
 interface TableGroup {
   tableNumber: number;
@@ -16,7 +17,7 @@ interface TableGroup {
 
 export default function DineInOrderBoard() {
   const { t } = useTranslation();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const navigate = useNavigate();
   const [tables, setTables] = useState<TableGroup[]>([]);
   const [selectedTable, setSelectedTable] = useState<number | null>(null);
@@ -24,7 +25,7 @@ export default function DineInOrderBoard() {
   const [config, setConfig] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    fetch('/api/admin/config').then(r => r.ok ? r.json() : {}).then(setConfig).catch(() => {});
+    apiFetch('/api/admin/config').then(r => r.ok ? r.json() : {}).then(setConfig).catch(() => {});
   }, []);
 
   const calcOrderTotal = (o: Order) => {
@@ -38,7 +39,7 @@ export default function DineInOrderBoard() {
 
   const fetchOrders = useCallback(async () => {
     try {
-      const res = await fetch('/api/orders/dine-in', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await apiFetch('/api/orders/dine-in', { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) return;
       const data: Order[] = await res.json();
       const grouped = new Map<number, Order[]>();
@@ -61,18 +62,19 @@ export default function DineInOrderBoard() {
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
   useEffect(() => {
-    const socket = io({ transports: ['websocket'] });
+    const query = user?.storeId ? { storeId: user.storeId } : {};
+    const socket = io({ transports: ['websocket'], query });
     socket.on('order:new', fetchOrders);
     socket.on('order:updated', fetchOrders);
     socket.on('order:checked-out', fetchOrders);
     socket.on('order:cancelled', fetchOrders);
     return () => { socket.disconnect(); };
-  }, [fetchOrders]);
+  }, [fetchOrders, user?.storeId]);
 
   const handleCancelOrder = async (orderId: string) => {
     if (!confirm('确认取消此订单？Cancel this order?')) return;
     try {
-      const res = await fetch(`/api/orders/${orderId}`, {
+      const res = await apiFetch(`/api/orders/${orderId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -86,7 +88,7 @@ export default function DineInOrderBoard() {
     try {
       const paidOrders = tbl.orders.filter(o => o.status === 'paid_online');
       for (const order of paidOrders) {
-        const res = await fetch('/api/payments/finalize', {
+        const res = await apiFetch('/api/payments/finalize', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ orderId: order._id }),
@@ -178,7 +180,7 @@ export default function DineInOrderBoard() {
               )}
               {selected.orders.some(o => o.status === 'pending') && (
                 <button className="btn btn-primary" style={{ padding: '8px 12px', fontSize: 12 }}
-                  onClick={() => navigate(`/cashier/checkout/${selected.tableNumber}`)}>
+                  onClick={() => navigate(`checkout/${selected.tableNumber}`)}>
                   {t('cashier.checkout')}
                 </button>
               )}

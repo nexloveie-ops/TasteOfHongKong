@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { loadStripe, type Stripe } from '@stripe/stripe-js';
 import { Elements, PaymentRequestButtonElement, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { apiFetch } from '../../api/client';
 
 interface PaymentModalProps {
   orderId: string;
@@ -37,7 +38,7 @@ function PaymentContent({ orderId, amount, onSuccess, onClose }: PaymentModalPro
 
   // Create payment intent
   useEffect(() => {
-    fetch('/api/admin/config').then(r => r.ok ? r.json() : {}).then((c: Record<string, string>) => {
+    apiFetch('/api/admin/config').then(r => r.ok ? r.json() : {}).then((c: Record<string, string>) => {
       setRestaurantLabel(c.restaurant_name_en || c.restaurant_name_zh || 'Restaurant');
     }).catch(() => {});
     let cancelled = false;
@@ -48,7 +49,7 @@ function PaymentContent({ orderId, amount, onSuccess, onClose }: PaymentModalPro
     }, 35000);
     (async () => {
       try {
-        const res = await fetch('/api/payments/create-intent', {
+        const res = await apiFetch('/api/payments/create-intent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ orderId }),
@@ -109,7 +110,7 @@ function PaymentContent({ orderId, amount, onSuccess, onClose }: PaymentModalPro
         setProcessing(false);
       } else if (paymentIntent) {
         ev.complete('success');
-        const res = await fetch('/api/payments/confirm', {
+        const res = await apiFetch('/api/payments/confirm', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ orderId, paymentIntentId: paymentIntent.id }),
@@ -151,7 +152,7 @@ function PaymentContent({ orderId, amount, onSuccess, onClose }: PaymentModalPro
     }
 
     if (paymentIntent?.status === 'succeeded') {
-      const res = await fetch('/api/payments/confirm', {
+      const res = await apiFetch('/api/payments/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId, paymentIntentId: paymentIntent.id }),
@@ -261,7 +262,7 @@ export default function PaymentModal({ orderId, amount, onSuccess, onClose }: Pa
 
     (async () => {
       try {
-        const res = await fetch('/api/payments/config');
+        const res = await apiFetch('/api/payments/config');
         const data = await res.json().catch(() => ({}));
         if (cancelled) return;
         if (!res.ok) {

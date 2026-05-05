@@ -1,10 +1,17 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import { Server as SocketIOServer } from 'socket.io';
-import { Order } from '../models/Order';
-import { Checkout } from '../models/Checkout';
+import { getModels } from '../getModels';
 import { createAppError } from '../middleware/errorHandler';
 import { createStripeClient, getStripePublishableResolved } from '../utils/stripeConfig';
+import { storeIoRoom } from '../socketRooms';
+
+function paymentModels() {
+  return getModels() as {
+    Order: mongoose.Model<any>;
+    Checkout: mongoose.Model<any>;
+  };
+}
 
 export function createPaymentsRouter(io: SocketIOServer): Router {
   const router = Router();
@@ -14,17 +21,18 @@ export function createPaymentsRouter(io: SocketIOServer): Router {
  */
 router.post('/create-intent', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { Order } = paymentModels();
     const { orderId } = req.body;
 
     if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
       throw createAppError('VALIDATION_ERROR', 'Valid orderId is required');
     }
 
-    const order = await Order.findById(orderId);
+    const order = await Order.findOne({ _id: orderId, storeId: req.storeId });
     if (!order) throw createAppError('NOT_FOUND', 'Order not found');
     if (order.status !== 'pending') throw createAppError('VALIDATION_ERROR', 'Order is already checked out');
 
-    const itemTotal = order.items.reduce((sum, item) => {
+    const itemTotal = order.items.reduce((sum: number, item: { unitPrice: number; quantity: number; selectedOptions?: { extraPrice?: number }[] }) => {
       const optExtra = (item.selectedOptions || []).reduce((s: number, o: { extraPrice?: number }) => s + (o.extraPrice || 0), 0);
       return sum + (item.unitPrice + optExtra) * item.quantity;
     }, 0);
@@ -34,7 +42,7 @@ router.post('/create-intent', async (req: Request, res: Response, next: NextFunc
 
     if (totalAmount <= 0) throw createAppError('VALIDATION_ERROR', 'Order total must be greater than 0');
 
-    const stripe = await createStripeClient();
+    const stripe = await createStripeClient(req.storeId!);
     const paymentIntent = await stripe.paymentIntents.create({
       amount: totalAmount,
       currency: 'eur',
@@ -53,13 +61,14 @@ router.post('/create-intent', async (req: Request, res: Response, next: NextFunc
  */
 router.post('/confirm', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { Order } = paymentModels();
     const { orderId, paymentIntentId } = req.body;
 
     if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
       throw createAppError('VALIDATION_ERROR', 'Valid orderId is required');
     }
 
-    const order = await Order.findById(orderId);
+    const order = await Order.findOne({ _id: orderId, storeId: req.storeId });
     if (!order) throw createAppError('NOT_FOUND', 'Order not found');
 
     if (order.status !== 'pending') {
@@ -67,7 +76,7 @@ router.post('/confirm', async (req: Request, res: Response, next: NextFunction) 
       return;
     }
 
-    const stripe = await createStripeClient();
+    const stripe = await createStripeClient(req.storeId!);
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
     if (paymentIntent.status !== 'succeeded') {
       throw createAppError('VALIDATION_ERROR', 'Payment not completed');
@@ -77,8 +86,7 @@ router.post('/confirm', async (req: Request, res: Response, next: NextFunction) 
     order.status = 'paid_online';
     await order.save();
 
-    // Notify cashier dashboard in real-time
-    io.emit('order:updated', order);
+    io.to(storeIoRoom(req.storeId!)).emit('order:updated', order);
 
     const totalAmount = paymentIntent.amount / 100;
 
@@ -91,9 +99,9 @@ router.post('/confirm', async (req: Request, res: Response, next: NextFunction) 
 /**
  * GET /api/payments/config
  */
-router.get('/config', async (_req: Request, res: Response, next: NextFunction) => {
+router.get('/config', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const publishableKey = await getStripePublishableResolved();
+    const publishableKey = await getStripePublishableResolved(req.storeId!);
     res.json({ publishableKey });
   } catch (err) {
     next(err);
@@ -107,12 +115,13 @@ router.get('/config', async (_req: Request, res: Response, next: NextFunction) =
  */
 router.post('/finalize', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { Order, Checkout } = paymentModels();
     const { orderId } = req.body;
     if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
       throw createAppError('VALIDATION_ERROR', 'Valid orderId is required');
     }
 
-    const order = await Order.findById(orderId);
+    const order = await Order.findOne({ _id: orderId, storeId: req.storeId });
     if (!order) throw createAppError('NOT_FOUND', 'Order not found');
 
     if (order.status !== 'paid_online') {
@@ -120,7 +129,7 @@ router.post('/finalize', async (req: Request, res: Response, next: NextFunction)
     }
 
     // Calculate total
-    const itemTotal = order.items.reduce((sum, item) => {
+    const itemTotal = order.items.reduce((sum: number, item: { unitPrice: number; quantity: number; selectedOptions?: { extraPrice?: number }[] }) => {
       const optExtra = (item.selectedOptions || []).reduce((s: number, o: { extraPrice?: number }) => s + (o.extraPrice || 0), 0);
       return sum + (item.unitPrice + optExtra) * item.quantity;
     }, 0);
@@ -130,6 +139,7 @@ router.post('/finalize', async (req: Request, res: Response, next: NextFunction)
 
     // Create checkout record
     const checkout = await Checkout.create({
+      storeId: req.storeId,
       type: 'seat',
       totalAmount,
       paymentMethod: 'online',

@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
-import { SystemConfig } from '../models/SystemConfig';
+import type mongoose from 'mongoose';
+import { getModels } from '../getModels';
 import { createAppError } from '../middleware/errorHandler';
 
 export const STRIPE_PUBLISHABLE_CONFIG_KEY = 'stripe_publishable_key';
@@ -11,30 +12,36 @@ export const STRIPE_KEYS_FILTER_FROM_PUBLIC_CONFIG = new Set([
   STRIPE_PUBLISHABLE_CONFIG_KEY,
 ]);
 
-/** Payment /customer Stripe.js — database only (system_configs.stripe_publishable_key). */
-export async function getStripePublishableResolved(): Promise<string> {
-  const row = await SystemConfig.findOne({ key: STRIPE_PUBLISHABLE_CONFIG_KEY }).lean();
+export async function getStripePublishableResolved(storeId: mongoose.Types.ObjectId): Promise<string> {
+  const { SystemConfig } = getModels();
+  const row = (await SystemConfig.findOne({ storeId, key: STRIPE_PUBLISHABLE_CONFIG_KEY }).lean()) as {
+    value?: string;
+  } | null;
   return row?.value?.trim() || '';
 }
 
-/** Server Stripe SDK — database only (system_configs.stripe_secret_key). */
-export async function getStripeSecretResolved(): Promise<string> {
-  const row = await SystemConfig.findOne({ key: STRIPE_SECRET_CONFIG_KEY }).lean();
+export async function getStripeSecretResolved(storeId: mongoose.Types.ObjectId): Promise<string> {
+  const { SystemConfig } = getModels();
+  const row = (await SystemConfig.findOne({ storeId, key: STRIPE_SECRET_CONFIG_KEY }).lean()) as {
+    value?: string;
+  } | null;
   return row?.value?.trim() || '';
 }
 
-/** Same as publishable resolved — kept for admin GET wording / symmetry */
-export async function getStripePublishableFromDbOnly(): Promise<string> {
-  return getStripePublishableResolved();
+export async function getStripePublishableFromDbOnly(storeId: mongoose.Types.ObjectId): Promise<string> {
+  return getStripePublishableResolved(storeId);
 }
 
-export async function hasStripeSecretInDb(): Promise<boolean> {
-  const row = await SystemConfig.findOne({ key: STRIPE_SECRET_CONFIG_KEY }).lean();
+export async function hasStripeSecretInDb(storeId: mongoose.Types.ObjectId): Promise<boolean> {
+  const { SystemConfig } = getModels();
+  const row = (await SystemConfig.findOne({ storeId, key: STRIPE_SECRET_CONFIG_KEY }).lean()) as {
+    value?: string;
+  } | null;
   return !!row?.value?.trim();
 }
 
-export async function createStripeClient() {
-  const secret = await getStripeSecretResolved();
+export async function createStripeClient(storeId: mongoose.Types.ObjectId) {
+  const secret = await getStripeSecretResolved(storeId);
   if (!secret) {
     throw createAppError(
       'VALIDATION_ERROR',
@@ -46,12 +53,10 @@ export async function createStripeClient() {
 
 export type StripeKeyMode = 'test' | 'live' | 'unknown';
 
-/** True if key looks like pk_test_* / pk_live_* */
 export function isValidPublishableKeyFormat(pk: string): boolean {
   return /^pk_(test|live)_/.test(pk.trim());
 }
 
-/** True if key looks like sk_test_* / sk_live_* */
 export function isValidSecretKeyFormat(sk: string): boolean {
   return /^sk_(test|live)_/.test(sk.trim());
 }
@@ -81,13 +86,9 @@ export type StripeHealthResult = {
   stripeApi: StripeHealthApiResult;
 };
 
-/**
- * Read-only checks: key shapes, test/live alignment, and a live Stripe.balance.retrieve()
- * to verify the secret key works (no charges, no PaymentIntent created).
- */
-export async function runStripeHealthCheck(): Promise<StripeHealthResult> {
-  const publishableKey = await getStripePublishableResolved();
-  const secret = await getStripeSecretResolved();
+export async function runStripeHealthCheck(storeId: mongoose.Types.ObjectId): Promise<StripeHealthResult> {
+  const publishableKey = await getStripePublishableResolved(storeId);
+  const secret = await getStripeSecretResolved(storeId);
 
   const publishableKeyPresent = !!publishableKey;
   const publishableKeyFormatOk = publishableKeyPresent && isValidPublishableKeyFormat(publishableKey);

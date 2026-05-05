@@ -1,6 +1,5 @@
 import mongoose from 'mongoose';
-import { OptionGroupTemplate } from '../models/OptionGroupTemplate';
-import { OptionGroupTemplateRule } from '../models/OptionGroupTemplateRule';
+import { getModels } from '../getModels';
 import { cloneOptionGroupsPreservingSubdocIds, type LeanOptionGroup } from './optionGroups';
 
 export interface MenuItemLike {
@@ -37,10 +36,17 @@ export function ruleMatchesItem(
   return byCategory || byItem;
 }
 
-export async function mergeTemplateOptionGroupsForItem(item: MenuItemLike): Promise<LeanOptionGroup[]> {
+export async function mergeTemplateOptionGroupsForItem(
+  storeId: mongoose.Types.ObjectId,
+  item: MenuItemLike,
+): Promise<LeanOptionGroup[]> {
+  const { OptionGroupTemplate, OptionGroupTemplateRule } = getModels() as {
+    OptionGroupTemplate: mongoose.Model<any>;
+    OptionGroupTemplateRule: mongoose.Model<any>;
+  };
   const own = cloneOptionGroupsPreservingSubdocIds((item.optionGroups || []) as unknown as LeanOptionGroup[]);
 
-  const rules = await OptionGroupTemplateRule.find({ enabled: true })
+  const rules = await OptionGroupTemplateRule.find({ storeId, enabled: true })
     .sort({ priority: 1, createdAt: 1, _id: 1 })
     .lean();
 
@@ -48,11 +54,13 @@ export async function mergeTemplateOptionGroupsForItem(item: MenuItemLike): Prom
   const appended: LeanOptionGroup[] = [];
 
   for (const rule of rules) {
-    if (!ruleMatchesItem(rule, item)) continue;
-    const tid = idStr(rule.templateId);
+    if (!ruleMatchesItem(rule as Parameters<typeof ruleMatchesItem>[0], item)) continue;
+    const tid = idStr((rule as { templateId?: mongoose.Types.ObjectId }).templateId);
     if (!tid || seenTemplateIds.has(tid)) continue;
 
-    const tpl = await OptionGroupTemplate.findOne({ _id: rule.templateId, enabled: true }).lean();
+    const tpl = (await OptionGroupTemplate.findOne({ _id: (rule as { templateId?: mongoose.Types.ObjectId }).templateId, storeId, enabled: true }).lean()) as {
+      optionGroups?: unknown;
+    } | null;
     if (!tpl) continue;
 
     const tplGroups = (tpl.optionGroups || []) as unknown as LeanOptionGroup[];
@@ -63,8 +71,15 @@ export async function mergeTemplateOptionGroupsForItem(item: MenuItemLike): Prom
   return [...own, ...appended];
 }
 
-export async function mergeTemplateOptionGroupsForItems<T extends Record<string, unknown>>(items: T[]): Promise<T[]> {
-  const rules = await OptionGroupTemplateRule.find({ enabled: true })
+export async function mergeTemplateOptionGroupsForItems<T extends Record<string, unknown>>(
+  storeId: mongoose.Types.ObjectId,
+  items: T[],
+): Promise<T[]> {
+  const { OptionGroupTemplate, OptionGroupTemplateRule } = getModels() as {
+    OptionGroupTemplate: mongoose.Model<any>;
+    OptionGroupTemplateRule: mongoose.Model<any>;
+  };
+  const rules = await OptionGroupTemplateRule.find({ storeId, enabled: true })
     .sort({ priority: 1, createdAt: 1, _id: 1 })
     .lean();
   const templateCache = new Map<string, LeanOptionGroup[] | null>();
@@ -78,7 +93,11 @@ export async function mergeTemplateOptionGroupsForItems<T extends Record<string,
       templateCache.set(templateId, null);
       return [];
     }
-    const tpl = await OptionGroupTemplate.findOne({ _id: templateId, enabled: true }).lean();
+    const tpl = (await OptionGroupTemplate.findOne({
+      _id: new mongoose.Types.ObjectId(templateId),
+      storeId,
+      enabled: true,
+    }).lean()) as { optionGroups?: unknown } | null;
     if (!tpl) {
       templateCache.set(templateId, null);
       return [];
@@ -96,8 +115,8 @@ export async function mergeTemplateOptionGroupsForItems<T extends Record<string,
       const appended: LeanOptionGroup[] = [];
 
       for (const r of rules) {
-        if (!ruleMatchesItem(r, item as unknown as MenuItemLike)) continue;
-        const tid = idStr(r.templateId);
+        if (!ruleMatchesItem(r as Parameters<typeof ruleMatchesItem>[0], item as unknown as MenuItemLike)) continue;
+        const tid = idStr((r as { templateId?: mongoose.Types.ObjectId }).templateId);
         if (!tid || seen.has(tid)) continue;
         seen.add(tid);
         appended.push(...(await templateGroups(tid)));

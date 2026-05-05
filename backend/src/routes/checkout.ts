@@ -1,10 +1,17 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import { Server as SocketIOServer } from 'socket.io';
-import { Order } from '../models/Order';
-import { Checkout } from '../models/Checkout';
+import { getModels } from '../getModels';
 import { createAppError } from '../middleware/errorHandler';
-import { SystemConfig } from '../models/SystemConfig';
+import { storeIoRoom } from '../socketRooms';
+
+/** LZFoodModels uses Model<unknown>; narrow for route logic */
+function checkoutModels() {
+  return getModels() as {
+    Order: mongoose.Model<any>;
+    Checkout: mongoose.Model<any>;
+  };
+}
 
 export function createCheckoutRouter(io: SocketIOServer): Router {
   const router = Router();
@@ -12,6 +19,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
   // POST /api/checkout/table/:tableNumber — Whole table checkout
   router.post('/table/:tableNumber', async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { Order, Checkout } = checkoutModels();
       const tableNumber = parseInt(req.params.tableNumber as string, 10);
       if (isNaN(tableNumber)) {
         throw createAppError('VALIDATION_ERROR', 'Invalid table number');
@@ -24,7 +32,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
       }
 
       // Find all pending dine-in orders for this table
-      const orders = await Order.find({ type: 'dine_in', tableNumber, status: 'pending' });
+      const orders = await Order.find({ storeId: req.storeId, type: 'dine_in', tableNumber, status: 'pending' });
 
       if (orders.length === 0) {
         throw createAppError('NOT_FOUND', 'No pending orders found for this table');
@@ -32,7 +40,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
 
       // Calculate total amount including bundle discounts
       const itemsTotal = orders.reduce((sum, order) => {
-        return sum + order.items.reduce((itemSum, item) => {
+        return sum + order.items.reduce((itemSum: number, item: { unitPrice: number; quantity: number; selectedOptions?: { extraPrice?: number }[] }) => {
           const optExtra = (item.selectedOptions || []).reduce((s: number, o: { extraPrice?: number }) => s + (o.extraPrice || 0), 0);
           return itemSum + (item.unitPrice + optExtra) * item.quantity;
         }, 0);
@@ -65,6 +73,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
 
       // Create checkout record
       const checkoutData: Record<string, unknown> = {
+        storeId: req.storeId,
         type: 'table',
         tableNumber,
         totalAmount: finalAmount,
@@ -83,13 +92,12 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
 
       // Update all orders to checked_out
       await Order.updateMany(
-        { _id: { $in: orders.map(o => o._id) } },
+        { storeId: req.storeId, _id: { $in: orders.map(o => o._id) } },
         { status: 'checked_out' }
       );
 
-      // Emit Socket.IO event for each order
       for (const order of orders) {
-        io.emit('order:checked-out', { orderId: order._id.toString(), tableNumber });
+        io.to(storeIoRoom(req.storeId!)).emit('order:checked-out', { orderId: order._id.toString(), tableNumber });
       }
 
       res.status(201).json(checkout);
@@ -101,6 +109,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
   // POST /api/checkout/seat/:orderId — Per-seat checkout
   router.post('/seat/:orderId', async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { Order, Checkout } = checkoutModels();
       const orderId = req.params.orderId as string;
       if (!mongoose.Types.ObjectId.isValid(orderId)) {
         throw createAppError('VALIDATION_ERROR', 'Invalid order ID');
@@ -112,7 +121,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
         throw createAppError('VALIDATION_ERROR', 'paymentMethod must be "cash", "card", "mixed", or "online"');
       }
 
-      const order = await Order.findById(orderId);
+      const order = await Order.findOne({ _id: orderId, storeId: req.storeId });
       if (!order) {
         throw createAppError('NOT_FOUND', 'Order not found');
       }
@@ -124,7 +133,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
       }
 
       // Calculate total amount from items, apply bundle discounts, allow override
-      const itemTotal = order.items.reduce((sum, item) => {
+      const itemTotal = order.items.reduce((sum: number, item: { unitPrice: number; quantity: number; selectedOptions?: { extraPrice?: number }[] }) => {
         const optExtra = (item.selectedOptions || []).reduce((s: number, o: { extraPrice?: number }) => s + (o.extraPrice || 0), 0);
         return sum + (item.unitPrice + optExtra) * item.quantity;
       }, 0);
@@ -157,6 +166,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
 
       // Create checkout record
       const checkoutData: Record<string, unknown> = {
+        storeId: req.storeId,
         type: 'seat',
         totalAmount: finalAmount,
         paymentMethod,
@@ -177,11 +187,12 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
       const checkout = await Checkout.create(checkoutData);
 
       // Update order status
-      order.status = 'checked_out';
-      await order.save();
+      await Order.findOneAndUpdate(
+        { _id: orderId, storeId: req.storeId },
+        { $set: { status: 'checked_out' } },
+      );
 
-      // Emit Socket.IO event
-      io.emit('order:checked-out', { orderId: order._id.toString(), tableNumber: order.tableNumber });
+      io.to(storeIoRoom(req.storeId!)).emit('order:checked-out', { orderId: order._id.toString(), tableNumber: order.tableNumber });
 
       res.status(201).json(checkout);
     } catch (err) {
@@ -192,18 +203,29 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
   // GET /api/checkout/receipt/:checkoutId — Get receipt data
   router.get('/receipt/:checkoutId', async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { Order, Checkout } = checkoutModels();
       const { checkoutId } = req.params;
       if (!mongoose.Types.ObjectId.isValid(checkoutId as string)) {
         throw createAppError('VALIDATION_ERROR', 'Invalid checkout ID');
       }
 
-      const checkout = await Checkout.findById(checkoutId).lean();
+      const checkout = await Checkout.findOne({ _id: checkoutId, storeId: req.storeId }).lean() as {
+        _id: mongoose.Types.ObjectId;
+        orderIds: mongoose.Types.ObjectId[];
+        type: string;
+        tableNumber?: number;
+        totalAmount: number;
+        paymentMethod: string;
+        cashAmount?: number;
+        cardAmount?: number;
+        checkedOutAt?: Date;
+      } | null;
       if (!checkout) {
         throw createAppError('NOT_FOUND', 'Checkout not found');
       }
 
       // Populate orders with their items
-      const orders = await Order.find({ _id: { $in: checkout.orderIds } }).lean();
+      const orders = await Order.find({ storeId: req.storeId, _id: { $in: checkout.orderIds } }).lean();
 
       res.json({
         checkoutId: checkout._id,
@@ -234,6 +256,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
   // If orderNumber is empty, return all checkouts for the given date
   router.get('/search', async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { Order, Checkout } = checkoutModels();
       const { orderNumber, date } = req.query;
 
       const dateStr = (date as string) || new Date().toISOString().slice(0, 10);
@@ -246,6 +269,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
         // Search by order number
         const num = Number(orderNumber);
         orderFilter = {
+          storeId: req.storeId,
           status: { $in: ['checked_out', 'completed', 'refunded'] },
           createdAt: { $gte: startOfDay, $lte: endOfDay },
           $or: [
@@ -256,6 +280,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
       } else {
         // No order number: return all checked-out orders for the date
         orderFilter = {
+          storeId: req.storeId,
           status: { $in: ['checked_out', 'completed', 'refunded'] },
           createdAt: { $gte: startOfDay, $lte: endOfDay },
         };
@@ -268,11 +293,11 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
       }
 
       const orderIds = orders.map(o => o._id);
-      const checkouts = await Checkout.find({ orderIds: { $in: orderIds } }).sort({ checkedOutAt: -1 }).lean();
+      const checkouts = await Checkout.find({ storeId: req.storeId, orderIds: { $in: orderIds } }).sort({ checkedOutAt: -1 }).lean();
 
-      const results = checkouts.map(c => {
+      const results = checkouts.map((c) => {
         const checkoutOrders = orders
-          .filter(o => c.orderIds.some((cid: mongoose.Types.ObjectId) => cid.toString() === o._id.toString()));
+          .filter((o) => c.orderIds.some((cid: mongoose.Types.ObjectId) => cid.toString() === String(o._id)));
         const allItems = checkoutOrders.flatMap(o => o.items);
         const allRefunded = allItems.length > 0 && allItems.every((i: { refunded?: boolean }) => i.refunded);
         const hasRefund = allItems.some((i: { refunded?: boolean }) => i.refunded);
@@ -312,6 +337,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
   // If itemIds is empty or not provided, refund ALL items (full refund)
   router.post('/:checkoutId/refund', async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { Order, Checkout } = checkoutModels();
       const { checkoutId } = req.params;
       if (!mongoose.Types.ObjectId.isValid(checkoutId as string)) {
         throw createAppError('VALIDATION_ERROR', 'Invalid checkout ID');
@@ -319,12 +345,12 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
 
       const { itemIds } = req.body as { itemIds?: string[] };
 
-      const checkout = await Checkout.findById(checkoutId);
+      const checkout = await Checkout.findOne({ _id: checkoutId, storeId: req.storeId });
       if (!checkout) {
         throw createAppError('NOT_FOUND', 'Checkout not found');
       }
 
-      const orders = await Order.find({ _id: { $in: checkout.orderIds } });
+      const orders = await Order.find({ storeId: req.storeId, _id: { $in: checkout.orderIds } });
       if (orders.length === 0) {
         throw createAppError('NOT_FOUND', 'No orders found for this checkout');
       }
@@ -383,8 +409,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
         throw createAppError('VALIDATION_ERROR', 'No items to refund (already refunded or invalid item IDs)');
       }
 
-      // Emit Socket.IO event
-      io.emit('order:refunded', {
+      io.to(storeIoRoom(req.storeId!)).emit('order:refunded', {
         checkoutId,
         refundedItems: refundedItemDetails,
         refundAmount: Math.round(refundAmount * 100) / 100,
