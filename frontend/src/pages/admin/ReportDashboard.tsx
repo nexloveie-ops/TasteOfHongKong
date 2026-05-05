@@ -507,7 +507,7 @@ export default function ReportDashboard() {
                   <div><span style={{ color: 'var(--text-light)' }}>选项收入: </span><span style={{ fontWeight: 700, color: 'var(--red-primary)' }}>{euro(itemOptionStats.totalOptionRevenue)}</span></div>
                 </div>
                 {itemOptionStats.options.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-light)' }}>无付费选项数据</div>
+                  <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-light)' }}>无选项数据（该菜品在订单中未带选项快照）</div>
                 ) : (
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>

@@ -429,7 +429,7 @@ router.get('/vat-pdf', authMiddleware, requirePermission('report:view'), async (
 });
 
 // GET /api/reports/item-options?itemName=xxx&startDate=xxx&endDate=xxx
-// Returns paid option stats for a specific menu item
+// Returns option choice stats for a specific menu item (includes extraPrice === 0, e.g. combo sides)
 router.get('/item-options', authMiddleware, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { itemName, startDate, endDate } = req.query;
@@ -460,20 +460,27 @@ router.get('/item-options', authMiddleware, requirePermission('report:view'), as
         let hasPaid = false;
         if (item.selectedOptions && item.selectedOptions.length > 0) {
           for (const opt of item.selectedOptions) {
-            if (opt.extraPrice > 0) {
-              hasPaid = true;
-              const key = `${opt.groupName}|${opt.choiceName}|${opt.extraPrice}`;
-              if (!optionStats[key]) optionStats[key] = { groupName: opt.groupName || '', choiceName: opt.choiceName || '', extraPrice: opt.extraPrice, count: 0, revenue: 0 };
-              optionStats[key].count += item.quantity;
-              optionStats[key].revenue += opt.extraPrice * item.quantity;
+            const extra = Number(opt.extraPrice) || 0;
+            if (extra > 0) hasPaid = true;
+            const key = `${opt.groupName}|${opt.choiceName}|${extra}`;
+            if (!optionStats[key]) {
+              optionStats[key] = {
+                groupName: opt.groupName || '',
+                choiceName: opt.choiceName || '',
+                extraPrice: extra,
+                count: 0,
+                revenue: 0,
+              };
             }
+            optionStats[key].count += item.quantity;
+            optionStats[key].revenue += extra * item.quantity;
           }
         }
         if (hasPaid) withPaidOptions += item.quantity;
       }
     }
 
-    const options = Object.values(optionStats).sort((a, b) => b.revenue - a.revenue);
+    const options = Object.values(optionStats).sort((a, b) => b.revenue - a.revenue || b.count - a.count);
     const totalOptionRevenue = options.reduce((s, o) => s + o.revenue, 0);
 
     res.json({ itemName, totalSold, withPaidOptions, totalOptionRevenue, options });
