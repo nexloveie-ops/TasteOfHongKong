@@ -253,6 +253,18 @@ export function createOrdersRouter(io: SocketIOServer): Router {
         orderData.deliveryStage = 'new';
       }
 
+      if (type === 'phone') {
+        const phone = typeof customerPhone === 'string' ? customerPhone.trim() : '';
+        if (!phone) {
+          throw createAppError('VALIDATION_ERROR', 'phone orders require customerPhone');
+        }
+        orderData.customerPhone = phone;
+        const name = typeof customerName === 'string' ? customerName.trim() : '';
+        if (name) {
+          orderData.customerName = name;
+        }
+      }
+
       const order = await Order.create(orderData);
 
       io.to(storeIoRoom(req.storeId!)).emit('order:new', order);

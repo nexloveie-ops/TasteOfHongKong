@@ -14,6 +14,8 @@ interface OrderItem {
 interface PhoneOrder {
   _id: string; type: string; dailyOrderNumber?: number; status: string;
   items: OrderItem[]; createdAt: string;
+  customerPhone?: string;
+  customerName?: string;
   appliedBundles?: { name: string; nameEn?: string; discount: number }[];
 }
 
@@ -168,6 +170,13 @@ export default function PhoneOrderList() {
                   </button>
                 </div>
               </div>
+              {(o.customerPhone || o.customerName) && (
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                  {o.customerName ? <span>{o.customerName}</span> : null}
+                  {o.customerName && o.customerPhone ? <span> · </span> : null}
+                  {o.customerPhone ? <span>📱 {o.customerPhone}</span> : null}
+                </div>
+              )}
               <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                 {o.items.map((item, i) => (
                   <span key={i}>{i > 0 && ', '}{item.itemName} ×{item.quantity}</span>

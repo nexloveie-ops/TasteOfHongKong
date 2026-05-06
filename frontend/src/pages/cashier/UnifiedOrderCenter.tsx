@@ -343,6 +343,8 @@ export default function UnifiedOrderCenter() {
         dailyOrderNumber: order.dailyOrderNumber,
         status: order.status,
         items: receiptItems,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone,
       }],
     };
     const html = buildReceiptHTML(receiptData, config);
@@ -440,6 +442,7 @@ export default function UnifiedOrderCenter() {
     detailsTitle: isEn ? 'Order Details' : '订单详情',
     status: isEn ? 'Status' : '状态',
     customer: isEn ? 'Customer' : '客户',
+    guestPhone: isEn ? 'Guest tel.' : '客人电话',
     address: isEn ? 'Address' : '地址',
     postalCode: isEn ? 'Postal Code' : '邮编',
     items: isEn ? 'Items' : '菜品',
@@ -625,6 +628,14 @@ export default function UnifiedOrderCenter() {
                       <div>{o.customerName} · {o.customerPhone}</div>
                       <div>
                         {L.deliverySource}：{deliverySourceLabel(o.deliverySource)} · {L.stage}：{deliveryStageLabel(o.deliveryStage)}
+                      </div>
+                    </div>
+                  ) : null}
+                  {o.type === 'phone' ? (
+                    <div style={{ fontSize: 12, color: '#555', marginBottom: 6, lineHeight: 1.5 }}>
+                      {o.customerName?.trim() ? <div style={{ marginBottom: 2 }}>{o.customerName.trim()}</div> : null}
+                      <div>
+                        {L.guestPhone}：{o.customerPhone?.trim() || '—'}
                       </div>
                     </div>
                   ) : null}

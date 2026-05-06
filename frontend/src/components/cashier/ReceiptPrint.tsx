@@ -13,13 +13,15 @@ interface ReceiptOrderItem {
 
 interface ReceiptOrder {
   _id: string;
-  type: 'dine_in' | 'takeout' | 'phone';
+  type: 'dine_in' | 'takeout' | 'phone' | 'delivery';
   tableNumber?: number;
   seatNumber?: number;
   dailyOrderNumber?: number;
   dineInOrderNumber?: string;
   status: string;
   items: ReceiptOrderItem[];
+  customerName?: string;
+  customerPhone?: string;
 }
 
 interface ReceiptData {
@@ -59,6 +61,14 @@ interface ReceiptPrintProps {
   printCopies?: number;
 }
 
+function escapeReceiptHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 function parseQRCodes(text: string): Array<{ type: 'text' | 'qr'; value: string }> {
   const segments: Array<{ type: 'text' | 'qr'; value: string }> = [];
   const regex = /\[QR:(.*?)\]/g;
@@ -83,6 +93,7 @@ function buildReceiptHTML(
 ): string {
   const isDineIn = receipt.orders.some(o => o.type === 'dine_in');
   const isPhone = receipt.orders.some(o => o.type === 'phone');
+  const isDelivery = receipt.orders.some(o => o.type === 'delivery');
   const checkedOutAt = new Date(receipt.checkedOutAt);
   const paymentLabel = receipt.paymentMethod === 'cash' ? 'Cash' : receipt.paymentMethod === 'card' ? 'Card' : receipt.paymentMethod === 'online' ? 'Online' : 'Mixed';
   const restaurantName = config.restaurant_name_en || config.restaurant_name_zh || '';
@@ -126,8 +137,21 @@ function buildReceiptHTML(
     html += `<div style="font-size:12px;margin-top:4px">Ref: ${String(receipt.checkoutId).slice(-8).toUpperCase()}</div>`;
   } else if (isPhone) {
     html += `<div class="big">Phone #${receipt.orders[0]?.dailyOrderNumber || ''}</div>`;
+  } else if (isDelivery) {
+    html += `<div class="big">Delivery #${receipt.orders[0]?.dailyOrderNumber || ''}</div>`;
   } else {
     html += `<div class="big">Pickup #${receipt.orders[0]?.dailyOrderNumber || ''}</div>`;
+  }
+
+  if (!isDineIn) {
+    const guestTel = receipt.orders.map(o => o.customerPhone?.trim()).find(Boolean);
+    const guestName = receipt.orders.map(o => o.customerName?.trim()).find(Boolean);
+    if (guestTel) {
+      html += `<div style="font-size:15px;margin-top:6px">客人电话 / Guest Tel: ${escapeReceiptHtml(guestTel)}</div>`;
+    }
+    if (guestName) {
+      html += `<div style="font-size:14px;margin-top:2px">客人姓名 / Name: ${escapeReceiptHtml(guestName)}</div>`;
+    }
   }
   html += `</div><div class="divider"></div>`;
 
@@ -303,6 +327,9 @@ export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, b
   // Render a visible preview (not used for printing)
   const isDineIn = receipt.orders.some(o => o.type === 'dine_in');
   const isPhonePreview = receipt.orders.some(o => o.type === 'phone');
+  const isDeliveryPreview = receipt.orders.some(o => o.type === 'delivery');
+  const previewGuestTel = !isDineIn ? receipt.orders.map(o => o.customerPhone?.trim()).find(Boolean) : undefined;
+  const previewGuestName = !isDineIn ? receipt.orders.map(o => o.customerName?.trim()).find(Boolean) : undefined;
   const checkedOutAt = new Date(receipt.checkedOutAt);
   const paymentLabel = receipt.paymentMethod === 'cash' ? 'Cash' : receipt.paymentMethod === 'card' ? 'Card' : receipt.paymentMethod === 'online' ? 'Online' : 'Mixed';
   const restaurantName = config.restaurant_name_en || config.restaurant_name_zh || '';
@@ -323,9 +350,17 @@ export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, b
             </>
           ) : isPhonePreview ? (
             <div style={{ fontSize: 20 }}>Phone #{receipt.orders[0]?.dailyOrderNumber}</div>
+          ) : isDeliveryPreview ? (
+            <div style={{ fontSize: 20 }}>Delivery #{receipt.orders[0]?.dailyOrderNumber}</div>
           ) : (
             <div style={{ fontSize: 20 }}>Pickup #{receipt.orders[0]?.dailyOrderNumber}</div>
           )}
+          {!isDineIn && previewGuestTel ? (
+            <div style={{ fontSize: 15, marginTop: 6 }}>客人电话 / Guest Tel: {previewGuestTel}</div>
+          ) : null}
+          {!isDineIn && previewGuestName ? (
+            <div style={{ fontSize: 14, marginTop: 2 }}>客人姓名 / Name: {previewGuestName}</div>
+          ) : null}
         </div>
       </div>
 

@@ -6,6 +6,7 @@ import type { CartItem } from '../../context/CartContext';
 import PaymentModal from '../../components/customer/PaymentModal';
 import { apiFetch } from '../../api/client';
 import { resolveBackendAssetUrl } from '../../utils/backendPublicUrl';
+import { useRestaurantConfig } from '../../hooks/useRestaurantConfig';
 
 interface OrderItem { _id: string; menuItemId: string; quantity: number; unitPrice: number; itemName: string; itemNameEn?: string; selectedOptions?: { groupName: string; groupNameEn?: string; choiceName: string; choiceNameEn?: string; extraPrice: number }[]; }
 interface AppliedBundle { offerId?: string; name: string; nameEn?: string; discount: number; }
@@ -109,6 +110,8 @@ export default function OrderStatusPage() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
+  const { config } = useRestaurantConfig();
+  const storePhone = (config.restaurant_phone || '').trim();
   const { clearCart, setItems, setEditOrderId } = useCart();
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
@@ -279,6 +282,30 @@ export default function OrderStatusPage() {
           </div>
         )}
       </div>
+
+      {isPending && order.type === 'delivery' && (
+        <div style={{
+          marginBottom: 12,
+          padding: '12px 14px',
+          borderRadius: 10,
+          border: '1px solid #E65100',
+          background: '#FFF8E1',
+          fontSize: 13,
+          lineHeight: 1.55,
+          color: '#5D4037',
+        }}>
+          <div style={{ fontWeight: 700, marginBottom: 8, color: '#E65100' }}>{t('customer.deliveryPolicyTitle')}</div>
+          <p style={{ margin: '0 0 8px' }}>{t('customer.deliveryPolicyUnpaidNoKitchen')}</p>
+          <p style={{ margin: '0 0 6px' }}>{t('customer.deliveryPolicyCashCallUs')}</p>
+          {storePhone ? (
+            <a href={`tel:${storePhone.replace(/\s/g, '')}`} style={{ fontWeight: 700, color: '#BF360C', wordBreak: 'break-all' }}>
+              {t('customer.deliveryStorePhoneLabel')}：{storePhone}
+            </a>
+          ) : (
+            <span style={{ fontSize: 12, color: '#6D4C41' }}>{t('customer.deliveryNoPhoneConfigured')}</span>
+          )}
+        </div>
+      )}
 
       {/* Items */}
       <div style={{ background: 'var(--bg-white)', borderRadius: 12, border: '1px solid rgba(232,213,184,0.5)', overflow: 'hidden' }}>

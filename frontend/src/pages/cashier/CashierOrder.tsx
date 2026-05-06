@@ -50,6 +50,7 @@ export default function CashierOrder() {
   const [deliveryCustomerPhone, setDeliveryCustomerPhone] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [deliveryPostalCode, setDeliveryPostalCode] = useState('');
+  const [phoneCustomerPhone, setPhoneCustomerPhone] = useState('');
   const [error, setError] = useState('');
   const [optionModal, setOptionModal] = useState<MenuItem | null>(null);
 
@@ -205,10 +206,15 @@ export default function CashierOrder() {
 
   // Phone order: create order only, print kitchen receipt, no payment
   const handlePhoneOrder = async () => {
+    const guestPhone = phoneCustomerPhone.trim();
+    if (!guestPhone) {
+      setError('请填写客人电话');
+      return;
+    }
     setPaying(true);
     setError('');
     try {
-      const orderBody: Record<string, unknown> = { type: 'phone', items: buildGroupedItems() };
+      const orderBody: Record<string, unknown> = { type: 'phone', customerPhone: guestPhone, items: buildGroupedItems() };
       if (matchedBundles.length > 0) {
         orderBody.appliedBundles = matchedBundles.map(b => ({ offerId: b.offer._id, name: b.offer.name, nameEn: b.offer.nameEn, discount: b.savings }));
       }
@@ -236,6 +242,9 @@ export default function CashierOrder() {
             dailyOrderNumber: orderData.dailyOrderNumber,
             status: 'pending',
             items: orderData.items,
+            customerPhone: (typeof orderData.customerPhone === 'string' && orderData.customerPhone.trim())
+              ? orderData.customerPhone.trim()
+              : guestPhone,
           }],
         };
         const html = buildReceiptHTML(receiptData, cfg, undefined, undefined,
@@ -246,6 +255,7 @@ export default function CashierOrder() {
 
       setPhoneOrderId(orderData._id);
       setOrder([]);
+      setPhoneCustomerPhone('');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed');
     } finally {
@@ -291,10 +301,16 @@ export default function CashierOrder() {
           checkedOutAt: new Date().toISOString(),
           orders: [{
             _id: orderData._id,
-            type: 'phone' as const,
+            type: 'delivery' as const,
             dailyOrderNumber: orderData.dailyOrderNumber,
             status: 'pending',
             items: orderData.items,
+            customerName: (typeof orderData.customerName === 'string' && orderData.customerName.trim())
+              ? orderData.customerName.trim()
+              : deliveryCustomerName.trim(),
+            customerPhone: (typeof orderData.customerPhone === 'string' && orderData.customerPhone.trim())
+              ? orderData.customerPhone.trim()
+              : deliveryCustomerPhone.trim(),
           }],
         };
         const html = buildReceiptHTML(receiptData, cfg, undefined, undefined,
@@ -497,6 +513,11 @@ export default function CashierOrder() {
             ) : null}
           </div>
         </div>
+        {orderType === 'phone' && (
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
+            <input className="input" placeholder="客人电话（必填）" value={phoneCustomerPhone} onChange={e => setPhoneCustomerPhone(e.target.value)} />
+          </div>
+        )}
         {orderType === 'delivery' && (
           <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', display: 'grid', gap: 6 }}>
             <input className="input" placeholder="客人姓名" value={deliveryCustomerName} onChange={e => setDeliveryCustomerName(e.target.value)} />

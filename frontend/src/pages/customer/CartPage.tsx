@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useCart } from '../../context/CartContext';
 import { matchBundles, calcBundleTotal, type OfferData, type MatchedBundle } from '../../utils/bundleMatcher';
 import { apiFetch } from '../../api/client';
+import { useRestaurantConfig } from '../../hooks/useRestaurantConfig';
 
 export default function CartPage() {
   const { items, increaseQuantity, decreaseQuantity, removeItem, clearCart, totalAmount, totalItems, getItemKey, editOrderId, setEditOrderId } = useCart();
@@ -12,6 +13,8 @@ export default function CartPage() {
   const [searchParams] = useSearchParams();
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
+  const { config } = useRestaurantConfig();
+  const storePhone = (config.restaurant_phone || '').trim();
   const getItemName = (names: Record<string, string>) => names[lang] || Object.values(names)[0] || '';
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -229,6 +232,29 @@ export default function CartPage() {
       </div>
 
       {error && <div style={{ color: 'var(--red-primary)', marginTop: 12, fontSize: 13 }}>{error}</div>}
+      {orderType === 'delivery' && (
+        <div style={{
+          marginTop: 12,
+          padding: '12px 14px',
+          borderRadius: 10,
+          border: '1px solid #E65100',
+          background: '#FFF8E1',
+          fontSize: 13,
+          lineHeight: 1.55,
+          color: '#5D4037',
+        }}>
+          <div style={{ fontWeight: 700, marginBottom: 8, color: '#E65100' }}>{t('customer.deliveryPolicyTitle')}</div>
+          <p style={{ margin: '0 0 8px' }}>{t('customer.deliveryPolicyUnpaidNoKitchen')}</p>
+          <p style={{ margin: '0 0 6px' }}>{t('customer.deliveryPolicyCashCallUs')}</p>
+          {storePhone ? (
+            <a href={`tel:${storePhone.replace(/\s/g, '')}`} style={{ fontWeight: 700, color: '#BF360C', wordBreak: 'break-all' }}>
+              {t('customer.deliveryStorePhoneLabel')}：{storePhone}
+            </a>
+          ) : (
+            <span style={{ fontSize: 12, color: '#6D4C41' }}>{t('customer.deliveryNoPhoneConfigured')}</span>
+          )}
+        </div>
+      )}
       {orderType === 'delivery' && (
         <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
           <input className="input" placeholder="收货姓名" value={deliveryCustomerName} onChange={e => setDeliveryCustomerName(e.target.value)} />

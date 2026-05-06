@@ -81,7 +81,12 @@
     "confirmAdd": "Confirm Add",
     "storeClosedTitle": "Closed Now",
     "storeClosedDate": "Today is configured as a closed date. QR ordering is unavailable.",
-    "storeOutsideHours": "You are outside business hours. Please access the menu during opening time."
+    "storeOutsideHours": "You are outside business hours. Please access the menu during opening time.",
+    "deliveryPolicyTitle": "Delivery notice",
+    "deliveryPolicyUnpaidNoKitchen": "We do not prepare or deliver unpaid orders. Please complete online payment so we can cook and deliver your meal.",
+    "deliveryPolicyCashCallUs": "To pay with cash or to order by phone, please call the restaurant:",
+    "deliveryStorePhoneLabel": "Restaurant phone",
+    "deliveryNoPhoneConfigured": "No phone number is on file for this store. Please contact the merchant another way."
   },
   "cashier": {
     "title": "Cashier",

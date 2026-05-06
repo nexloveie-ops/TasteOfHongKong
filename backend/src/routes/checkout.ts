@@ -245,6 +245,8 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
           dineInOrderNumber: (o as Record<string, unknown>).dineInOrderNumber,
           status: o.status,
           items: o.items,
+          customerName: (o as { customerName?: string }).customerName,
+          customerPhone: (o as { customerPhone?: string }).customerPhone,
         })),
       });
     } catch (err) {
@@ -320,6 +322,8 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
             dailyOrderNumber: o.dailyOrderNumber,
             dineInOrderNumber: (o as Record<string, unknown>).dineInOrderNumber,
             status: o.status,
+            customerName: (o as { customerName?: string }).customerName,
+            customerPhone: (o as { customerPhone?: string }).customerPhone,
             appliedBundles: ((o as Record<string, unknown>).appliedBundles as unknown[]) ?? [],
             items: o.items,
           })),

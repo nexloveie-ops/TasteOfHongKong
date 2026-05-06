@@ -35,6 +35,8 @@ interface SearchResult {
     dailyOrderNumber?: number;
     dineInOrderNumber?: string;
     status?: string;
+    customerName?: string;
+    customerPhone?: string;
     appliedBundles?: AppliedBundleLite[];
     items: OrderItem[];
   }[];
@@ -97,12 +99,14 @@ export default function ReprintReceipt() {
       checkedOutAt: r.checkedOutAt,
       orders: r.orders.map(o => ({
         _id: o._id,
-        type: o.type as 'dine_in' | 'takeout',
+        type: o.type as 'dine_in' | 'takeout' | 'phone' | 'delivery',
         tableNumber: o.tableNumber,
         seatNumber: o.seatNumber,
         dailyOrderNumber: o.dailyOrderNumber,
         dineInOrderNumber: o.dineInOrderNumber,
         status: 'checked_out',
+        customerName: o.customerName,
+        customerPhone: o.customerPhone,
         items: o.items,
       })),
     };
