@@ -1,0 +1,99 @@
+import mongoose from 'mongoose';
+import { Router, type Request, type Response, type NextFunction } from 'express';
+import { getModels } from '../getModels';
+import { createAppError } from '../middleware/errorHandler';
+import { filterActivePostOrderAds } from '../utils/postOrderAdSchedule';
+import { getSlidesFromDoc, type PostOrderSlideInput } from '../utils/postOrderAdSlides';
+
+const router = Router();
+
+const IMPRESSION_BATCH_MAX = 32;
+
+/**
+ * POST /api/public/post-order-ads/impressions
+ * body: { adIds: string[] } — 顾客完成页展示上报，每条 id 对应广告 impressionCount +1
+ */
+router.post('/post-order-ads/impressions', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const raw = req.body?.adIds;
+    if (!Array.isArray(raw) || raw.length === 0) {
+      res.json({ ok: true, modified: 0 });
+      return;
+    }
+    const unique = [
+      ...new Set(
+        raw.map((x) => (typeof x === 'string' ? x.trim() : '')).filter((id) => mongoose.Types.ObjectId.isValid(id)),
+      ),
+    ].slice(0, IMPRESSION_BATCH_MAX);
+    if (unique.length === 0) {
+      res.json({ ok: true, modified: 0 });
+      return;
+    }
+    const { PostOrderAd } = getModels();
+    const oids = unique.map((id) => new mongoose.Types.ObjectId(id));
+    const result = await PostOrderAd.updateMany({ _id: { $in: oids } }, { $inc: { impressionCount: 1 } });
+    res.json({ ok: true, modified: result.modifiedCount });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/public/post-order-ads/click
+ * body: { adId: string } — 顾客点击跳转上报 clickCount +1
+ */
+router.post('/post-order-ads/click', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const adId = req.body?.adId;
+    if (typeof adId !== 'string' || !mongoose.Types.ObjectId.isValid(adId)) {
+      throw createAppError('VALIDATION_ERROR', 'adId 无效');
+    }
+    const { PostOrderAd } = getModels();
+    await PostOrderAd.updateOne({ _id: new mongoose.Types.ObjectId(adId) }, { $inc: { clickCount: 1 } });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/public/post-order-ads
+ * 无需店铺头：顾客完成页拉取当前有效横幅（平台统一配置）。
+ */
+router.get('/post-order-ads', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { PostOrderAd } = getModels();
+    const raw = await PostOrderAd.find({ isActive: true }).sort({ sortOrder: 1, createdAt: -1 }).lean();
+    const active = filterActivePostOrderAds(
+      raw as unknown as { validFrom: string; validTo: string; windowStart?: string; windowEnd?: string }[],
+    );
+    type PubRow = {
+      _id: string;
+      titleZh: unknown;
+      titleEn: unknown;
+      linkUrl: unknown;
+      slides: ReturnType<typeof getSlidesFromDoc>;
+    };
+    const body: PubRow[] = [];
+    for (const doc of active) {
+      const o = doc as Record<string, unknown>;
+      const slides = getSlidesFromDoc({
+        slides: o.slides as PostOrderSlideInput[] | undefined,
+        imageUrl: o.imageUrl as string | undefined,
+      });
+      if (slides.length === 0) continue;
+      body.push({
+        _id: String(o._id),
+        titleZh: o.titleZh,
+        titleEn: o.titleEn || '',
+        linkUrl: o.linkUrl,
+        slides,
+      });
+    }
+    res.json(body);
+  } catch (err) {
+    next(err);
+  }
+});
+
+export default router;

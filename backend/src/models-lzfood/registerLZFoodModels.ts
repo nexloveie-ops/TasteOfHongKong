@@ -12,6 +12,7 @@ import mongoose from 'mongoose';
 import { StoreSchema } from './Store';
 import { AdminAuditLogSchema } from './AdminAuditLog';
 import { LZFoodAdminSchema } from './LZFoodAdmin';
+import { PostOrderAdSchema } from './PostOrderAd';
 
 const storeIdField = {
   storeId: {
@@ -62,6 +63,7 @@ export type LZFoodModels = {
   SystemConfig: Model<unknown>;
   Admin: Model<unknown>;
   AdminAuditLog: Model<unknown>;
+  PostOrderAd: Model<unknown>;
 };
 
 let cached: LZFoodModels | null = null;
@@ -97,6 +99,7 @@ export function registerLZFoodModels(conn: Connection): LZFoodModels {
   const SystemConfig = m('SystemConfig', LZFoodSystemConfigSchema, 'system_configs');
   const Admin = m('Admin', LZFoodAdminSchema, 'admins');
   const AdminAuditLog = m('AdminAuditLog', AdminAuditLogSchema, 'admin_audit_logs');
+  const PostOrderAd = m('PostOrderAd', PostOrderAdSchema, 'platform_post_order_ads');
 
   cached = {
     Store,
@@ -113,6 +116,7 @@ export function registerLZFoodModels(conn: Connection): LZFoodModels {
     SystemConfig,
     Admin,
     AdminAuditLog,
+    PostOrderAd,
   };
   return cached;
 }

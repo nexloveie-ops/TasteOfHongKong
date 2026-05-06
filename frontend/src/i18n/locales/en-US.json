@@ -70,6 +70,7 @@
     "unitPrice": "Unit Price",
     "loadingOrder": "Loading order...",
     "orderNotFound": "Order not found",
+    "postOrderSponsored": "Sponsored",
     "updateSuccess": "Order updated successfully",
     "updateFailed": "Failed to update order",
     "expand": "More",

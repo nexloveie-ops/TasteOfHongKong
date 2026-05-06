@@ -176,7 +176,7 @@ router.post('/logo',
       const filename = `logo${ext}`;
       const localDest = path.join(LOGO_DIR, filename);
       fs.copyFileSync(req.file.path, localDest);
-      const logoUrl = await uploadFile(localDest, 'logo' as 'photos', filename);
+      const logoUrl = await uploadFile(localDest, 'logo', filename);
       fs.unlink(req.file.path, () => {});
 
       // Save logo URL to config

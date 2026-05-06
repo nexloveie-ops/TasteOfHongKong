@@ -20,6 +20,9 @@ function skipStoreContext(req: Request): boolean {
   if (req.path.startsWith('/platform')) {
     return true;
   }
+  if (req.path.startsWith('/public')) {
+    return true;
+  }
   if (req.path === '/health') {
     return true;
   }

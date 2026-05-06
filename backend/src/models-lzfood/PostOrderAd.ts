@@ -1,0 +1,39 @@
+import mongoose from 'mongoose';
+
+const PostOrderSlideSchema = new mongoose.Schema(
+  {
+    imageUrl: { type: String, required: true, trim: true },
+    captionZh: { type: String, default: '', trim: true },
+    captionEn: { type: String, default: '', trim: true },
+  },
+  { _id: false },
+);
+
+/** 全平台顾客「下单完成」页横幅广告（平台管理员配置，非按店） */
+const PostOrderAdSchema = new mongoose.Schema(
+  {
+    titleZh: { type: String, required: true, trim: true },
+    titleEn: { type: String, default: '', trim: true },
+    /** @deprecated 使用 slides；保留以兼容旧数据 */
+    imageUrl: { type: String, trim: true },
+    slides: { type: [PostOrderSlideSchema], default: [] },
+    linkUrl: { type: String, required: true, trim: true },
+    /** YYYY-MM-DD，含首尾日 */
+    validFrom: { type: String, required: true },
+    validTo: { type: String, required: true },
+    /** 每日展示 HH:mm（24h），留空表示全天；由 PLATFORM_AD_TIMEZONE 解释 */
+    windowStart: { type: String, default: '' },
+    windowEnd: { type: String, default: '' },
+    sortOrder: { type: Number, default: 0 },
+    isActive: { type: Boolean, default: true },
+    /** 顾客端订单完成页展示次数（批量上报，每条广告每次展示 +1） */
+    impressionCount: { type: Number, default: 0 },
+    /** 顾客点击跳转次数 */
+    clickCount: { type: Number, default: 0 },
+  },
+  { timestamps: true },
+);
+
+PostOrderAdSchema.index({ isActive: 1, sortOrder: 1, createdAt: -1 });
+
+export { PostOrderAdSchema };

@@ -22,6 +22,7 @@ import offersRouter from './routes/offers';
 import { createPaymentsRouter } from './routes/payments';
 import couponsRouter from './routes/coupons';
 import platformRouter from './routes/platform';
+import publicAdsRouter from './routes/publicAds';
 import { storeIoRoom } from './socketRooms';
 
 dotenv.config();
@@ -78,6 +79,9 @@ app.use('/api/auth', authRouter);
 
 // 平台管理员（不要求 X-Store-Slug）
 app.use('/api/platform', platformRouter);
+
+// 公开接口（不要求 X-Store-Slug）
+app.use('/api/public', publicAdsRouter);
 
 // Menu categories routes
 app.use('/api/menu/categories', menuCategoriesRouter);

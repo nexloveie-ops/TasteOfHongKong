@@ -2,13 +2,22 @@ import { Storage } from '@google-cloud/storage';
 import path from 'path';
 import fs from 'fs';
 
-const GCS_BUCKET = process.env.GCS_BUCKET || '';
-const USE_GCS = !!GCS_BUCKET;
+const GCS_BUCKET_RAW = (process.env.GCS_BUCKET || '').trim();
+/**
+ * 本地调试：设为 `1` / `true` / `yes` 时强制走磁盘 `uploads/`，不连 GCS（避免本机误配 GCS_BUCKET 却未配凭证）。
+ * 不设 bucket 时本身即为本地存储。
+ */
+const FORCE_LOCAL_UPLOADS = /^1|true|yes$/i.test(String(process.env.USE_LOCAL_UPLOADS || process.env.LZFOOD_LOCAL_UPLOADS || '').trim());
+const USE_GCS = !!GCS_BUCKET_RAW && !FORCE_LOCAL_UPLOADS;
+const GCS_BUCKET = USE_GCS ? GCS_BUCKET_RAW : '';
 
 let storage: Storage | null = null;
 if (USE_GCS) {
   storage = new Storage(); // Uses Application Default Credentials on Cloud Run
 }
+
+/** 与 `/uploads/:folder/:filename` 路由一致；`postorder-ads` 为平台下单完成页广告图 */
+export type UploadFolder = 'photos' | 'ar' | 'logo' | 'postorder-ads';
 
 /**
  * Upload a file to GCS or local filesystem.
@@ -16,7 +25,7 @@ if (USE_GCS) {
  */
 export async function uploadFile(
   localFilePath: string,
-  folder: 'photos' | 'ar' | 'logo',
+  folder: UploadFolder,
   filename: string,
 ): Promise<string> {
   const destination = `${folder}/${filename}`;
@@ -34,7 +43,7 @@ export async function uploadFile(
     return `/uploads/${destination}`;
   }
 
-  // Local fallback: file is already in the right place (multer saved it)
+  // 本地：调用方须已将文件放到最终路径（如 uploads/postorder-ads/xxx.jpg）；此处只返回 URL
   return `/uploads/${destination}`;
 }
 

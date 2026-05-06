@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useCart } from '../../context/CartContext';
@@ -14,6 +14,101 @@ interface Order {
   appliedBundles?: AppliedBundle[];
 }
 
+interface PostOrderSlide {
+  imageUrl: string;
+  captionZh?: string;
+  captionEn?: string;
+}
+
+interface PostOrderAdBanner {
+  _id: string;
+  titleZh: string;
+  titleEn?: string;
+  linkUrl: string;
+  slides: PostOrderSlide[];
+}
+
+function resolvePublicImageUrl(url: string): string {
+  if (url.startsWith('/')) {
+    return `${typeof window !== 'undefined' ? window.location.origin : ''}${url}`;
+  }
+  return url;
+}
+
+/** 下单后在本页即可展示广告（含待支付） */
+const POST_ORDER_AD_STATUSES = new Set(['pending', 'paid_online', 'checked_out', 'completed']);
+
+function PostOrderAdCarousel({ slides, lang }: { slides: PostOrderSlide[]; lang: string }) {
+  const [idx, setIdx] = useState(0);
+  const scRef = useRef<HTMLDivElement>(null);
+  const onScroll = () => {
+    const el = scRef.current;
+    if (!el) return;
+    const w = el.clientWidth || 1;
+    setIdx(Math.min(slides.length - 1, Math.max(0, Math.round(el.scrollLeft / w))));
+  };
+  return (
+    <>
+      <div
+        ref={scRef}
+        onScroll={onScroll}
+        style={{
+          overflowX: 'auto',
+          display: 'flex',
+          scrollSnapType: 'x mandatory',
+          WebkitOverflowScrolling: 'touch',
+          maxHeight: 220,
+        }}
+      >
+        {slides.map((s, i) => (
+          <div
+            key={i}
+            style={{
+              flex: '0 0 100%',
+              scrollSnapAlign: 'start',
+              minWidth: 0,
+            }}
+          >
+            <img
+              src={resolvePublicImageUrl(s.imageUrl)}
+              alt=""
+              style={{ width: '100%', height: 'auto', display: 'block', maxHeight: 180, objectFit: 'cover' }}
+            />
+            {(lang === 'en-US' ? s.captionEn : s.captionZh)?.trim() ? (
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '6px 10px 4px', lineHeight: 1.35 }}>
+                {lang === 'en-US' ? s.captionEn?.trim() : s.captionZh?.trim()}
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      {slides.length > 1 ? (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: 6,
+            padding: '6px 0 2px',
+            pointerEvents: 'none',
+          }}
+        >
+          {slides.map((_, i) => (
+            <span
+              key={i}
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: '50%',
+                background: i === idx ? 'var(--red-primary, #C41E24)' : 'rgba(0,0,0,0.15)',
+              }}
+            />
+          ))}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 export default function OrderStatusPage() {
   const { orderId, storeSlug } = useParams<{ orderId: string; storeSlug: string }>();
   const [searchParams] = useSearchParams();
@@ -24,6 +119,7 @@ export default function OrderStatusPage() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [showPayment, setShowPayment] = useState(false);
+  const [postOrderAds, setPostOrderAds] = useState<PostOrderAdBanner[]>([]);
   const qs = searchParams.toString();
   const menuHref = storeSlug ? `/${storeSlug}/customer/menu${qs ? `?${qs}` : ''}` : '/';
 
@@ -37,6 +133,41 @@ export default function OrderStatusPage() {
   }, [orderId]);
 
   useEffect(() => { fetchOrder(); }, [fetchOrder]);
+
+  useEffect(() => {
+    if (!order || !POST_ORDER_AD_STATUSES.has(order.status)) {
+      setPostOrderAds([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch('/api/public/post-order-ads');
+        if (!res.ok) return;
+        const data = (await res.json()) as unknown;
+        if (!cancelled && Array.isArray(data)) {
+          setPostOrderAds(data as PostOrderAdBanner[]);
+        }
+      } catch {
+        if (!cancelled) setPostOrderAds([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [order?.status, orderId]);
+
+  const impressionLoggedKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (!order || !POST_ORDER_AD_STATUSES.has(order.status)) return;
+    if (postOrderAds.length === 0) return;
+    const key = `${orderId}:${postOrderAds.map(a => a._id).sort().join(',')}`;
+    if (impressionLoggedKey.current === key) return;
+    impressionLoggedKey.current = key;
+    void apiFetch('/api/public/post-order-ads/impressions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adIds: postOrderAds.map(a => a._id) }),
+    });
+  }, [order?.status, orderId, postOrderAds]);
 
   const total = (items: OrderItem[]) => items.reduce((s, i) => {
     const optExtra = (i.selectedOptions || []).reduce((a, o) => a + (o.extraPrice || 0), 0);
@@ -257,6 +388,52 @@ export default function OrderStatusPage() {
           </div>
         )}
       </div>
+
+      {order && POST_ORDER_AD_STATUSES.has(order.status) && postOrderAds.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <div style={{
+            fontSize: 11,
+            color: 'var(--text-light)',
+            marginBottom: 8,
+            letterSpacing: 0.04,
+          }}>
+            {t('customer.postOrderSponsored')}
+          </div>
+          {postOrderAds.map((ad) => (
+            <a
+              key={ad._id}
+              href={ad.linkUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => {
+                void apiFetch('/api/public/post-order-ads/click', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ adId: ad._id }),
+                });
+              }}
+              style={{
+                display: 'block',
+                marginBottom: 12,
+                borderRadius: 12,
+                overflow: 'hidden',
+                border: '1px solid rgba(232,213,184,0.45)',
+                background: 'var(--bg-white)',
+                textDecoration: 'none',
+                color: 'inherit',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+              }}
+            >
+              {ad.slides && ad.slides.length > 0 ? (
+                <PostOrderAdCarousel slides={ad.slides} lang={lang} />
+              ) : null}
+              <div style={{ padding: '10px 14px', fontSize: 14, fontWeight: 600, lineHeight: 1.4 }}>
+                {lang === 'en-US' && ad.titleEn?.trim() ? ad.titleEn : ad.titleZh}
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
 
       {/* Payment Modal */}
       {showPayment && order && (

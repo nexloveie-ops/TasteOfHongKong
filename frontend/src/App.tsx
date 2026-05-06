@@ -5,7 +5,8 @@ import { CartProvider } from './context/CartContext';
 import PlatformLayout from './layouts/PlatformLayout';
 import PortalHome from './pages/PortalHome';
 import PlatformLoginPage from './pages/platform/PlatformLoginPage';
-import PlatformDashboard from './pages/platform/PlatformDashboard';
+import PlatformStoresPage from './pages/platform/PlatformStoresPage';
+import PlatformPostOrderAdsPage from './pages/platform/PlatformPostOrderAdsPage';
 import LoginPage from './pages/LoginPage';
 import CustomerLayout from './layouts/CustomerLayout';
 import CashierLayout from './layouts/CashierLayout';
@@ -78,7 +79,9 @@ export default function App() {
           <Route path="/" element={<PortalHome />} />
           <Route path="/adlg" element={<PlatformLoginPage />} />
           <Route path="/platform" element={<RequirePlatformAuth><PlatformLayout /></RequirePlatformAuth>}>
-            <Route index element={<PlatformDashboard />} />
+            <Route index element={<Navigate to="stores" replace />} />
+            <Route path="stores" element={<PlatformStoresPage />} />
+            <Route path="ads" element={<PlatformPostOrderAdsPage />} />
           </Route>
 
           <Route path="/:storeSlug" element={<StoreRouteShell />}>

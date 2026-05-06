@@ -15,7 +15,7 @@ interface AdminRow {
   role: string;
 }
 
-export default function PlatformDashboard() {
+export default function PlatformStoresPage() {
   const [stores, setStores] = useState<StoreRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
@@ -33,7 +33,6 @@ export default function PlatformDashboard() {
   const [newAdminRole, setNewAdminRole] = useState<'owner' | 'cashier'>('owner');
   const [addingAdmin, setAddingAdmin] = useState(false);
 
-  /** 危险操作：删除整店 */
   const [purgeOpenFor, setPurgeOpenFor] = useState<string | null>(null);
   const [purgeSlugInput, setPurgeSlugInput] = useState('');
   const [purging, setPurging] = useState(false);

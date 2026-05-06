@@ -70,6 +70,7 @@
     "unitPrice": "单价",
     "loadingOrder": "加载订单中...",
     "orderNotFound": "订单未找到",
+    "postOrderSponsored": "推广",
     "updateSuccess": "订单修改成功",
     "updateFailed": "订单修改失败",
     "expand": "展开",
