@@ -228,7 +228,8 @@ export default function MenuView() {
           </div>
           <div style={{ position: 'absolute', top: 8, right: 12, zIndex: 1, textAlign: 'right', color: 'rgba(255,255,255,0.7)', fontSize: 9, lineHeight: 1.5 }}>
             <div>
-              Powered by <span style={{ fontWeight: 600, color: '#F0D68A' }}>L&Z techserve LTD</span>
+              Powered by{' '}
+              <span style={{ fontWeight: 600, color: '#F0D68A' }}>L&Z Techserve Limited · F&B</span>
             </div>
             <div>info@lztechserve.com</div>
           </div>

@@ -129,7 +129,7 @@ export default function CustomerLayout() {
           </div>
         ) : null}
         <div style={{ lineHeight: 1.5 }}>
-          Powered by L&amp;Z techserve LTD
+          Powered by L&Z Techserve Limited · F&B
           <br />
           <a href="mailto:info@lztechserve.com" style={{ color: 'var(--text-light)', textDecoration: 'none' }}>
             info@lztechserve.com

@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { StoreRouteShell } from './context/StoreContext';
 import { CartProvider } from './context/CartContext';
 import PlatformLayout from './layouts/PlatformLayout';
+import PortalHome from './pages/PortalHome';
 import PlatformLoginPage from './pages/platform/PlatformLoginPage';
 import PlatformDashboard from './pages/platform/PlatformDashboard';
 import LoginPage from './pages/LoginPage';
@@ -64,7 +65,7 @@ function RequireOwner({ children }: { children: React.ReactNode }) {
 function RequirePlatformAuth({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user } = useAuth();
   if (!isAuthenticated || user?.role !== 'platform_owner') {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/adlg" replace />;
   }
   return <>{children}</>;
 }
@@ -74,7 +75,8 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/" element={<PlatformLoginPage />} />
+          <Route path="/" element={<PortalHome />} />
+          <Route path="/adlg" element={<PlatformLoginPage />} />
           <Route path="/platform" element={<RequirePlatformAuth><PlatformLayout /></RequirePlatformAuth>}>
             <Route index element={<PlatformDashboard />} />
           </Route>

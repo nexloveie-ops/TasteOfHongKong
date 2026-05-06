@@ -33,6 +33,11 @@ export default function PlatformDashboard() {
   const [newAdminRole, setNewAdminRole] = useState<'owner' | 'cashier'>('owner');
   const [addingAdmin, setAddingAdmin] = useState(false);
 
+  /** 危险操作：删除整店 */
+  const [purgeOpenFor, setPurgeOpenFor] = useState<string | null>(null);
+  const [purgeSlugInput, setPurgeSlugInput] = useState('');
+  const [purging, setPurging] = useState(false);
+
   const loadStores = useCallback(async () => {
     setErr('');
     const res = await platformApiFetch('/api/platform/stores');
@@ -148,6 +153,52 @@ export default function PlatformDashboard() {
     if (res.ok) await loadAdmins(storeId);
   };
 
+  const openPurge = (storeId: string) => {
+    setPurgeOpenFor(storeId);
+    setPurgeSlugInput('');
+    setErr('');
+  };
+
+  const cancelPurge = () => {
+    setPurgeOpenFor(null);
+    setPurgeSlugInput('');
+  };
+
+  const deleteStoreCascade = async (storeId: string, expectedSlug: string) => {
+    const typed = purgeSlugInput.trim().toLowerCase();
+    if (typed !== expectedSlug.toLowerCase()) {
+      setErr('请输入与该行「标识」完全一致的 slug 以确认删除');
+      return;
+    }
+    if (!confirm('最后确认：将永久删除该店铺及菜单、订单、配置、店内账号等全部数据，无法恢复。确定？')) {
+      return;
+    }
+    setPurging(true);
+    setErr('');
+    try {
+      const res = await platformApiFetch(`/api/platform/stores/${storeId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmSlug: typed }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setErr(j.error?.message || '删除失败');
+        return;
+      }
+      cancelPurge();
+      if (expanded === storeId) setExpanded(null);
+      setAdminsByStore(prev => {
+        const next = { ...prev };
+        delete next[storeId];
+        return next;
+      });
+      await loadStores();
+    } finally {
+      setPurging(false);
+    }
+  };
+
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
   return (
@@ -222,12 +273,44 @@ export default function PlatformDashboard() {
                       </select>
                     </td>
                     <td style={{ padding: '12px 16px' }}>
-                      <button type="button" className="btn btn-outline" style={{ fontSize: 12, padding: '6px 12px' }}
-                        onClick={() => toggleExpand(s._id)}>
-                        {expanded === s._id ? '收起账号' : '管理店内账号'}
-                      </button>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                        <button type="button" className="btn btn-outline" style={{ fontSize: 12, padding: '6px 12px' }}
+                          onClick={() => toggleExpand(s._id)}>
+                          {expanded === s._id ? '收起账号' : '管理店内账号'}
+                        </button>
+                        <button type="button" className="btn btn-outline" style={{
+                          fontSize: 12,
+                          padding: '6px 12px',
+                          color: '#b71c1c',
+                          borderColor: '#ffcdd2',
+                        }}
+                          onClick={() => (purgeOpenFor === s._id ? cancelPurge() : openPurge(s._id))}>
+                          {purgeOpenFor === s._id ? '取消删除' : '删除店铺…'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
+                  {purgeOpenFor === s._id && (
+                    <tr>
+                      <td colSpan={4} style={{ padding: '12px 16px 16px', background: '#fff3e0', borderTop: '1px solid #ffe0b2' }}>
+                        <div style={{ fontSize: 13, color: '#bf360c', fontWeight: 600, marginBottom: 8 }}>危险：永久删除店铺</div>
+                        <p style={{ fontSize: 13, color: '#5d4037', margin: '0 0 12px', lineHeight: 1.5 }}>
+                          将删除该店下<strong>全部</strong>数据：分类与菜品、过敏原、选项模板与规则、优惠与优惠券、订单与结账、日序号、系统配置、店内账号及与本店相关的审计日志。此操作<strong>不可恢复</strong>。
+                          云存储中的图片文件不会按店自动清理，如需请另行在存储桶中处理。
+                        </p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                          <span style={{ fontSize: 13 }}>请输入店铺标识 <code style={{ background: '#ffe0b2', padding: '2px 6px', borderRadius: 4 }}>{s.slug}</code> 以确认：</span>
+                          <input className="input" style={{ width: 180 }} placeholder={s.slug} value={purgeSlugInput}
+                            onChange={e => setPurgeSlugInput(e.target.value)} autoComplete="off" />
+                          <button type="button" className="btn btn-primary" disabled={purging}
+                            style={{ background: '#c62828', borderColor: '#c62828' }}
+                            onClick={() => deleteStoreCascade(s._id, s.slug)}>
+                            {purging ? '删除中…' : '确认永久删除'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                   {expanded === s._id && (
                     <tr>
                       <td colSpan={4} style={{ padding: '0 16px 20px', background: '#fafafa' }}>

@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 export default function PlatformLoginPage() {
@@ -48,6 +48,9 @@ export default function PlatformLoginPage() {
       padding: 24,
       gap: 28,
     }}>
+      <Link to="/" style={{ color: '#e8eaf6', fontSize: 13, textDecoration: 'none', opacity: 0.9 }}>
+        ← 返回门户首页
+      </Link>
       <div style={{
         background: '#fff',
         borderRadius: 16,

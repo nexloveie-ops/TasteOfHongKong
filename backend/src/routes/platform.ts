@@ -8,7 +8,22 @@ import { platformAuth } from '../middleware/requirePlatformOwner';
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function models() {
-  return getModels() as { Store: mongoose.Model<any>; Admin: mongoose.Model<any> };
+  return getModels() as {
+    Store: mongoose.Model<any>;
+    Admin: mongoose.Model<any>;
+    MenuCategory: mongoose.Model<any>;
+    MenuItem: mongoose.Model<any>;
+    Allergen: mongoose.Model<any>;
+    OptionGroupTemplate: mongoose.Model<any>;
+    OptionGroupTemplateRule: mongoose.Model<any>;
+    Offer: mongoose.Model<any>;
+    Coupon: mongoose.Model<any>;
+    Order: mongoose.Model<any>;
+    Checkout: mongoose.Model<any>;
+    DailyOrderCounter: mongoose.Model<any>;
+    SystemConfig: mongoose.Model<any>;
+    AdminAuditLog: mongoose.Model<any>;
+  };
 }
 
 function paramStr(p: string | string[] | undefined): string {
@@ -109,6 +124,53 @@ router.patch('/stores/:id', ...platformAuth, async (req: Request, res: Response,
     }
     await store.save();
     res.json(store.toObject());
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/platform/stores/:id — 级联删除该店下业务数据（不可逆）
+router.delete('/stores/:id', ...platformAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { Store } = models();
+    const id = paramStr(req.params.id);
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw createAppError('VALIDATION_ERROR', 'Invalid store id');
+    }
+    const store = (await Store.findById(id).lean()) as { _id: mongoose.Types.ObjectId; slug: string } | null;
+    if (!store) {
+      throw createAppError('NOT_FOUND', '店铺不存在');
+    }
+    const { confirmSlug } = req.body as { confirmSlug?: string };
+    const typed = typeof confirmSlug === 'string' ? confirmSlug.trim().toLowerCase() : '';
+    if (!typed || typed !== store.slug) {
+      throw createAppError(
+        'VALIDATION_ERROR',
+        '请在请求体中提供 confirmSlug，且必须与店铺 URL 标识完全一致以确认删除',
+      );
+    }
+
+    const storeOid = new mongoose.Types.ObjectId(id);
+    const m = models();
+
+    await Promise.all([
+      m.MenuCategory.deleteMany({ storeId: storeOid }),
+      m.MenuItem.deleteMany({ storeId: storeOid }),
+      m.Allergen.deleteMany({ storeId: storeOid }),
+      m.OptionGroupTemplateRule.deleteMany({ storeId: storeOid }),
+      m.OptionGroupTemplate.deleteMany({ storeId: storeOid }),
+      m.Offer.deleteMany({ storeId: storeOid }),
+      m.Coupon.deleteMany({ storeId: storeOid }),
+      m.Order.deleteMany({ storeId: storeOid }),
+      m.Checkout.deleteMany({ storeId: storeOid }),
+      m.DailyOrderCounter.deleteMany({ storeId: storeOid }),
+      m.SystemConfig.deleteMany({ storeId: storeOid }),
+      m.Admin.deleteMany({ storeId: storeOid }),
+      m.AdminAuditLog.deleteMany({ targetStoreId: storeOid }),
+    ]);
+
+    await Store.findByIdAndDelete(id);
+    res.json({ message: '店铺及关联数据已删除' });
   } catch (err) {
     next(err);
   }

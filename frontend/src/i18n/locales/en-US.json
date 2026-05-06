@@ -200,5 +200,69 @@
     "title": "Receipt",
     "orderId": "Order ID",
     "dailyOrderNumber": "Pickup #"
+  },
+  "portal": {
+    "companyName": "L&Z Techserve Limited · F&B",
+    "tagline": "Restaurant & hospitality technology",
+    "badge": "QR ordering · One checkout",
+    "langEn": "English",
+    "langZh": "中文",
+    "hero": "Less friction at the table. Leaner service on the floor.",
+    "lead": "Let guests order and pay from their phones, line up phone and walk-in orders on the same rail, and keep one live menu that nudges add-ons—so you save labor, speed up turns, and grow average check without a bigger headcount.",
+    "lead2": "From dine-in QR and takeaway QR to a single payment and pickup flow: fewer order mistakes, less running between tables and the till, and clearer visibility into what is selling today.",
+    "modulesTitle": "Where guests meet your menu—and where you save time",
+    "modulesSubtitle": "Designed around busy shifts: faster ordering for diners, fewer repetitive tasks for staff, and menus that help lift ticket size.",
+    "moduleLabel": "Focus",
+    "footer": "L&Z Techserve Limited · F&B · End-to-end F&B digitization",
+    "cards": {
+      "dineIn": {
+        "title": "QR dine-in ordering",
+        "desc": "Guests scan once at the table, browse photos and modifiers at their own pace, and send orders straight to the kitchen—no waiting to flag someone down during peak hours. Fewer missed upsells from rushed verbal orders."
+      },
+      "takeaway": {
+        "title": "Takeaway & pickup QR",
+        "desc": "Same smooth flow for guests ordering ahead: scan from a poster or window code, choose pickup time, pay online, and pick up when ready—front-of-house spends less time retaking details on the phone."
+      },
+      "counter": {
+        "title": "Phone orders & counter in one flow",
+        "desc": "Walk-in, phone, and counter orders follow one ticket line with clear statuses—print or bump to the line, take integrated payment once, and reduce double entry between the handset and the POS."
+      },
+      "menu": {
+        "title": "Digital menu that lifts revenue",
+        "desc": "Replace printed sheets that go out of date: highlight combos, sides, and drinks where guests already look, surface allergens clearly, and rotate offers by daypart—many venues see higher attachment and average spend when choices are visible and easy to add."
+      }
+    },
+    "chainSplit": {
+      "title": "Consistent experience across locations",
+      "body": "When you run more than one site, guests get the same simple scan-and-order habit everywhere; you roll out menu or price adjustments from one place instead of chasing paper at each branch.",
+      "b1": "Branding and items stay aligned per venue while guests always recognize the same ordering steps.",
+      "b2": "Promotions and seasonal sets can go live together—less confusion for staff training across stores.",
+      "b3": "Less time reprinting menus and reconciling mismatched versions between the floor and the kitchen."
+    },
+    "flowSplit": {
+      "title": "One journey: choose, pay, collect",
+      "body": "Whether someone is at the table or picking up, they see what they ordered, pay in one place, and know when to collect—customers wait less at the counter and staff answer fewer “where is my order?” questions.",
+      "b1": "Kitchen and service see the same queue so handoff stays calm during rushes.",
+      "b2": "Integrated payment means fewer cash-handling steps and fewer wrong totals from manual re-keying."
+    },
+    "opsSplit": {
+      "title": "Day-to-day control without spreadsheet chaos",
+      "body": "Owner-managers update dishes, prices, and tags in one console; staff see today’s truth on phones and printers—less back-and-forth and fewer disputes over outdated chalkboards or PDF menus.",
+      "b1": "Shift-friendly screens so the team spends minutes—not hours—on order exceptions.",
+      "b2": "Clear sales views help you trim slow movers and double down on what actually drives margin."
+    },
+    "illus": {
+      "chainHub": "Head office",
+      "storeA": "Branch A",
+      "storeB": "Branch B",
+      "storeC": "Branch C",
+      "flowPick": "Pick items",
+      "flowCart": "Cart",
+      "flowPay": "Pay",
+      "flowPickup": "Pickup",
+      "dashMenu": "Menu",
+      "dashOrders": "Orders",
+      "dashReports": "Sales"
+    }
   }
 }

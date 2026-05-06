@@ -65,10 +65,9 @@ if (USE_GCS) {
   app.use('/uploads', express.static(uploadsPath));
 }
 
-// Serve frontend static files in production
 const publicPath = path.join(__dirname, '..', 'public');
-app.use(express.static(publicPath));
 
+// 所有 /api 路由须先于 express.static，否则部分非 GET 请求可能被静态中间件以 404 结束，无法到达平台路由等处理器。
 // Health check
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -110,6 +109,9 @@ app.use('/api/payments', createPaymentsRouter(io));
 
 // Coupons routes
 app.use('/api/coupons', couponsRouter);
+
+// Serve frontend static files in production（放在 /api 之后）
+app.use(express.static(publicPath));
 
 // SPA fallback: serve index.html for non-API routes (Express 5 syntax)
 app.get('/{*splat}', (_req, res) => {
