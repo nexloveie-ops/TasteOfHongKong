@@ -16,6 +16,8 @@ interface MenuItem {
   isSoldOut?: boolean;
 }
 interface OrderItemOption {
+  groupId?: string;
+  choiceId?: string;
   groupName: Record<string, string>;
   choiceName: Record<string, string>;
   extraPrice: number;
@@ -103,7 +105,13 @@ export default function CashierOrder() {
   };
 
   const addToOrderWithOptions = (item: MenuItem, cartOptions: CartItemOption[]) => {
-    const options: OrderItemOption[] = cartOptions.map(o => ({ groupName: o.groupName, choiceName: o.choiceName, extraPrice: o.extraPrice }));
+    const options: OrderItemOption[] = cartOptions.map(o => ({
+      groupId: o.groupId,
+      choiceId: o.choiceId,
+      groupName: o.groupName,
+      choiceName: o.choiceName,
+      extraPrice: o.extraPrice,
+    }));
     setOrder(prev => [...prev, { id: nextLineId(), menuItemId: item._id, name: getName(item.translations), price: item.price, options }]);
     setOptionModal(null);
   };
@@ -239,10 +247,14 @@ export default function CashierOrder() {
       let selOpts: { groupId: string; choiceId: string }[] | undefined;
       if (line.options && line.options.length > 0 && mi?.optionGroups) {
         selOpts = line.options.map(opt => {
+          // Prefer persisted IDs from selection time; fallback to name matching for legacy lines.
+          if (opt.groupId && opt.choiceId) {
+            return { groupId: opt.groupId, choiceId: opt.choiceId };
+          }
           const group = mi.optionGroups!.find(g => g.translations.some(t2 => Object.values(opt.groupName).includes(t2.name)));
           const choice = group?.choices.find(c => c.translations.some(t2 => Object.values(opt.choiceName).includes(t2.name)));
           return { groupId: group?._id || '', choiceId: choice?._id || '' };
-        });
+        }).filter(o => o.groupId && o.choiceId);
       }
       const key = line.menuItemId + '|' + JSON.stringify(selOpts || []);
       const existing = grouped.get(key);
