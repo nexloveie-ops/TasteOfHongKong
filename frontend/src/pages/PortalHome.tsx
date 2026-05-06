@@ -363,6 +363,23 @@ const portalStyles = `
   line-height: 1.5;
   animation: portal-fade-up 1s ease-out 0.5s both;
 }
+.portal-contact {
+  margin-top: 14px;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+.portal-contact-mail {
+  color: #22d3ee;
+  text-decoration: none;
+  font-weight: 600;
+  margin-left: 6px;
+  border-bottom: 1px solid rgba(34, 211, 238, 0.45);
+  transition: color 0.2s, border-color 0.2s;
+}
+.portal-contact-mail:hover {
+  color: #67e8f9;
+  border-bottom-color: rgba(103, 232, 249, 0.7);
+}
 `;
 
 const CARD_KEYS = ['dineIn', 'takeaway', 'counter', 'menu'] as const;
@@ -508,7 +525,15 @@ export default function PortalHome() {
             </div>
           </section>
 
-          <footer className="portal-footer">{t('portal.footer')}</footer>
+          <footer className="portal-footer">
+            <div>{t('portal.footer')}</div>
+            <div className="portal-contact">
+              <span>{t('portal.contactLabel')}</span>
+              <a className="portal-contact-mail" href={`mailto:${t('portal.contactEmail')}`}>
+                {t('portal.contactEmail')}
+              </a>
+            </div>
+          </footer>
         </main>
       </div>
     </>

@@ -80,6 +80,58 @@ export type PostOrderAdScheduleFields = {
   windowEnd?: string;
 };
 
+export type PostOrderAdCapFields = PostOrderAdScheduleFields & {
+  impressionCount?: number;
+  clickCount?: number;
+  maxImpressions?: number | null;
+  maxClicks?: number | null;
+};
+
+/** 展示/点击上限（与日期、每日时段独立；未设置上限则不计入停止条件） */
+export function isPostOrderAdWithinNumericCaps(
+  ad: Pick<PostOrderAdCapFields, 'impressionCount' | 'clickCount' | 'maxImpressions' | 'maxClicks'>,
+): boolean {
+  const maxI = ad.maxImpressions;
+  if (maxI != null && maxI > 0 && (ad.impressionCount ?? 0) >= maxI) {
+    return false;
+  }
+  const maxC = ad.maxClicks;
+  if (maxC != null && maxC > 0 && (ad.clickCount ?? 0) >= maxC) {
+    return false;
+  }
+  return true;
+}
+
+export function parseOptionalMaxCap(raw: unknown, fieldLabel: string): number | null {
+  if (raw === undefined || raw === null || raw === '') {
+    return null;
+  }
+  const n = typeof raw === 'number' ? raw : Number(String(raw).trim());
+  if (!Number.isFinite(n) || n < 1 || Math.floor(n) !== n) {
+    throw createAppError('VALIDATION_ERROR', `${fieldLabel} 须为正整数或留空（不限制）`);
+  }
+  return n;
+}
+
+/** 当前计数已达展示/点击上限时自动停用（用于保存后或增量上报后） */
+export function applyPostOrderAdAutoDeactivateFromCaps(doc: {
+  get(path: string): unknown;
+  set(path: string, v: unknown): void;
+}): void {
+  if (doc.get('isActive') === false) return;
+  const imp = Number(doc.get('impressionCount')) || 0;
+  const clk = Number(doc.get('clickCount')) || 0;
+  const maxI = doc.get('maxImpressions') as number | null | undefined;
+  const maxC = doc.get('maxClicks') as number | null | undefined;
+  if (maxI != null && maxI > 0 && imp >= maxI) {
+    doc.set('isActive', false);
+    return;
+  }
+  if (maxC != null && maxC > 0 && clk >= maxC) {
+    doc.set('isActive', false);
+  }
+}
+
 export function isPostOrderAdActiveNow(
   ad: PostOrderAdScheduleFields,
   now: Date,
@@ -106,10 +158,12 @@ export function isPostOrderAdActiveNow(
   return mins >= startM || mins <= endM;
 }
 
-export function filterActivePostOrderAds<T extends PostOrderAdScheduleFields>(
+export function filterActivePostOrderAds<T extends PostOrderAdCapFields>(
   ads: T[],
   now = new Date(),
   timeZone = process.env.PLATFORM_AD_TIMEZONE || 'Asia/Hong_Kong',
 ): T[] {
-  return ads.filter((a) => isPostOrderAdActiveNow(a, now, timeZone));
+  return ads.filter(
+    (a) => isPostOrderAdActiveNow(a, now, timeZone) && isPostOrderAdWithinNumericCaps(a),
+  );
 }

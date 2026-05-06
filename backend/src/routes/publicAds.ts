@@ -1,9 +1,31 @@
-import mongoose from 'mongoose';
+import mongoose, { type Model } from 'mongoose';
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { getModels } from '../getModels';
 import { createAppError } from '../middleware/errorHandler';
 import { filterActivePostOrderAds } from '../utils/postOrderAdSchedule';
 import { getSlidesFromDoc, type PostOrderSlideInput } from '../utils/postOrderAdSlides';
+
+async function deactivatePostOrderAdsOverCaps(PostOrderAd: Model<unknown>, ids: mongoose.Types.ObjectId[]): Promise<void> {
+  if (ids.length === 0) return;
+  await PostOrderAd.updateMany(
+    {
+      _id: { $in: ids },
+      isActive: true,
+      maxImpressions: { $type: 'number', $gte: 1 },
+      $expr: { $gte: ['$impressionCount', '$maxImpressions'] },
+    },
+    { $set: { isActive: false } },
+  );
+  await PostOrderAd.updateMany(
+    {
+      _id: { $in: ids },
+      isActive: true,
+      maxClicks: { $type: 'number', $gte: 1 },
+      $expr: { $gte: ['$clickCount', '$maxClicks'] },
+    },
+    { $set: { isActive: false } },
+  );
+}
 
 const router = Router();
 
@@ -32,6 +54,7 @@ router.post('/post-order-ads/impressions', async (req: Request, res: Response, n
     const { PostOrderAd } = getModels();
     const oids = unique.map((id) => new mongoose.Types.ObjectId(id));
     const result = await PostOrderAd.updateMany({ _id: { $in: oids } }, { $inc: { impressionCount: 1 } });
+    await deactivatePostOrderAdsOverCaps(PostOrderAd, oids);
     res.json({ ok: true, modified: result.modifiedCount });
   } catch (err) {
     next(err);
@@ -49,7 +72,9 @@ router.post('/post-order-ads/click', async (req: Request, res: Response, next: N
       throw createAppError('VALIDATION_ERROR', 'adId 无效');
     }
     const { PostOrderAd } = getModels();
-    await PostOrderAd.updateOne({ _id: new mongoose.Types.ObjectId(adId) }, { $inc: { clickCount: 1 } });
+    const oid = new mongoose.Types.ObjectId(adId);
+    await PostOrderAd.updateOne({ _id: oid }, { $inc: { clickCount: 1 } });
+    await deactivatePostOrderAdsOverCaps(PostOrderAd, [oid]);
     res.json({ ok: true });
   } catch (err) {
     next(err);

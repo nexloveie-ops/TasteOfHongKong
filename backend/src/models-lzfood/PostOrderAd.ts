@@ -30,6 +30,10 @@ const PostOrderAdSchema = new mongoose.Schema(
     impressionCount: { type: Number, default: 0 },
     /** 顾客点击跳转次数 */
     clickCount: { type: Number, default: 0 },
+    /** 达到该展示次数后自动停用（null/不设 = 不限制）；与 valid 区间、每日时段一并生效，任一达标即停 */
+    maxImpressions: { type: Number, default: null },
+    /** 达到该点击次数后自动停用（null/不设 = 不限制） */
+    maxClicks: { type: Number, default: null },
   },
   { timestamps: true },
 );

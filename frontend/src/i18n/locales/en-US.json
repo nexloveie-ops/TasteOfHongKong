@@ -215,6 +215,8 @@
     "modulesSubtitle": "Designed around busy shifts: faster ordering for diners, fewer repetitive tasks for staff, and menus that help lift ticket size.",
     "moduleLabel": "Focus",
     "footer": "L&Z Techserve Limited · F&B · End-to-end F&B digitization",
+    "contactLabel": "Contact",
+    "contactEmail": "info@lztechserve.com",
     "cards": {
       "dineIn": {
         "title": "QR dine-in ordering",

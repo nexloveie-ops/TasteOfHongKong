@@ -23,6 +23,8 @@ interface PostOrderAdRow {
   isActive: boolean;
   impressionCount?: number;
   clickCount?: number;
+  maxImpressions?: number | null;
+  maxClicks?: number | null;
 }
 
 function slidesFromApiRow(row: PostOrderAdRow): PostOrderSlideRow[] {
@@ -49,6 +51,11 @@ function formatCtr(impressions: number, clicks: number): string {
   return `${((clicks / impressions) * 100).toFixed(2)}%`;
 }
 
+function formatCountWithCap(count: number, cap?: number | null): string {
+  if (cap != null && cap > 0) return `${count} / ${cap}`;
+  return String(count);
+}
+
 export default function PlatformPostOrderAdsPage() {
   const [err, setErr] = useState('');
   const [postOrderAds, setPostOrderAds] = useState<PostOrderAdRow[]>([]);
@@ -69,6 +76,8 @@ export default function PlatformPostOrderAdsPage() {
     windowEnd: '',
     sortOrder: 0,
     isActive: true,
+    maxImpressionsInput: '',
+    maxClicksInput: '',
   });
 
   const loadPostOrderAds = useCallback(async () => {
@@ -111,6 +120,8 @@ export default function PlatformPostOrderAdsPage() {
       windowEnd: '',
       sortOrder: 0,
       isActive: true,
+      maxImpressionsInput: '',
+      maxClicksInput: '',
     });
   };
 
@@ -163,6 +174,16 @@ export default function PlatformPostOrderAdsPage() {
       setErr('请填写中文标题、至少一张图片（上传或 URL）、跳转链接与生效日期');
       return;
     }
+    const maxImpRaw = adForm.maxImpressionsInput.trim();
+    const maxClkRaw = adForm.maxClicksInput.trim();
+    if (maxImpRaw && (!/^\d+$/.test(maxImpRaw) || parseInt(maxImpRaw, 10) < 1)) {
+      setErr('展示次数上限须为正整数或留空');
+      return;
+    }
+    if (maxClkRaw && (!/^\d+$/.test(maxClkRaw) || parseInt(maxClkRaw, 10) < 1)) {
+      setErr('点击次数上限须为正整数或留空');
+      return;
+    }
     setAdSaving(true);
     setErr('');
     try {
@@ -177,6 +198,8 @@ export default function PlatformPostOrderAdsPage() {
         windowEnd: adForm.windowEnd.trim(),
         sortOrder: adForm.sortOrder,
         isActive: adForm.isActive,
+        maxImpressions: maxImpRaw ? parseInt(maxImpRaw, 10) : null,
+        maxClicks: maxClkRaw ? parseInt(maxClkRaw, 10) : null,
       };
       const res = adForm.editingId
         ? await platformApiFetch(`/api/platform/post-order-ads/${adForm.editingId}`, {
@@ -215,6 +238,9 @@ export default function PlatformPostOrderAdsPage() {
       windowEnd: row.windowEnd || '',
       sortOrder: row.sortOrder ?? 0,
       isActive: row.isActive !== false,
+      maxImpressionsInput:
+        row.maxImpressions != null && row.maxImpressions > 0 ? String(row.maxImpressions) : '',
+      maxClicksInput: row.maxClicks != null && row.maxClicks > 0 ? String(row.maxClicks) : '',
     });
     setAdFormOpen(true);
   };
@@ -248,7 +274,8 @@ export default function PlatformPostOrderAdsPage() {
     <div>
       <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a237e', marginBottom: 8 }}>下单完成页广告</h1>
       <p style={{ fontSize: 14, color: '#555', marginBottom: 24, lineHeight: 1.6 }}>
-        配置顾客<strong>订单状态页</strong>的推广横幅（顾客<strong>下单后</strong>进入该页即可看到，含待支付）。支持多张图轮播、日期与每日时段；统计<strong>展示次数</strong>与<strong>点击次数</strong>（打开该页时上报展示，点击跳转时上报点击）。
+        配置顾客<strong>订单状态页</strong>的推广横幅（顾客<strong>下单后</strong>进入该页即可看到，含待支付）。支持多张图轮播；统计<strong>展示次数</strong>与<strong>点击次数</strong>（打开该页时上报展示，点击跳转时上报点击）。
+        <strong>停止投放</strong>满足任一即生效并自动关闭「启用」：<strong>① 时间</strong>——未到开始日、已过结束日或不在每日时段内；<strong>② 展示次数</strong>——达到所设展示上限；<strong>③ 点击次数</strong>——达到所设点击上限。上限留空表示该项不限制。
       </p>
 
       {err && (
@@ -260,7 +287,7 @@ export default function PlatformPostOrderAdsPage() {
       <div className="card" style={{ padding: 20, marginBottom: 24 }}>
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>广告列表与数据</h2>
         <p style={{ fontSize: 13, color: '#555', marginBottom: 16, lineHeight: 1.6 }}>
-          图片可<strong>上传到存储桶</strong>（<code>GCS_BUCKET</code>）或填写 URL。时段时区：<code>PLATFORM_AD_TIMEZONE</code>（默认 <code>Asia/Hong_Kong</code>）。点击率 = 点击 / 展示。
+          图片可<strong>上传到存储桶</strong>（<code>GCS_BUCKET</code>）或填写 URL。日期与每日时段时区：<code>PLATFORM_AD_TIMEZONE</code>（默认 <code>Asia/Hong_Kong</code>）。点击率 = 点击 / 展示。列表中展示/点击列带「当前/上限」时表示已设上限。
         </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 16, alignItems: 'center' }}>
           {!adFormOpen ? (
@@ -298,6 +325,8 @@ export default function PlatformPostOrderAdsPage() {
                 {postOrderAds.map((a) => {
                   const imp = a.impressionCount ?? 0;
                   const clk = a.clickCount ?? 0;
+                  const capImp = a.maxImpressions;
+                  const capClk = a.maxClicks;
                   return (
                     <tr key={a._id} style={{ borderTop: '1px solid #eee', verticalAlign: 'top' }}>
                       <td style={{ padding: '8px 10px' }}>
@@ -305,8 +334,8 @@ export default function PlatformPostOrderAdsPage() {
                         {a.titleEn ? <div style={{ color: '#666', fontSize: 12 }}>{a.titleEn}</div> : null}
                       </td>
                       <td style={{ padding: '8px 10px' }}>{slideCount(a)} 张</td>
-                      <td style={{ padding: '8px 10px' }}>{imp}</td>
-                      <td style={{ padding: '8px 10px' }}>{clk}</td>
+                      <td style={{ padding: '8px 10px' }} title={capImp != null && capImp > 0 ? `上限 ${capImp}` : undefined}>{formatCountWithCap(imp, capImp)}</td>
+                      <td style={{ padding: '8px 10px' }} title={capClk != null && capClk > 0 ? `上限 ${capClk}` : undefined}>{formatCountWithCap(clk, capClk)}</td>
                       <td style={{ padding: '8px 10px' }}>{formatCtr(imp, clk)}</td>
                       <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{a.validFrom} — {a.validTo}</td>
                       <td style={{ padding: '8px 10px' }}>
@@ -474,6 +503,28 @@ export default function PlatformPostOrderAdsPage() {
               <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>每日结束（HH:mm，可选）</label>
               <input className="input" placeholder="22:00" value={adForm.windowEnd}
                 onChange={e => setAdForm(f => ({ ...f, windowEnd: e.target.value }))} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>展示次数上限（可选）</label>
+              <input
+                className="input"
+                type="text"
+                inputMode="numeric"
+                placeholder="留空=不限制，达标自动停用"
+                value={adForm.maxImpressionsInput}
+                onChange={e => setAdForm(f => ({ ...f, maxImpressionsInput: e.target.value.replace(/\D/g, '') }))}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>点击次数上限（可选）</label>
+              <input
+                className="input"
+                type="text"
+                inputMode="numeric"
+                placeholder="留空=不限制，达标自动停用"
+                value={adForm.maxClicksInput}
+                onChange={e => setAdForm(f => ({ ...f, maxClicksInput: e.target.value.replace(/\D/g, '') }))}
+              />
             </div>
             <div>
               <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>排序（小在前）</label>

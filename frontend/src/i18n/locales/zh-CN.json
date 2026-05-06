@@ -215,6 +215,8 @@
     "modulesSubtitle": "面向高峰时段：客人自助下单更快，员工重复劳动更少，菜单展示更能带动加购。",
     "moduleLabel": "重点",
     "footer": "L&Z Techserve Limited · F&B · 餐饮全链路数字化",
+    "contactLabel": "联系邮箱",
+    "contactEmail": "info@lztechserve.com",
     "cards": {
       "dineIn": {
         "title": "堂食扫码点餐",

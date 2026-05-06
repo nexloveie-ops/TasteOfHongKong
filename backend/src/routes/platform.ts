@@ -16,6 +16,8 @@ import {
   assertYmd,
   assertYmdOrder,
   parseHmToMinutes,
+  parseOptionalMaxCap,
+  applyPostOrderAdAutoDeactivateFromCaps,
 } from '../utils/postOrderAdSchedule';
 import { getSlidesFromDoc, parseSlidesFromBody, requireNonEmptySlides } from '../utils/postOrderAdSlides';
 
@@ -362,6 +364,9 @@ router.post('/post-order-ads', ...platformAuth, async (req: Request, res: Respon
     );
     const sortOrder = typeof b.sortOrder === 'number' ? b.sortOrder : Number(b.sortOrder) || 0;
     const isActive = b.isActive !== false;
+    const maxImpressions =
+      'maxImpressions' in b ? parseOptionalMaxCap(b.maxImpressions, '展示次数上限') : null;
+    const maxClicks = 'maxClicks' in b ? parseOptionalMaxCap(b.maxClicks, '点击次数上限') : null;
     const doc = await PostOrderAd.create({
       titleZh,
       titleEn,
@@ -373,6 +378,8 @@ router.post('/post-order-ads', ...platformAuth, async (req: Request, res: Respon
       windowEnd: tw.windowEnd,
       sortOrder,
       isActive,
+      maxImpressions,
+      maxClicks,
     });
     res.status(201).json(doc.toObject());
   } catch (err) {
@@ -440,6 +447,13 @@ router.patch('/post-order-ads/:id', ...platformAuth, async (req: Request, res: R
     if (typeof b.isActive === 'boolean') {
       doc.set('isActive', b.isActive);
     }
+    if ('maxImpressions' in b) {
+      doc.set('maxImpressions', parseOptionalMaxCap(b.maxImpressions, '展示次数上限'));
+    }
+    if ('maxClicks' in b) {
+      doc.set('maxClicks', parseOptionalMaxCap(b.maxClicks, '点击次数上限'));
+    }
+    applyPostOrderAdAutoDeactivateFromCaps(doc);
     await doc.save();
     const out = doc.toObject() as Record<string, unknown>;
     if (getSlidesFromDoc(out as { slides?: { imageUrl?: string; captionZh?: string; captionEn?: string }[]; imageUrl?: string }).length === 0) {
