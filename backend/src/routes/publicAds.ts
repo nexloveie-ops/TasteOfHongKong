@@ -4,7 +4,14 @@ import { getModels } from '../getModels';
 import { createAppError } from '../middleware/errorHandler';
 import { filterActivePostOrderAds } from '../utils/postOrderAdSchedule';
 import { getSlidesFromDoc, type PostOrderSlideInput } from '../utils/postOrderAdSlides';
-import { resolveStoreEffectiveFeatures, FeatureKeys } from '../utils/featureCatalog';
+import { FeatureKeys } from '../utils/featureCatalog';
+
+/** 顾客端下单后广告默认展示；仅在 overrides 显式关闭或 Enterprise 套餐时隐藏 */
+function explicitPostOrderAdsOptOut(overrides: Map<string, boolean> | Record<string, boolean> | undefined): boolean {
+  if (!overrides) return false;
+  const entries = overrides instanceof Map ? [...overrides.entries()] : Object.entries(overrides);
+  return entries.some(([k, v]) => k === FeatureKeys.CustomerPostOrderAdsViewAction && v === false);
+}
 
 async function deactivatePostOrderAdsOverCaps(PostOrderAd: Model<unknown>, ids: mongoose.Types.ObjectId[]): Promise<void> {
   if (ids.length === 0) return;
@@ -88,15 +95,29 @@ router.post('/post-order-ads/click', async (req: Request, res: Response, next: N
  */
 router.get('/post-order-ads', async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    const { PostOrderAd, Store } = getModels() as { PostOrderAd: Model<unknown>; Store: Model<any> };
+    const { PostOrderAd, Store, FeaturePlan } = getModels() as {
+      PostOrderAd: Model<unknown>;
+      Store: Model<any>;
+      FeaturePlan: Model<any>;
+    };
     const rawSlug = (typeof _req.headers['x-store-slug'] === 'string' ? _req.headers['x-store-slug'] : '').trim().toLowerCase();
     if (rawSlug) {
-      const store = await Store.findOne({ slug: rawSlug }).lean() as { _id: mongoose.Types.ObjectId } | null;
+      const store = await Store.findOne({ slug: rawSlug }).lean() as {
+        _id: mongoose.Types.ObjectId;
+        basePlanId?: mongoose.Types.ObjectId | null;
+        featureOverrides?: Map<string, boolean> | Record<string, boolean>;
+      } | null;
       if (store) {
-        const features = await resolveStoreEffectiveFeatures(store._id);
-        if (!features.has(FeatureKeys.CustomerPostOrderAdsViewAction)) {
+        if (explicitPostOrderAdsOptOut(store.featureOverrides)) {
           res.json([]);
           return;
+        }
+        if (store.basePlanId) {
+          const plan = await FeaturePlan.findById(store.basePlanId).lean() as { code?: string } | null;
+          if ((plan?.code || '').toLowerCase().includes('enterprise')) {
+            res.json([]);
+            return;
+          }
         }
       }
     }

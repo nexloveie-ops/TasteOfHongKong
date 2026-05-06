@@ -43,7 +43,6 @@ const FEATURE_OPTIONS: { key: string; label: string }[] = [
   { key: 'admin.reports.vatExport.action', label: '报表-VAT 导出' },
   { key: 'admin.inventory.restoreTime.action', label: '库存-恢复供应时间' },
   { key: 'platform.postOrderAds.manage.action', label: '平台-广告管理' },
-  { key: 'customer.postOrderAds.view.action', label: '顾客端-广告展示' },
 ];
 
 export default function PlatformStoresPage() {
@@ -736,6 +735,11 @@ export default function PlatformStoresPage() {
             </div>
             <div style={{ marginBottom: 12 }}>
               <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>店铺覆盖（JSON）</label>
+              <div style={{ fontSize: 11, color: '#888', marginBottom: 6, lineHeight: 1.45 }}>
+                顾客端下单后广告默认开启。若需关闭，可加入：
+                <code style={{ fontSize: 10 }}>{'{"customer.postOrderAds.view.action": false}'}</code>
+                。Enterprise 套餐始终不展示广告。
+              </div>
               <textarea
                 className="input"
                 style={{ width: '100%', minHeight: 140 }}

@@ -10,6 +10,7 @@ export const FeatureKeys = {
   AdminReportsVatExportAction: 'admin.reports.vatExport.action',
   AdminInventoryRestoreTimeAction: 'admin.inventory.restoreTime.action',
   PlatformPostOrderAdsManageAction: 'platform.postOrderAds.manage.action',
+  /** 仅用于店铺 `featureOverrides` 显式设为 `false` 时关闭顾客端下单后广告；勿再用于 Plan「开启」广告 */
   CustomerPostOrderAdsViewAction: 'customer.postOrderAds.view.action',
 } as const;
 

@@ -413,6 +413,65 @@ export function createOrdersRouter(io: SocketIOServer): Router {
     }
   });
 
+  // PUT /api/orders/dine-in/:id/complete-online-paid
+  // Customer QR dine-in already paid online: after cashier prints kitchen ticket, mark completed + checkout record for reporting.
+  router.put('/dine-in/:id/complete-online-paid', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const models = getModels() as {
+        Order: mongoose.Model<any>;
+        Checkout: mongoose.Model<any>;
+      };
+      const { Order, Checkout } = models;
+      const id = req.params.id as string;
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw createAppError('VALIDATION_ERROR', 'Invalid order ID');
+      }
+
+      const order = await Order.findOne({ _id: id, storeId: req.storeId });
+      if (!order) {
+        throw createAppError('NOT_FOUND', 'Order not found');
+      }
+
+      if (order.type !== 'dine_in') {
+        throw createAppError('VALIDATION_ERROR', 'Only dine-in orders can use this action');
+      }
+
+      if (order.status !== 'paid_online') {
+        throw createAppError('VALIDATION_ERROR', 'Only online-paid dine-in orders can be finished here', {
+          currentStatus: order.status,
+        });
+      }
+
+      const itemTotal = order.items.reduce((sum: number, item: { unitPrice: number; quantity: number; selectedOptions?: { extraPrice?: number }[] }) => {
+        const optExtra = (item.selectedOptions || []).reduce((s: number, o: { extraPrice?: number }) => s + (o.extraPrice || 0), 0);
+        return sum + (item.unitPrice + optExtra) * item.quantity;
+      }, 0);
+      const bundleDiscount = ((order as unknown as { appliedBundles?: { discount: number }[] }).appliedBundles || [])
+        .reduce((s: number, b: { discount: number }) => s + b.discount, 0);
+      const totalAmount = Math.round((itemTotal - bundleDiscount) * 100) / 100;
+
+      await Checkout.create({
+        storeId: req.storeId,
+        type: 'seat',
+        totalAmount,
+        paymentMethod: 'online',
+        orderIds: [order._id],
+        tableNumber: order.tableNumber,
+      });
+
+      const updated = await Order.findOneAndUpdate(
+        { _id: id, storeId: req.storeId },
+        { $set: { status: 'completed', completedAt: new Date() } },
+        { new: true },
+      );
+
+      io.to(storeIoRoom(req.storeId!)).emit('order:updated', updated);
+      res.json(updated);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // PUT /api/orders/:id/delivery-stage — update delivery workflow stage without changing checkout status
   router.put('/:id/delivery-stage', async (req: Request, res: Response, next: NextFunction) => {
     try {

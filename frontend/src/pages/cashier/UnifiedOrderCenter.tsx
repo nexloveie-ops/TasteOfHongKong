@@ -14,6 +14,8 @@ interface OrderRow {
   type: OrderType;
   status: OrderStatus;
   dailyOrderNumber?: number;
+  /** 堂食扫码单号（顾客端常见） */
+  dineInOrderNumber?: string;
   tableNumber?: number;
   seatNumber?: number;
   customerName?: string;
@@ -36,6 +38,12 @@ interface RestaurantConfig {
   restaurant_email?: string;
   receipt_terms?: string;
   receipt_print_copies?: string;
+}
+
+function orderNoForDisplay(o: OrderRow): string {
+  if (o.type === 'dine_in' && o.dineInOrderNumber?.trim()) return o.dineInOrderNumber.trim();
+  if (o.dailyOrderNumber != null && Number.isFinite(o.dailyOrderNumber)) return `#${o.dailyOrderNumber}`;
+  return '—';
 }
 
 function calcTotal(order: OrderRow): number {
@@ -341,6 +349,28 @@ export default function UnifiedOrderCenter() {
     printViaIframe(html, 1);
   }, [config]);
 
+  /** 堂食顾客已在线付款：打印出餐小票 → 后端记 completed + 在线 Checkout → 本单从订单中心移除（流程终结） */
+  const completeDineInOnlinePaid = useCallback(async (order: OrderRow) => {
+    setBusyId(order._id);
+    try {
+      printOrderTicket(order);
+      const res = await apiFetch(`/api/orders/dine-in/${order._id}/complete-online-paid`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        await fetchAll();
+        setDetailModalOrder((cur) => (cur?._id === order._id ? null : cur));
+        return;
+      }
+      const errBody = await res.json().catch(() => ({})) as { error?: { message?: string }; message?: string };
+      const msg = errBody?.error?.message || errBody?.message || `HTTP ${res.status}`;
+      alert(isEn ? `Could not close order: ${msg}` : `未能完结订单：${msg}`);
+    } finally {
+      setBusyId(null);
+    }
+  }, [fetchAll, isEn, printOrderTicket, token]);
+
   const handleDeliveryPrintAndCook = useCallback(async (order: OrderRow) => {
     printDeliveryPrepTicket(order);
     await setDeliveryStage(order._id, 'accepted');
@@ -388,6 +418,7 @@ export default function UnifiedOrderCenter() {
     checkout: isEn ? 'Checkout' : '结账',
     cancel: isEn ? 'Cancel' : '取消',
     markComplete: isEn ? 'Mark Complete' : '标记完成',
+    printAndKitchenDone: isEn ? 'Print ticket & prep' : '打印小票并制作',
     printAndComplete: isEn ? 'Print & Complete' : '打印并完成',
     processing: isEn ? 'Processing…' : '处理中…',
     checkoutModalTitle: isEn ? 'Order Checkout' : '订单结账',
@@ -413,6 +444,7 @@ export default function UnifiedOrderCenter() {
     postalCode: isEn ? 'Postal Code' : '邮编',
     items: isEn ? 'Items' : '菜品',
     clickToView: isEn ? 'Click to view details' : '点击查看详情',
+    orderNo: isEn ? 'Order no.' : '订单号',
     printReceipt: isEn ? 'Print Ticket' : '打印小票',
     tableCheckout: isEn ? 'Checkout Table' : '按桌结账',
     seatCheckout: isEn ? 'Checkout Seat' : '按座结账',
@@ -487,7 +519,8 @@ export default function UnifiedOrderCenter() {
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
                 {dineInByTable.map((tableGroup) => {
-                  const tableTotal = tableGroup.pendingOrders.reduce((sum, o) => sum + calcTotal(o), 0);
+                  /** 仅 pending 可「按桌结账」；金额展示本桌当前列表中全部单（含已在线付）避免全 paid_online 时显示 0 */
+                  const tableAllTotal = tableGroup.orders.reduce((sum, o) => sum + calcTotal(o), 0);
                   return (
                     <div key={`table-${tableGroup.tableNumber}`} style={{ border: '1px solid #eee', borderRadius: 8, padding: 8, background: '#fafafa' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, marginBottom: 6 }}>
@@ -495,7 +528,7 @@ export default function UnifiedOrderCenter() {
                           {L.tableLabel} {tableGroup.tableNumber} · {L.seatsLabel} {tableGroup.orders.length}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                          <span style={{ fontSize: 11, color: '#666' }}>€{tableTotal.toFixed(2)}</span>
+                          <span style={{ fontSize: 11, color: '#666' }} title={isEn ? 'Sum of all seats shown for this table (incl. paid online)' : '本桌当前展示订单合计（含已在线支付）'}>€{tableAllTotal.toFixed(2)}</span>
                           <button
                             className="btn btn-primary"
                             style={{ fontSize: 11, padding: '4px 8px', lineHeight: 1.2 }}
@@ -534,10 +567,20 @@ export default function UnifiedOrderCenter() {
                             <div style={{ fontSize: 11, color: '#666', marginBottom: 6 }}>
                               {o.items.length} items · €{calcTotal(o).toFixed(2)}
                             </div>
-                            <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: 5 }}>
+                            <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                               {o.status === 'pending' ? (
                                 <button className="btn btn-outline" style={{ fontSize: 11, padding: '4px 8px', lineHeight: 1.2 }} disabled={busyId === o._id} onClick={() => openCheckoutModal(o)}>
                                   {L.seatCheckout}
+                                </button>
+                              ) : null}
+                              {o.status === 'paid_online' ? (
+                                <button
+                                  className="btn btn-primary"
+                                  style={{ fontSize: 11, padding: '4px 8px', lineHeight: 1.2 }}
+                                  disabled={busyId === o._id}
+                                  onClick={() => void completeDineInOnlinePaid(o)}
+                                >
+                                  {busyId === o._id ? L.processing : L.printAndKitchenDone}
                                 </button>
                               ) : null}
                             </div>
@@ -722,8 +765,13 @@ export default function UnifiedOrderCenter() {
 
             <div style={{ border: '1px solid #eee', borderRadius: 10, padding: 10, marginBottom: 10, background: '#fafafa' }}>
               <div style={{ fontSize: 14, color: '#222', fontWeight: 700, marginBottom: 4 }}>
-                #{detailModalOrder.dailyOrderNumber ?? '--'} · {typeLabel[detailModalOrder.type]}
+                {L.orderNo}：{orderNoForDisplay(detailModalOrder)} · {typeLabel[detailModalOrder.type]}
               </div>
+              {detailModalOrder.type === 'dine_in' && detailModalOrder.dineInOrderNumber?.trim() && detailModalOrder.dailyOrderNumber != null ? (
+                <div style={{ fontSize: 12, color: '#555', marginBottom: 4 }}>
+                  {isEn ? 'Daily no.' : '日序'}：#{detailModalOrder.dailyOrderNumber}
+                </div>
+              ) : null}
               <div style={{ fontSize: 12, color: '#777' }}>
                 {new Date(detailModalOrder.createdAt).toLocaleString()}
               </div>
@@ -759,7 +807,16 @@ export default function UnifiedOrderCenter() {
               <span style={{ fontSize: 13, color: '#666' }}>{L.total}</span>
               <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--red-primary)' }}>€{calcTotal(detailModalOrder).toFixed(2)}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
+              {detailModalOrder.type === 'dine_in' && detailModalOrder.status === 'paid_online' ? (
+                <button
+                  className="btn btn-primary"
+                  disabled={busyId === detailModalOrder._id}
+                  onClick={() => void completeDineInOnlinePaid(detailModalOrder)}
+                >
+                  {busyId === detailModalOrder._id ? L.processing : L.printAndKitchenDone}
+                </button>
+              ) : null}
               <button className="btn btn-outline" onClick={() => setDetailModalOrder(null)}>{L.cancel}</button>
             </div>
           </div>
