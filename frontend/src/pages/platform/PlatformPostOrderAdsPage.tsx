@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { platformApiFetch } from '../../api/client';
+import { resolveBackendAssetUrl } from '../../utils/backendPublicUrl';
 
 interface PostOrderSlideRow {
   imageUrl: string;
@@ -54,6 +55,8 @@ export default function PlatformPostOrderAdsPage() {
   const [adsLoading, setAdsLoading] = useState(false);
   const [adSaving, setAdSaving] = useState(false);
   const [slideUploading, setSlideUploading] = useState<number | null>(null);
+  const [adFormOpen, setAdFormOpen] = useState(false);
+  const formWrapRef = useRef<HTMLDivElement>(null);
   const [adForm, setAdForm] = useState({
     editingId: null as string | null,
     titleZh: '',
@@ -87,7 +90,15 @@ export default function PlatformPostOrderAdsPage() {
     return () => { cancelled = true; };
   }, [loadPostOrderAds]);
 
-  const resetAdForm = () => {
+  useEffect(() => {
+    if (!adFormOpen) return;
+    const id = requestAnimationFrame(() => {
+      formWrapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [adFormOpen, adForm.editingId]);
+
+  const clearAdFormFields = () => {
     setAdForm({
       editingId: null,
       titleZh: '',
@@ -101,6 +112,16 @@ export default function PlatformPostOrderAdsPage() {
       sortOrder: 0,
       isActive: true,
     });
+  };
+
+  const resetAdForm = () => {
+    clearAdFormFields();
+    setAdFormOpen(false);
+  };
+
+  const openNewAdForm = () => {
+    clearAdFormFields();
+    setAdFormOpen(true);
   };
 
   const uploadSlideToBucket = async (idx: number, file: File) => {
@@ -195,7 +216,7 @@ export default function PlatformPostOrderAdsPage() {
       sortOrder: row.sortOrder ?? 0,
       isActive: row.isActive !== false,
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setAdFormOpen(true);
   };
 
   const deletePostOrderAd = async (id: string) => {
@@ -223,8 +244,6 @@ export default function PlatformPostOrderAdsPage() {
     }
   };
 
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
-
   return (
     <div>
       <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a237e', marginBottom: 8 }}>下单完成页广告</h1>
@@ -243,10 +262,21 @@ export default function PlatformPostOrderAdsPage() {
         <p style={{ fontSize: 13, color: '#555', marginBottom: 16, lineHeight: 1.6 }}>
           图片可<strong>上传到存储桶</strong>（<code>GCS_BUCKET</code>）或填写 URL。时段时区：<code>PLATFORM_AD_TIMEZONE</code>（默认 <code>Asia/Hong_Kong</code>）。点击率 = 点击 / 展示。
         </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 16, alignItems: 'center' }}>
+          {!adFormOpen ? (
+            <button type="button" className="btn btn-primary" style={{ background: '#1a237e' }} onClick={openNewAdForm}>
+              新增广告
+            </button>
+          ) : (
+            <button type="button" className="btn btn-outline" onClick={resetAdForm}>
+              关闭表单
+            </button>
+          )}
+        </div>
         {adsLoading ? (
           <div style={{ padding: 24, textAlign: 'center', color: '#888' }}>加载广告…</div>
         ) : postOrderAds.length === 0 ? (
-          <div style={{ padding: 12, color: '#888', fontSize: 14, marginBottom: 12 }}>暂无广告，可在下方新增。</div>
+          <div style={{ padding: 12, color: '#888', fontSize: 14, marginBottom: 12 }}>暂无广告，点击「新增广告」添加。</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 20, minWidth: 720 }}>
@@ -300,6 +330,8 @@ export default function PlatformPostOrderAdsPage() {
             </table>
           </div>
         )}
+        {adFormOpen ? (
+        <div ref={formWrapRef}>
         <form onSubmit={savePostOrderAd} style={{
           padding: 16,
           background: '#fafafa',
@@ -353,7 +385,7 @@ export default function PlatformPostOrderAdsPage() {
                     </button>
                     {slide.imageUrl ? (
                       <img
-                        src={slide.imageUrl.startsWith('/') ? `${origin}${slide.imageUrl}` : slide.imageUrl}
+                        src={resolveBackendAssetUrl(slide.imageUrl)}
                         alt=""
                         style={{ maxHeight: 72, borderRadius: 6, objectFit: 'cover' }}
                       />
@@ -460,11 +492,11 @@ export default function PlatformPostOrderAdsPage() {
             <button type="submit" className="btn btn-primary" disabled={adSaving} style={{ background: '#1a237e' }}>
               {adSaving ? '保存中…' : '保存'}
             </button>
-            {adForm.editingId ? (
-              <button type="button" className="btn btn-outline" onClick={resetAdForm}>取消编辑</button>
-            ) : null}
+            <button type="button" className="btn btn-outline" onClick={resetAdForm}>取消</button>
           </div>
         </form>
+        </div>
+        ) : null}
       </div>
     </div>
   );

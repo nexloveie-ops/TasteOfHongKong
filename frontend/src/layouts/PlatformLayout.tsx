@@ -14,7 +14,13 @@ export default function PlatformLayout() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f0f2f8', display: 'flex', flexDirection: 'column' }}>
+    <div style={{
+      flex: 1,
+      minHeight: 0,
+      background: '#f0f2f8',
+      display: 'flex',
+      flexDirection: 'column',
+    }}>
       <header style={{
         display: 'flex',
         alignItems: 'center',
@@ -71,7 +77,14 @@ export default function PlatformLayout() {
           下单完成广告
         </NavLink>
       </nav>
-      <main style={{ flex: 1, padding: 24, maxWidth: 1100, margin: '0 auto', width: '100%' }}>
+      <main style={{
+        flex: 1,
+        minHeight: 0,
+        overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        padding: 24,
+        width: '100%',
+      }}>
         <Outlet />
       </main>
     </div>

@@ -5,6 +5,7 @@ import { useCart } from '../../context/CartContext';
 import type { CartItem } from '../../context/CartContext';
 import PaymentModal from '../../components/customer/PaymentModal';
 import { apiFetch } from '../../api/client';
+import { resolveBackendAssetUrl } from '../../utils/backendPublicUrl';
 
 interface OrderItem { _id: string; menuItemId: string; quantity: number; unitPrice: number; itemName: string; itemNameEn?: string; selectedOptions?: { groupName: string; groupNameEn?: string; choiceName: string; choiceNameEn?: string; extraPrice: number }[]; }
 interface AppliedBundle { offerId?: string; name: string; nameEn?: string; discount: number; }
@@ -26,13 +27,6 @@ interface PostOrderAdBanner {
   titleEn?: string;
   linkUrl: string;
   slides: PostOrderSlide[];
-}
-
-function resolvePublicImageUrl(url: string): string {
-  if (url.startsWith('/')) {
-    return `${typeof window !== 'undefined' ? window.location.origin : ''}${url}`;
-  }
-  return url;
 }
 
 /** 下单后在本页即可展示广告（含待支付） */
@@ -70,7 +64,7 @@ function PostOrderAdCarousel({ slides, lang }: { slides: PostOrderSlide[]; lang:
             }}
           >
             <img
-              src={resolvePublicImageUrl(s.imageUrl)}
+              src={resolveBackendAssetUrl(s.imageUrl)}
               alt=""
               style={{ width: '100%', height: 'auto', display: 'block', maxHeight: 180, objectFit: 'cover' }}
             />
