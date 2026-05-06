@@ -9,7 +9,6 @@ export default function PlatformLoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [storeSlugInput, setStoreSlugInput] = useState('demo');
 
   useEffect(() => {
     if (isAuthenticated && user?.role === 'platform_owner') {
@@ -29,12 +28,6 @@ export default function PlatformLoginPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const goStoreLogin = () => {
-    const s = storeSlugInput.trim().toLowerCase();
-    if (!s) return;
-    navigate(`/${s}/login`);
   };
 
   return (
@@ -90,34 +83,6 @@ export default function PlatformLoginPage() {
             {loading ? '登录中…' : '登录'}
           </button>
         </form>
-      </div>
-
-      <div style={{
-        background: 'rgba(255,255,255,0.12)',
-        borderRadius: 12,
-        padding: '20px 24px',
-        width: '100%',
-        maxWidth: 400,
-        color: '#e8eaf6',
-      }}>
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>店铺员工登录</div>
-        <p style={{ fontSize: 12, opacity: 0.9, marginBottom: 12, lineHeight: 1.5 }}>
-          本地开发时店铺地址为 <code style={{ background: 'rgba(0,0,0,0.2)', padding: '2px 6px', borderRadius: 4 }}>/{'{slug}'}/login</code>
-          （与分配的 URL 标识一致；正式环境可配置为子域名）。
-        </p>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            className="input"
-            style={{ flex: 1, background: '#fff' }}
-            placeholder="店铺标识，如 demo"
-            value={storeSlugInput}
-            onChange={e => setStoreSlugInput(e.target.value)}
-          />
-          <button type="button" className="btn" style={{ background: '#fff', color: '#1a237e', fontWeight: 600 }}
-            onClick={goStoreLogin}>
-            前往
-          </button>
-        </div>
       </div>
 
       {isAuthenticated && user && user.role !== 'platform_owner' && (

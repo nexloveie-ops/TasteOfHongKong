@@ -7,6 +7,7 @@ import { getBusinessStatus } from '../utils/businessHours';
 import { mergeTemplateOptionGroupsForItem, type MenuItemLike } from '../utils/optionGroupTemplateApply';
 import type { LeanOptionGroup } from '../utils/optionGroups';
 import { storeIoRoom } from '../socketRooms';
+import { resolveStoreEffectiveFeatures, FeatureKeys } from '../utils/featureCatalog';
 
 function orderModels() {
   return getModels() as {
@@ -24,6 +25,7 @@ type MenuItemForOrder = MenuItemLike & {
 
 export function createOrdersRouter(io: SocketIOServer): Router {
   const router = Router();
+  const ACTIVE_ORDER_STATUSES = ['pending', 'paid_online', 'checked_out'] as const;
 
   type SelectedOptInput = { groupId: string; choiceId: string };
 
@@ -114,7 +116,18 @@ export function createOrdersRouter(io: SocketIOServer): Router {
   router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { MenuItem, Order, DailyOrderCounter } = orderModels();
-      const { type, tableNumber, seatNumber, items, appliedBundles } = req.body;
+      const {
+        type,
+        tableNumber,
+        seatNumber,
+        items,
+        appliedBundles,
+        customerName,
+        customerPhone,
+        deliveryAddress,
+        postalCode,
+        deliverySource,
+      } = req.body;
 
       // Customer self-order channels follow business hour restrictions.
       if (type === 'dine_in' || type === 'takeout') {
@@ -127,8 +140,8 @@ export function createOrdersRouter(io: SocketIOServer): Router {
       }
 
       // Validate type
-      if (!type || !['dine_in', 'takeout', 'phone'].includes(type)) {
-        throw createAppError('VALIDATION_ERROR', 'type must be "dine_in", "takeout", or "phone"');
+      if (!type || !['dine_in', 'takeout', 'phone', 'delivery'].includes(type)) {
+        throw createAppError('VALIDATION_ERROR', 'type must be "dine_in", "takeout", "phone", or "delivery"');
       }
 
       // For dine_in, require tableNumber and seatNumber
@@ -138,6 +151,23 @@ export function createOrdersRouter(io: SocketIOServer): Router {
         }
         if (seatNumber == null || typeof seatNumber !== 'number') {
           throw createAppError('VALIDATION_ERROR', 'seatNumber is required for dine_in orders');
+        }
+      }
+      if (type === 'delivery') {
+        const features = await resolveStoreEffectiveFeatures(req.storeId!);
+        if (!features.has(FeatureKeys.CashierDeliveryPage)) {
+          throw createAppError('FORBIDDEN', '当前套餐未开通送餐功能');
+        }
+        const name = typeof customerName === 'string' ? customerName.trim() : '';
+        const phone = typeof customerPhone === 'string' ? customerPhone.trim() : '';
+        const addr = typeof deliveryAddress === 'string' ? deliveryAddress.trim() : '';
+        const pc = typeof postalCode === 'string' ? postalCode.trim() : '';
+        const src = typeof deliverySource === 'string' ? deliverySource.trim() : '';
+        if (!name || !phone || !addr || !pc) {
+          throw createAppError('VALIDATION_ERROR', 'delivery orders require customerName, customerPhone, deliveryAddress, and postalCode');
+        }
+        if (src !== 'phone' && src !== 'qr') {
+          throw createAppError('VALIDATION_ERROR', 'deliverySource must be "phone" or "qr"');
         }
       }
 
@@ -207,6 +237,21 @@ export function createOrdersRouter(io: SocketIOServer): Router {
         );
         orderData.dailyOrderNumber = counter!.currentNumber;
       }
+      if (type === 'delivery') {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const counter = await DailyOrderCounter.findOneAndUpdate(
+          { storeId: req.storeId, date: todayStr },
+          { $inc: { currentNumber: 1 }, $setOnInsert: { storeId: req.storeId, date: todayStr } },
+          { upsert: true, returnDocument: 'after' }
+        );
+        orderData.dailyOrderNumber = counter!.currentNumber;
+        orderData.customerName = String(customerName || '').trim();
+        orderData.customerPhone = String(customerPhone || '').trim();
+        orderData.deliveryAddress = String(deliveryAddress || '').trim();
+        orderData.postalCode = String(postalCode || '').trim();
+        orderData.deliverySource = String(deliverySource || '').trim();
+        orderData.deliveryStage = 'new';
+      }
 
       const order = await Order.create(orderData);
 
@@ -272,6 +317,56 @@ export function createOrdersRouter(io: SocketIOServer): Router {
     }
   });
 
+  // GET /api/orders/active-all — unified active queue for cashier order center
+  router.get('/active-all', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { Order } = orderModels();
+      const orders = await Order.find({
+        storeId: req.storeId,
+        $or: [
+          // Dine-in and takeout keep existing active statuses.
+          {
+            type: { $in: ['dine_in', 'takeout'] },
+            status: { $in: [...ACTIVE_ORDER_STATUSES] },
+          },
+          // Phone orders should disappear after checkout.
+          {
+            type: 'phone',
+            status: 'pending',
+          },
+          // Delivery orders created in cashier (phone source) can flow immediately from pending.
+          {
+            type: 'delivery',
+            deliverySource: 'phone',
+            status: { $in: [...ACTIVE_ORDER_STATUSES] },
+          },
+          // Delivery orders from QR appear in cashier only after payment.
+          {
+            type: 'delivery',
+            deliverySource: 'qr',
+            status: { $in: ['paid_online', 'checked_out'] },
+          },
+          // Backward compatibility for old delivery rows without source.
+          {
+            type: 'delivery',
+            deliverySource: { $exists: false },
+            status: { $in: [...ACTIVE_ORDER_STATUSES] },
+          },
+        ],
+      }).sort({
+        type: 1,
+        status: 1,
+        tableNumber: 1,
+        seatNumber: 1,
+        dailyOrderNumber: 1,
+        createdAt: 1,
+      });
+      res.json(orders);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // GET /api/orders/takeout/pending — Get checked_out (not completed) takeout orders
   router.get('/takeout/pending', async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -313,6 +408,46 @@ export function createOrdersRouter(io: SocketIOServer): Router {
         { new: true },
       );
       res.json(updated);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // PUT /api/orders/:id/delivery-stage — update delivery workflow stage without changing checkout status
+  router.put('/:id/delivery-stage', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const features = await resolveStoreEffectiveFeatures(req.storeId!);
+      if (!features.has(FeatureKeys.CashierDeliveryPage)) {
+        throw createAppError('FORBIDDEN', '当前套餐未开通送餐功能');
+      }
+      const { Order } = orderModels();
+      const id = req.params.id as string;
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw createAppError('VALIDATION_ERROR', 'Invalid order ID');
+      }
+      const nextStage = typeof req.body?.deliveryStage === 'string' ? req.body.deliveryStage.trim() : '';
+      const allowed = new Set(['new', 'accepted', 'picked_up_by_driver', 'out_for_delivery']);
+      if (!allowed.has(nextStage)) {
+        throw createAppError('VALIDATION_ERROR', 'deliveryStage must be one of new/accepted/picked_up_by_driver/out_for_delivery');
+      }
+
+      const order = await Order.findOne({ _id: id, storeId: req.storeId });
+      if (!order) {
+        throw createAppError('NOT_FOUND', 'Order not found');
+      }
+      if (order.type !== 'delivery') {
+        throw createAppError('VALIDATION_ERROR', 'Only delivery orders can update delivery stage');
+      }
+      order.deliveryStage = nextStage;
+      // Delivery business rule: once driver has picked up and payment is already settled,
+      // treat as delivered+done (no separate delivered step needed).
+      if (nextStage === 'picked_up_by_driver' && (order.status === 'checked_out' || order.status === 'paid_online')) {
+        order.status = 'completed';
+        order.completedAt = new Date();
+      }
+      await order.save();
+      io.to(storeIoRoom(req.storeId!)).emit('order:updated', order);
+      res.json(order);
     } catch (err) {
       next(err);
     }

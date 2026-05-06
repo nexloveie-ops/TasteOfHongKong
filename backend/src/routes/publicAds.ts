@@ -4,6 +4,7 @@ import { getModels } from '../getModels';
 import { createAppError } from '../middleware/errorHandler';
 import { filterActivePostOrderAds } from '../utils/postOrderAdSchedule';
 import { getSlidesFromDoc, type PostOrderSlideInput } from '../utils/postOrderAdSlides';
+import { resolveStoreEffectiveFeatures, FeatureKeys } from '../utils/featureCatalog';
 
 async function deactivatePostOrderAdsOverCaps(PostOrderAd: Model<unknown>, ids: mongoose.Types.ObjectId[]): Promise<void> {
   if (ids.length === 0) return;
@@ -87,7 +88,18 @@ router.post('/post-order-ads/click', async (req: Request, res: Response, next: N
  */
 router.get('/post-order-ads', async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    const { PostOrderAd } = getModels();
+    const { PostOrderAd, Store } = getModels() as { PostOrderAd: Model<unknown>; Store: Model<any> };
+    const rawSlug = (typeof _req.headers['x-store-slug'] === 'string' ? _req.headers['x-store-slug'] : '').trim().toLowerCase();
+    if (rawSlug) {
+      const store = await Store.findOne({ slug: rawSlug }).lean() as { _id: mongoose.Types.ObjectId } | null;
+      if (store) {
+        const features = await resolveStoreEffectiveFeatures(store._id);
+        if (!features.has(FeatureKeys.CustomerPostOrderAdsViewAction)) {
+          res.json([]);
+          return;
+        }
+      }
+    }
     const raw = await PostOrderAd.find({ isActive: true }).sort({ sortOrder: 1, createdAt: -1 }).lean();
     const active = filterActivePostOrderAds(
       raw as unknown as { validFrom: string; validTo: string; windowStart?: string; windowEnd?: string }[],

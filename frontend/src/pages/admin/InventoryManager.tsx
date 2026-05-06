@@ -10,7 +10,8 @@ interface MenuItem {
 
 export default function InventoryManager() {
   const { t } = useTranslation();
-  const { token } = useAuth();
+  const { token, hasFeature } = useAuth();
+  const canSetRestoreTime = hasFeature('admin.inventory.restoreTime.action');
   const [items, setItems] = useState<MenuItem[]>([]);
   const [showModal, setShowModal] = useState<string | null>(null); // item id
   const [restoreMode, setRestoreMode] = useState<'quick' | 'custom'>('quick');
@@ -44,6 +45,10 @@ export default function InventoryManager() {
   };
 
   const openSoldOutModal = (id: string) => {
+    if (!canSetRestoreTime) {
+      void markSoldOut(id, null);
+      return;
+    }
     setShowModal(id);
     setRestoreMode('quick');
     const now = new Date();
@@ -120,7 +125,7 @@ export default function InventoryManager() {
       </div>
 
       {/* Sold Out Time Modal */}
-      {showModal && (
+      {canSetRestoreTime && showModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           onClick={() => setShowModal(null)}>
           <div style={{ background: '#fff', borderRadius: 16, padding: 24, width: 380, maxWidth: '90%' }}

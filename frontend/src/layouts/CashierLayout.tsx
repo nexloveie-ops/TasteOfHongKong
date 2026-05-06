@@ -18,6 +18,7 @@ export default function CashierLayout() {
   // Show settle button only between 20:30 and 23:59
   const [showSettle, setShowSettle] = useState(false);
   const [settling, setSettling] = useState(false);
+  const [toasts, setToasts] = useState<{ id: string; text: string }[]>([]);
   useEffect(() => {
     const check = () => {
       const now = new Date();
@@ -41,6 +42,10 @@ export default function CashierLayout() {
     const query = user?.storeId ? { storeId: user.storeId } : {};
     const socket = io({ transports: ['websocket'], query });
     socket.on('order:new', (order: { type?: string }) => {
+      const text = `新订单：${order?.type || 'unknown'} · ${new Date().toLocaleTimeString()}`;
+      const id = `${Date.now()}-${Math.random()}`;
+      setToasts((prev) => [...prev, { id, text }]);
+      setTimeout(() => setToasts((prev) => prev.filter((t2) => t2.id !== id)), 5000);
       if (order?.type === 'takeout') playTakeoutSound();
       else playDineInSound();
     });
@@ -147,10 +152,7 @@ export default function CashierLayout() {
         display: 'flex', gap: 0, background: 'var(--bg-white)',
         borderBottom: '2px solid var(--border)', flexShrink: 0, paddingLeft: 16,
       }}>
-        <NavLink to="." end style={({ isActive }) => tabStyle(isActive)}>{t('cashier.dineIn')}</NavLink>
-        <NavLink to="takeout" style={({ isActive }) => tabStyle(isActive)}>{t('cashier.takeout')}</NavLink>
-        <NavLink to="delivery" style={({ isActive }) => tabStyle(isActive)}>{t('cashier.delivery')}</NavLink>
-        <NavLink to="phone" style={({ isActive }) => tabStyle(isActive)}>📞 {t('cashier.phone', 'Phone')}</NavLink>
+        <NavLink to="." end style={({ isActive }) => tabStyle(isActive)}>订单中心</NavLink>
         <NavLink to="order" style={({ isActive }) => tabStyle(isActive)}>{t('cashier.newOrder', '点单')}</NavLink>
         <NavLink to="reprint" style={({ isActive }) => tabStyle(isActive)}>{t('cashier.reprint', '重印小票')}</NavLink>
         <NavLink to="inventory" style={({ isActive }) => tabStyle(isActive)}>{t('admin.inventory', '库存')}</NavLink>
@@ -159,6 +161,22 @@ export default function CashierLayout() {
       {/* Content */}
       <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
         <Outlet />
+      </div>
+      <div style={{ position: 'fixed', right: 16, bottom: 16, display: 'flex', flexDirection: 'column', gap: 8, zIndex: 1500 }}>
+        {toasts.map((toast) => (
+          <div key={toast.id} style={{
+            minWidth: 220,
+            maxWidth: 360,
+            background: '#1f2937',
+            color: '#fff',
+            borderRadius: 8,
+            padding: '10px 12px',
+            boxShadow: '0 8px 22px rgba(0,0,0,0.25)',
+            fontSize: 13,
+          }}>
+            {toast.text}
+          </div>
+        ))}
       </div>
     </div>
   );

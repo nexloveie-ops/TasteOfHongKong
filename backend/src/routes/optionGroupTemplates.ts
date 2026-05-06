@@ -4,6 +4,8 @@ import { getModels } from '../getModels';
 import { requirePermission } from '../middleware/auth';
 import { requireAuthSameStore } from '../middleware/authForStore';
 import { createAppError } from '../middleware/errorHandler';
+import { requireFeature } from '../middleware/featureAccess';
+import { FeatureKeys } from '../utils/featureCatalog';
 import { normalizeNestedOptionGroups, validateOptionGroups } from '../utils/optionGroups';
 
 const router = Router();
@@ -32,6 +34,7 @@ router.get(
   '/',
   ...requireAuthSameStore,
   requirePermission('menu:write'),
+  requireFeature(FeatureKeys.AdminOptionTemplatePage),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { OptionGroupTemplate } = getModels();
@@ -47,6 +50,7 @@ router.post(
   '/',
   ...requireAuthSameStore,
   requirePermission('menu:write'),
+  requireFeature(FeatureKeys.AdminOptionTemplatePage),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { OptionGroupTemplate } = getModels();
@@ -74,6 +78,7 @@ router.get(
   '/rules',
   ...requireAuthSameStore,
   requirePermission('menu:write'),
+  requireFeature(FeatureKeys.AdminOptionTemplatePage),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { OptionGroupTemplateRule } = getModels();
@@ -91,6 +96,7 @@ router.post(
   '/rules',
   ...requireAuthSameStore,
   requirePermission('menu:write'),
+  requireFeature(FeatureKeys.AdminOptionTemplatePage),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { OptionGroupTemplate, OptionGroupTemplateRule } = getModels();

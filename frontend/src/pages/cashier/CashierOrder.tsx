@@ -36,7 +36,8 @@ function nextLineId() { return `line-${++lineIdCounter}-${Date.now()}`; }
 
 export default function CashierOrder() {
   const { t, i18n } = useTranslation();
-  const { token } = useAuth();
+  const { token, hasFeature } = useAuth();
+  const canDelivery = hasFeature('cashier.delivery.page');
   const lang = i18n.language;
 
   const [categories, setCategories] = useState<Category[]>([]);
@@ -44,7 +45,11 @@ export default function CashierOrder() {
   const [activeCat, setActiveCat] = useState('');
   const [search, setSearch] = useState('');
   const [order, setOrder] = useState<OrderLine[]>([]);
-  const [orderType, setOrderType] = useState<'dine_in' | 'takeout' | 'phone'>('dine_in');
+  const [orderType, setOrderType] = useState<'dine_in' | 'takeout' | 'phone' | 'delivery'>('dine_in');
+  const [deliveryCustomerName, setDeliveryCustomerName] = useState('');
+  const [deliveryCustomerPhone, setDeliveryCustomerPhone] = useState('');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [deliveryPostalCode, setDeliveryPostalCode] = useState('');
   const [error, setError] = useState('');
   const [optionModal, setOptionModal] = useState<MenuItem | null>(null);
 
@@ -182,6 +187,14 @@ export default function CashierOrder() {
       handlePhoneOrder();
       return;
     }
+    if (orderType === 'delivery') {
+      if (!canDelivery) {
+        setError('当前套餐未开通送餐功能');
+        return;
+      }
+      handleDeliveryPhoneOrder();
+      return;
+    }
     setPayingTotal(finalTotal);
     setCashReceived('');
     setPaymentMethod('cash');
@@ -233,6 +246,68 @@ export default function CashierOrder() {
 
       setPhoneOrderId(orderData._id);
       setOrder([]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed');
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  const handleDeliveryPhoneOrder = async () => {
+    if (!deliveryCustomerName.trim() || !deliveryCustomerPhone.trim() || !deliveryAddress.trim() || !deliveryPostalCode.trim()) {
+      setError('送餐订单需填写姓名、电话、地址、邮编');
+      return;
+    }
+    setPaying(true);
+    setError('');
+    try {
+      const orderBody: Record<string, unknown> = {
+        type: 'delivery',
+        deliverySource: 'phone',
+        customerName: deliveryCustomerName.trim(),
+        customerPhone: deliveryCustomerPhone.trim(),
+        deliveryAddress: deliveryAddress.trim(),
+        postalCode: deliveryPostalCode.trim(),
+        items: buildGroupedItems(),
+      };
+      if (matchedBundles.length > 0) {
+        orderBody.appliedBundles = matchedBundles.map(b => ({ offerId: b.offer._id, name: b.offer.name, nameEn: b.offer.nameEn, discount: b.savings }));
+      }
+      const orderRes = await apiFetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(orderBody),
+      });
+      if (!orderRes.ok) { const d = await orderRes.json().catch(() => null); throw new Error(d?.error?.message || 'Failed'); }
+      const orderData = await orderRes.json();
+      try {
+        const configRes = await apiFetch('/api/admin/config');
+        const cfg = configRes.ok ? await configRes.json() : {};
+        const receiptData = {
+          checkoutId: orderData._id,
+          type: 'seat' as const,
+          totalAmount: finalTotal,
+          paymentMethod: 'cash' as const,
+          checkedOutAt: new Date().toISOString(),
+          orders: [{
+            _id: orderData._id,
+            type: 'phone' as const,
+            dailyOrderNumber: orderData.dailyOrderNumber,
+            status: 'pending',
+            items: orderData.items,
+          }],
+        };
+        const html = buildReceiptHTML(receiptData, cfg, undefined, undefined,
+          matchedBundles.length > 0 ? matchedBundles.map(b => ({ name: b.offer.name, nameEn: b.offer.nameEn, discount: b.savings })) : undefined
+        );
+        printViaIframe(html, 1);
+      } catch { /* print error ignored */ }
+      setPhoneOrderId(orderData._id);
+      setOrder([]);
+      setDeliveryCustomerName('');
+      setDeliveryCustomerPhone('');
+      setDeliveryAddress('');
+      setDeliveryPostalCode('');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed');
     } finally {
@@ -417,8 +492,19 @@ export default function CashierOrder() {
             <button className="btn" onClick={() => setOrderType('dine_in')} style={{ flex: 1, fontSize: 12, padding: '6px 0', background: orderType === 'dine_in' ? 'var(--red-primary)' : 'var(--bg)', color: orderType === 'dine_in' ? '#fff' : 'var(--text-secondary)', border: '1px solid var(--border)' }}>堂食</button>
             <button className="btn" onClick={() => setOrderType('takeout')} style={{ flex: 1, fontSize: 12, padding: '6px 0', background: orderType === 'takeout' ? 'var(--red-primary)' : 'var(--bg)', color: orderType === 'takeout' ? '#fff' : 'var(--text-secondary)', border: '1px solid var(--border)' }}>外卖</button>
             <button className="btn" onClick={() => setOrderType('phone')} style={{ flex: 1, fontSize: 12, padding: '6px 0', background: orderType === 'phone' ? 'var(--red-primary)' : 'var(--bg)', color: orderType === 'phone' ? '#fff' : 'var(--text-secondary)', border: '1px solid var(--border)' }}>📞 电话</button>
+            {canDelivery ? (
+              <button className="btn" onClick={() => setOrderType('delivery')} style={{ flex: 1, fontSize: 12, padding: '6px 0', background: orderType === 'delivery' ? 'var(--red-primary)' : 'var(--bg)', color: orderType === 'delivery' ? '#fff' : 'var(--text-secondary)', border: '1px solid var(--border)' }}>🚚 送餐</button>
+            ) : null}
           </div>
         </div>
+        {orderType === 'delivery' && (
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', display: 'grid', gap: 6 }}>
+            <input className="input" placeholder="客人姓名" value={deliveryCustomerName} onChange={e => setDeliveryCustomerName(e.target.value)} />
+            <input className="input" placeholder="电话" value={deliveryCustomerPhone} onChange={e => setDeliveryCustomerPhone(e.target.value)} />
+            <input className="input" placeholder="地址" value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} />
+            <input className="input" placeholder="邮编" value={deliveryPostalCode} onChange={e => setDeliveryPostalCode(e.target.value)} />
+          </div>
+        )}
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
           {order.length === 0 ? (

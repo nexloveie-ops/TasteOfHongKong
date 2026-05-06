@@ -229,7 +229,6 @@ export default function MenuView() {
           <div style={{ position: 'absolute', top: 8, right: 12, zIndex: 1, textAlign: 'right', color: 'rgba(255,255,255,0.75)', fontSize: 9, lineHeight: 1.45, maxWidth: 'min(220px, 48vw)' }}>
             <div style={{ fontWeight: 700, color: '#F0D68A', marginBottom: 2 }}>{t('customer.footerCompany')}</div>
             <div>
-              <span>{t('customer.footerAdContact')}</span>{' '}
               <a href="mailto:info@lztechserve.com" style={{ color: '#F0D68A', fontWeight: 600, textDecoration: 'none' }}>
                 info@lztechserve.com
               </a>

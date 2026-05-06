@@ -9,14 +9,14 @@ const sidebarItems = [
   { path: 'restaurant', icon: '🏪', key: 'admin.restaurantInfo' },
   { path: 'categories', icon: '📂', key: 'admin.categories' },
   { path: 'menu-items', icon: '🍽️', key: 'admin.menuItems' },
-  { path: 'option-group-templates', icon: '🧩', key: 'admin.optionGroupTemplatesNav' },
+  { path: 'option-group-templates', icon: '🧩', key: 'admin.optionGroupTemplatesNav', featureKey: 'admin.optionGroupTemplates.page' },
   { path: 'inventory', icon: '📦', key: 'admin.inventory' },
   { path: 'allergens', icon: '⚠️', key: 'admin.allergens' },
   { path: 'i18n', icon: '🌐', key: 'admin.i18nEditor' },
   { path: 'qr-codes', icon: '📱', key: 'admin.qrCodes' },
-  { path: 'offers', icon: '🎁', key: 'admin.offers' },
-  { path: 'coupons', icon: '🎟️', key: 'admin.coupons' },
-  { path: 'orders', icon: '📋', key: 'admin.orderHistory' },
+  { path: 'offers', icon: '🎁', key: 'admin.offers', featureKey: 'admin.offers.page' },
+  { path: 'coupons', icon: '🎟️', key: 'admin.coupons', featureKey: 'admin.coupons.page' },
+  { path: 'orders', icon: '📋', key: 'admin.orderHistory', featureKey: 'admin.orderHistory.page' },
   { path: 'reports', icon: '📊', key: 'admin.reports' },
   { path: 'business-hours', icon: '🕒', key: 'admin.businessHours' },
   { path: 'users', icon: '👥', key: 'admin.users' },
@@ -25,7 +25,7 @@ const sidebarItems = [
 ];
 
 export default function AdminLayout() {
-  const { user, logout } = useAuth();
+  const { user, logout, hasFeature } = useAuth();
   const { storeSlug } = useParams<{ storeSlug: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -59,7 +59,7 @@ export default function AdminLayout() {
           )}
         </div>
         <nav style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
-          {sidebarItems.map(item => (
+          {sidebarItems.filter(item => !item.featureKey || hasFeature(item.featureKey)).map(item => (
             <NavLink key={item.path} to={item.path}
               title={collapsed ? t(item.key) : undefined}
               style={({ isActive }) => ({

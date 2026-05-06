@@ -19,12 +19,15 @@ import {
   STRIPE_PUBLISHABLE_CONFIG_KEY,
   STRIPE_SECRET_CONFIG_KEY,
 } from '../utils/stripeConfig';
+import { resolveStoreEffectiveFeatures } from '../utils/featureCatalog';
 
 function adminModels() {
   return getModels() as {
     SystemConfig: mongoose.Model<any>;
     Admin: mongoose.Model<any>;
     Store: mongoose.Model<any>;
+    FeaturePlan: mongoose.Model<any>;
+    FeatureAddon: mongoose.Model<any>;
   };
 }
 
@@ -61,6 +64,16 @@ router.get('/business-status', async (req: Request, res: Response, next: NextFun
   try {
     const status = await getBusinessStatus(req.storeId!);
     res.json(status);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/admin/features — Effective capability keys for current store
+router.get('/features', ...requireAuthSameStore, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const features = await resolveStoreEffectiveFeatures(req.storeId!);
+    res.json({ features: [...features].sort() });
   } catch (err) {
     next(err);
   }

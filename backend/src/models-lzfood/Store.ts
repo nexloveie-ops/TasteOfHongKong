@@ -20,6 +20,9 @@ export const StoreSchema = new mongoose.Schema(
     subscriptionStartsAt: { type: Date, default: () => new Date() },
     subscriptionEndsAt: { type: Date, required: true },
     retentionEndsAt: { type: Date },
+    basePlanId: { type: mongoose.Schema.Types.ObjectId, ref: 'FeaturePlan', default: null },
+    enabledAddOnIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'FeatureAddon' }],
+    featureOverrides: { type: Map, of: Boolean, default: {} },
   },
   { timestamps: true },
 );

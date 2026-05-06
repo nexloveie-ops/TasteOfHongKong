@@ -16,11 +16,15 @@ export interface TakeoutParams {
   type: 'takeout';
 }
 
+export interface DeliveryParams {
+  type: 'delivery';
+}
+
 export interface InvalidParams {
   type: 'invalid';
 }
 
-export type QRParams = DineInParams | TakeoutParams | InvalidParams;
+export type QRParams = DineInParams | TakeoutParams | DeliveryParams | InvalidParams;
 
 /**
  * Encode dine-in QR parameters into a URL search params string.
@@ -43,6 +47,13 @@ export function encodeTakeoutQRParams(): string {
   return params.toString();
 }
 
+/** Encode delivery QR parameters into a URL search params string. */
+export function encodeDeliveryQRParams(): string {
+  const params = new URLSearchParams();
+  params.set('type', 'delivery');
+  return params.toString();
+}
+
 /**
  * Parse QR code URL search params into a typed result.
  *
@@ -57,6 +68,9 @@ export function parseQRParams(searchParams: URLSearchParams | string): QRParams 
   // Check for takeout
   if (params.get('type') === 'takeout') {
     return { type: 'takeout' };
+  }
+  if (params.get('type') === 'delivery') {
+    return { type: 'delivery' };
   }
 
   // Check for dine-in

@@ -40,6 +40,8 @@ function models() {
     SystemConfig: mongoose.Model<any>;
     AdminAuditLog: mongoose.Model<any>;
     PostOrderAd: mongoose.Model<any>;
+    FeaturePlan: mongoose.Model<any>;
+    FeatureAddon: mongoose.Model<any>;
   };
 }
 
@@ -62,6 +64,65 @@ function paramStr(p: string | string[] | undefined): string {
   if (typeof p === 'string') return p;
   if (Array.isArray(p) && p[0]) return p[0];
   return '';
+}
+
+function parseObjectIdOrNull(input: unknown, field: string): mongoose.Types.ObjectId | null {
+  if (input == null || input === '') return null;
+  if (typeof input !== 'string' || !mongoose.Types.ObjectId.isValid(input)) {
+    throw createAppError('VALIDATION_ERROR', `${field} 无效`);
+  }
+  return new mongoose.Types.ObjectId(input);
+}
+
+function parseObjectIdArray(input: unknown, field: string): mongoose.Types.ObjectId[] {
+  if (input == null) return [];
+  if (!Array.isArray(input)) throw createAppError('VALIDATION_ERROR', `${field} 必须为数组`);
+  return input.map((x, idx) => {
+    if (typeof x !== 'string' || !mongoose.Types.ObjectId.isValid(x)) {
+      throw createAppError('VALIDATION_ERROR', `${field}[${idx}] 无效`);
+    }
+    return new mongoose.Types.ObjectId(x);
+  });
+}
+
+function parseFeatureList(input: unknown): string[] {
+  if (!Array.isArray(input)) throw createAppError('VALIDATION_ERROR', 'features 必须为字符串数组');
+  const out = [...new Set(input.map((x) => String(x).trim()).filter(Boolean))];
+  return out;
+}
+
+const ADS_FEATURE_KEYS = new Set<string>([
+  'platform.postOrderAds.manage.action',
+  'customer.postOrderAds.view.action',
+]);
+
+async function assertEnterpriseAdsPolicy(
+  basePlanId: mongoose.Types.ObjectId | null,
+  enabledAddOnIds: mongoose.Types.ObjectId[],
+  featureOverrides?: Record<string, boolean>,
+): Promise<void> {
+  if (!basePlanId) return;
+  const { FeaturePlan, FeatureAddon } = models();
+  const plan = await FeaturePlan.findById(basePlanId).lean() as { code?: string } | null;
+  const isEnterprise = (plan?.code || '').toLowerCase().includes('enterprise');
+  if (!isEnterprise) return;
+
+  if (featureOverrides) {
+    for (const k of Object.keys(featureOverrides)) {
+      if (ADS_FEATURE_KEYS.has(k) && featureOverrides[k]) {
+        throw createAppError('VALIDATION_ERROR', 'Enterprise 版本不允许开启广告能力');
+      }
+    }
+  }
+
+  if (enabledAddOnIds.length === 0) return;
+  const adsAddon = await FeatureAddon.findOne({
+    _id: { $in: enabledAddOnIds },
+    features: { $in: [...ADS_FEATURE_KEYS] },
+  }).lean();
+  if (adsAddon) {
+    throw createAppError('VALIDATION_ERROR', 'Enterprise 版本不允许绑定广告 Add-on');
+  }
 }
 
 const ALLOWED_POST_ORDER_AD_IMG = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
@@ -92,14 +153,136 @@ router.get('/stores', ...platformAuth, async (_req: Request, res: Response, next
   }
 });
 
+// ===== Feature plans / add-ons =====
+router.get('/feature-plans', ...platformAuth, async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { FeaturePlan } = models();
+    const rows = await FeaturePlan.find({}).sort({ createdAt: -1 }).lean();
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/feature-plans', ...platformAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { FeaturePlan } = models();
+    const { name, code, description, isActive, features } = req.body as Record<string, unknown>;
+    if (!name || !code) throw createAppError('VALIDATION_ERROR', 'name 与 code 必填');
+    const doc = await FeaturePlan.create({
+      name: String(name).trim(),
+      code: String(code).trim().toLowerCase(),
+      description: description ? String(description) : '',
+      isActive: typeof isActive === 'boolean' ? isActive : true,
+      features: parseFeatureList(features),
+    });
+    res.status(201).json(doc);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/feature-plans/:id', ...platformAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { FeaturePlan } = models();
+    const id = paramStr(req.params.id);
+    if (!mongoose.Types.ObjectId.isValid(id)) throw createAppError('VALIDATION_ERROR', 'Invalid id');
+    const doc = await FeaturePlan.findById(id);
+    if (!doc) throw createAppError('NOT_FOUND', 'plan 不存在');
+    const { name, description, isActive, features } = req.body as Record<string, unknown>;
+    if (name !== undefined) doc.set('name', String(name).trim());
+    if (description !== undefined) doc.set('description', String(description));
+    if (isActive !== undefined) doc.set('isActive', !!isActive);
+    if (features !== undefined) doc.set('features', parseFeatureList(features));
+    await doc.save();
+    res.json(doc.toObject());
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/feature-plans/:id', ...platformAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { FeaturePlan } = models();
+    const id = paramStr(req.params.id);
+    if (!mongoose.Types.ObjectId.isValid(id)) throw createAppError('VALIDATION_ERROR', 'Invalid id');
+    await FeaturePlan.findByIdAndDelete(id);
+    res.json({ message: 'deleted' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/feature-addons', ...platformAuth, async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { FeatureAddon } = models();
+    const rows = await FeatureAddon.find({}).sort({ createdAt: -1 }).lean();
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/feature-addons', ...platformAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { FeatureAddon } = models();
+    const { name, code, description, isActive, features } = req.body as Record<string, unknown>;
+    if (!name || !code) throw createAppError('VALIDATION_ERROR', 'name 与 code 必填');
+    const doc = await FeatureAddon.create({
+      name: String(name).trim(),
+      code: String(code).trim().toLowerCase(),
+      description: description ? String(description) : '',
+      isActive: typeof isActive === 'boolean' ? isActive : true,
+      features: parseFeatureList(features),
+    });
+    res.status(201).json(doc);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/feature-addons/:id', ...platformAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { FeatureAddon } = models();
+    const id = paramStr(req.params.id);
+    if (!mongoose.Types.ObjectId.isValid(id)) throw createAppError('VALIDATION_ERROR', 'Invalid id');
+    const doc = await FeatureAddon.findById(id);
+    if (!doc) throw createAppError('NOT_FOUND', 'addon 不存在');
+    const { name, description, isActive, features } = req.body as Record<string, unknown>;
+    if (name !== undefined) doc.set('name', String(name).trim());
+    if (description !== undefined) doc.set('description', String(description));
+    if (isActive !== undefined) doc.set('isActive', !!isActive);
+    if (features !== undefined) doc.set('features', parseFeatureList(features));
+    await doc.save();
+    res.json(doc.toObject());
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/feature-addons/:id', ...platformAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { FeatureAddon } = models();
+    const id = paramStr(req.params.id);
+    if (!mongoose.Types.ObjectId.isValid(id)) throw createAppError('VALIDATION_ERROR', 'Invalid id');
+    await FeatureAddon.findByIdAndDelete(id);
+    res.json({ message: 'deleted' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/platform/stores — 新建店铺（URL 段 / 子域标识 = slug）
 router.post('/stores', ...platformAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { Store } = models();
-    const { slug: rawSlug, displayName, subscriptionEndsAt } = req.body as {
+    const { slug: rawSlug, displayName, subscriptionEndsAt, basePlanId, enabledAddOnIds, featureOverrides } = req.body as {
       slug?: string;
       displayName?: string;
       subscriptionEndsAt?: string;
+      basePlanId?: string | null;
+      enabledAddOnIds?: string[];
+      featureOverrides?: Record<string, boolean>;
     };
     if (!rawSlug || typeof rawSlug !== 'string' || !displayName || typeof displayName !== 'string') {
       throw createAppError('VALIDATION_ERROR', 'slug 与 displayName 必填');
@@ -121,11 +304,19 @@ router.post('/stores', ...platformAuth, async (req: Request, res: Response, next
     } else {
       ends = new Date('2099-12-31');
     }
+    const parsedBasePlanId = parseObjectIdOrNull(basePlanId, 'basePlanId');
+    const parsedAddOnIds = parseObjectIdArray(enabledAddOnIds, 'enabledAddOnIds');
+    const parsedOverrides = featureOverrides && typeof featureOverrides === 'object' ? featureOverrides : {};
+    await assertEnterpriseAdsPolicy(parsedBasePlanId, parsedAddOnIds, parsedOverrides);
+
     const store = await Store.create({
       slug,
       displayName: displayName.trim(),
       subscriptionEndsAt: ends,
       status: 'active',
+      basePlanId: parsedBasePlanId,
+      enabledAddOnIds: parsedAddOnIds,
+      featureOverrides: parsedOverrides,
     });
     res.status(201).json(store);
   } catch (err) {
@@ -145,10 +336,13 @@ router.patch('/stores/:id', ...platformAuth, async (req: Request, res: Response,
     if (!store) {
       throw createAppError('NOT_FOUND', '店铺不存在');
     }
-    const { displayName, status, subscriptionEndsAt } = req.body as {
+    const { displayName, status, subscriptionEndsAt, basePlanId, enabledAddOnIds, featureOverrides } = req.body as {
       displayName?: string;
       status?: string;
       subscriptionEndsAt?: string;
+      basePlanId?: string | null;
+      enabledAddOnIds?: string[];
+      featureOverrides?: Record<string, boolean>;
     };
     if (displayName !== undefined) {
       if (typeof displayName !== 'string' || !displayName.trim()) {
@@ -169,6 +363,25 @@ router.patch('/stores/:id', ...platformAuth, async (req: Request, res: Response,
       }
       store.set('subscriptionEndsAt', d);
     }
+    if (basePlanId !== undefined) {
+      store.set('basePlanId', parseObjectIdOrNull(basePlanId, 'basePlanId'));
+    }
+    if (enabledAddOnIds !== undefined) {
+      store.set('enabledAddOnIds', parseObjectIdArray(enabledAddOnIds, 'enabledAddOnIds'));
+    }
+    if (featureOverrides !== undefined) {
+      if (!featureOverrides || typeof featureOverrides !== 'object' || Array.isArray(featureOverrides)) {
+        throw createAppError('VALIDATION_ERROR', 'featureOverrides 必须为对象');
+      }
+      const out: Record<string, boolean> = {};
+      for (const [k, v] of Object.entries(featureOverrides)) out[k] = !!v;
+      store.set('featureOverrides', out);
+    }
+    await assertEnterpriseAdsPolicy(
+      (store.get('basePlanId') as mongoose.Types.ObjectId | null) ?? null,
+      ((store.get('enabledAddOnIds') as mongoose.Types.ObjectId[] | undefined) ?? []),
+      ((store.get('featureOverrides') as Record<string, boolean> | undefined) ?? {}),
+    );
     await store.save();
     res.json(store.toObject());
   } catch (err) {

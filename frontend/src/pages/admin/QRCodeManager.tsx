@@ -45,6 +45,10 @@ export default function QRCodeManager() {
     const takeoutDataUrl = await QRCode.toDataURL(takeoutUrl, { width: 200, margin: 1 });
     items.push({ label: 'Take Away', url: takeoutUrl, dataUrl: takeoutDataUrl });
 
+    const deliveryUrl = `${baseUrl}/${storeSlug}/customer?type=delivery`;
+    const deliveryDataUrl = await QRCode.toDataURL(deliveryUrl, { width: 200, margin: 1 });
+    items.push({ label: 'Delivery', url: deliveryUrl, dataUrl: deliveryDataUrl });
+
     setQrItems(items);
     setGenerating(false);
 
@@ -116,6 +120,12 @@ export default function QRCodeManager() {
         <button className="btn btn-gold" onClick={generate} disabled={generating}>
           {generating ? t('common.loading') : '生成 QR 码'}
         </button>
+      </div>
+      <div className="card" style={{ padding: 12, marginBottom: 16, background: '#fff8e1', border: '1px solid #ffe0b2' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#8d6e63', marginBottom: 4 }}>Delivery 二维码说明</div>
+        <div style={{ fontSize: 12, color: '#8d6e63', lineHeight: 1.6 }}>
+          客人扫码进入送餐下单流程时，需先填写姓名、电话、地址、邮编，再提交订单。
+        </div>
       </div>
 
       {/* QR Grid */}

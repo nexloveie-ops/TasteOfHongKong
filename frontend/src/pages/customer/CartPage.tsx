@@ -18,6 +18,10 @@ export default function CartPage() {
   const [offers, setOffers] = useState<OfferData[]>([]);
   const [menuItemCategories, setMenuItemCategories] = useState<Record<string, string>>({});
   const [offersLoaded, setOffersLoaded] = useState(false);
+  const [deliveryCustomerName, setDeliveryCustomerName] = useState('');
+  const [deliveryCustomerPhone, setDeliveryCustomerPhone] = useState('');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [deliveryPostalCode, setDeliveryPostalCode] = useState('');
 
   const table = searchParams.get('table');
   const seat = searchParams.get('seat');
@@ -97,6 +101,17 @@ export default function CartPage() {
         const body: Record<string, unknown> = { items: itemsPayload };
         if (orderType === 'takeout') {
           body.type = 'takeout';
+        } else if (orderType === 'delivery') {
+          if (!deliveryCustomerName.trim() || !deliveryCustomerPhone.trim() || !deliveryAddress.trim() || !deliveryPostalCode.trim()) {
+            setError('请填写送餐姓名、电话、地址与邮编');
+            return;
+          }
+          body.type = 'delivery';
+          body.deliverySource = 'qr';
+          body.customerName = deliveryCustomerName.trim();
+          body.customerPhone = deliveryCustomerPhone.trim();
+          body.deliveryAddress = deliveryAddress.trim();
+          body.postalCode = deliveryPostalCode.trim();
         } else {
           body.type = 'dine_in';
           body.tableNumber = Number(table);
@@ -214,6 +229,14 @@ export default function CartPage() {
       </div>
 
       {error && <div style={{ color: 'var(--red-primary)', marginTop: 12, fontSize: 13 }}>{error}</div>}
+      {orderType === 'delivery' && (
+        <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
+          <input className="input" placeholder="收货姓名" value={deliveryCustomerName} onChange={e => setDeliveryCustomerName(e.target.value)} />
+          <input className="input" placeholder="联系电话" value={deliveryCustomerPhone} onChange={e => setDeliveryCustomerPhone(e.target.value)} />
+          <input className="input" placeholder="送餐地址" value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} />
+          <input className="input" placeholder="邮编" value={deliveryPostalCode} onChange={e => setDeliveryPostalCode(e.target.value)} />
+        </div>
+      )}
 
       {/* Bundle discount display */}
       {matchedBundles.length > 0 && (

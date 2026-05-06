@@ -13,6 +13,8 @@ import { StoreSchema } from './Store';
 import { AdminAuditLogSchema } from './AdminAuditLog';
 import { LZFoodAdminSchema } from './LZFoodAdmin';
 import { PostOrderAdSchema } from './PostOrderAd';
+import { FeaturePlanSchema } from './FeaturePlan';
+import { FeatureAddonSchema } from './FeatureAddon';
 
 const storeIdField = {
   storeId: {
@@ -64,6 +66,8 @@ export type LZFoodModels = {
   Admin: Model<unknown>;
   AdminAuditLog: Model<unknown>;
   PostOrderAd: Model<unknown>;
+  FeaturePlan: Model<unknown>;
+  FeatureAddon: Model<unknown>;
 };
 
 let cached: LZFoodModels | null = null;
@@ -100,6 +104,8 @@ export function registerLZFoodModels(conn: Connection): LZFoodModels {
   const Admin = m('Admin', LZFoodAdminSchema, 'admins');
   const AdminAuditLog = m('AdminAuditLog', AdminAuditLogSchema, 'admin_audit_logs');
   const PostOrderAd = m('PostOrderAd', PostOrderAdSchema, 'platform_post_order_ads');
+  const FeaturePlan = m('FeaturePlan', FeaturePlanSchema, 'feature_plans');
+  const FeatureAddon = m('FeatureAddon', FeatureAddonSchema, 'feature_addons');
 
   cached = {
     Store,
@@ -117,6 +123,8 @@ export function registerLZFoodModels(conn: Connection): LZFoodModels {
     Admin,
     AdminAuditLog,
     PostOrderAd,
+    FeaturePlan,
+    FeatureAddon,
   };
   return cached;
 }

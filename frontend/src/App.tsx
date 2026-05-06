@@ -18,10 +18,10 @@ import OrderStatusPage from './pages/customer/OrderStatusPage';
 import CashierOrder from './pages/cashier/CashierOrder';
 import ReprintReceipt from './pages/cashier/ReprintReceipt';
 import PhoneOrderList from './pages/cashier/PhoneOrderList';
-import DineInOrderBoard from './pages/cashier/DineInOrderBoard';
 import TakeoutOrderList from './pages/cashier/TakeoutOrderList';
 import TakeoutDelivery from './pages/cashier/TakeoutDelivery';
 import CheckoutFlow from './pages/cashier/CheckoutFlow';
+import UnifiedOrderCenter from './pages/cashier/UnifiedOrderCenter';
 import CategoryManager from './pages/admin/CategoryManager';
 import MenuItemManager from './pages/admin/MenuItemManager';
 import OptionGroupTemplates from './pages/admin/OptionGroupTemplates';
@@ -71,6 +71,15 @@ function RequirePlatformAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function RequireFeature({ featureKey, children }: { featureKey: string; children: React.ReactNode }) {
+  const { hasFeature } = useAuth();
+  const { storeSlug } = useParams<{ storeSlug: string }>();
+  if (!hasFeature(featureKey)) {
+    return <Navigate to={`/${storeSlug}/admin`} replace />;
+  }
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -96,7 +105,9 @@ export default function App() {
             </Route>
 
             <Route path="cashier" element={<RequireAuth><CashierLayout /></RequireAuth>}>
-              <Route index element={<DineInOrderBoard />} />
+              <Route index element={<UnifiedOrderCenter />} />
+              <Route path="orders" element={<UnifiedOrderCenter />} />
+              {/* Legacy pages kept for rollback */}
               <Route path="order" element={<CashierOrder />} />
               <Route path="reprint" element={<ReprintReceipt />} />
               <Route path="phone" element={<PhoneOrderList />} />
@@ -112,19 +123,19 @@ export default function App() {
               <Route path="restaurant" element={<RestaurantInfo />} />
               <Route path="categories" element={<CategoryManager />} />
               <Route path="menu-items" element={<MenuItemManager />} />
-              <Route path="option-group-templates" element={<OptionGroupTemplates />} />
+              <Route path="option-group-templates" element={<RequireFeature featureKey="admin.optionGroupTemplates.page"><OptionGroupTemplates /></RequireFeature>} />
               <Route path="inventory" element={<InventoryManager />} />
               <Route path="allergens" element={<AllergenManager />} />
               <Route path="i18n" element={<I18nEditor />} />
               <Route path="qr-codes" element={<QRCodeManager />} />
-              <Route path="orders" element={<OrderHistory />} />
+              <Route path="orders" element={<RequireFeature featureKey="admin.orderHistory.page"><OrderHistory /></RequireFeature>} />
               <Route path="reports" element={<ReportDashboard />} />
               <Route path="business-hours" element={<BusinessHours />} />
               <Route path="users" element={<UserManager />} />
               <Route path="config" element={<SystemConfig />} />
               <Route path="stripe" element={<StripeSettings />} />
-              <Route path="offers" element={<OfferManager />} />
-              <Route path="coupons" element={<CouponManager />} />
+              <Route path="offers" element={<RequireFeature featureKey="admin.offers.page"><OfferManager /></RequireFeature>} />
+              <Route path="coupons" element={<RequireFeature featureKey="admin.coupons.page"><CouponManager /></RequireFeature>} />
             </Route>
 
             <Route path="*" element={<StoreUnknownRoute />} />

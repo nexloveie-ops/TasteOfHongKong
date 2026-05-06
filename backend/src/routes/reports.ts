@@ -4,6 +4,8 @@ import { getModels } from '../getModels';
 import { requirePermission } from '../middleware/auth';
 import { requireAuthSameStore } from '../middleware/authForStore';
 import { createAppError } from '../middleware/errorHandler';
+import { requireFeature } from '../middleware/featureAccess';
+import { FeatureKeys } from '../utils/featureCatalog';
 import { aggregateVatSalesByMonth } from '../utils/vatReportAggregation';
 import { buildVatReportPdfBuffer } from '../utils/vatReportPdf';
 
@@ -17,7 +19,7 @@ function reportModels() {
 const router = Router();
 
 // GET /api/reports/orders — Order history query (requires auth + report:view)
-router.get('/orders', ...requireAuthSameStore, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/orders', ...requireAuthSameStore, requirePermission('report:view'), requireFeature(FeatureKeys.AdminOrderHistoryPage), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { Order, Checkout } = reportModels();
     const { startDate, endDate, type, paymentMethod, source, status } = req.query;
@@ -423,7 +425,7 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
 });
 
 // GET /api/reports/vat-pdf?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD — VAT worksheet PDF (IE Food 13.5% / Drink 23%)
-router.get('/vat-pdf', ...requireAuthSameStore, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/vat-pdf', ...requireAuthSameStore, requirePermission('report:view'), requireFeature(FeatureKeys.AdminReportsVatExportAction), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { startDate, endDate } = req.query;
     if (!startDate || !endDate || typeof startDate !== 'string' || typeof endDate !== 'string') {

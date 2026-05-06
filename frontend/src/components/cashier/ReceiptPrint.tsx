@@ -203,12 +203,10 @@ function printViaIframe(html: string, copies: number) {
   const doc = iframe.contentDocument || iframe.contentWindow?.document;
   if (!doc) { document.body.removeChild(iframe); return; }
 
-  doc.open();
-  doc.write(html);
-  doc.close();
-
-  // Wait for images to load, then print
-  iframe.onload = () => {
+  let done = false;
+  const runPrint = () => {
+    if (done) return;
+    done = true;
     const images = doc.querySelectorAll('img');
     const promises = Array.from(images).map(img => {
       if (img.complete) return Promise.resolve();
@@ -224,6 +222,16 @@ function printViaIframe(html: string, copies: number) {
       }, 100);
     });
   };
+
+  // Bind before writing to avoid missing fast onload events.
+  iframe.onload = runPrint;
+
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  // Fallback for browsers where iframe onload may not fire reliably.
+  setTimeout(runPrint, 250);
 }
 
 export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, bundleDiscounts, printCopies }: ReceiptPrintProps) {

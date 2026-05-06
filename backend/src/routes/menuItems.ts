@@ -11,6 +11,7 @@ import { createAppError } from '../middleware/errorHandler';
 import { uploadFile } from '../storage';
 import { mergeTemplateOptionGroupsForItems } from '../utils/optionGroupTemplateApply';
 import { validateOptionGroups } from '../utils/optionGroups';
+import { resolveStoreEffectiveFeatures, FeatureKeys } from '../utils/featureCatalog';
 
 function menuModels() {
   return getModels() as {
@@ -285,6 +286,13 @@ router.put(
       const { isSoldOut, soldOutUntil } = req.body;
       if (typeof isSoldOut !== 'boolean') {
         throw createAppError('VALIDATION_ERROR', 'isSoldOut must be a boolean');
+      }
+
+      if (isSoldOut && soldOutUntil) {
+        const features = await resolveStoreEffectiveFeatures(req.storeId!);
+        if (!features.has(FeatureKeys.AdminInventoryRestoreTimeAction)) {
+          throw createAppError('FORBIDDEN', '当前套餐未开通“恢复供应时间”功能');
+        }
       }
 
       const updateData: Record<string, unknown> = { isSoldOut };

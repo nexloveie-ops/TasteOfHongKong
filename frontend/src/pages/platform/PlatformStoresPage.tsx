@@ -7,6 +7,9 @@ interface StoreRow {
   displayName: string;
   status: string;
   subscriptionEndsAt?: string;
+  basePlanId?: string | null;
+  enabledAddOnIds?: string[];
+  featureOverrides?: Record<string, boolean>;
 }
 
 interface AdminRow {
@@ -14,6 +17,34 @@ interface AdminRow {
   username: string;
   role: string;
 }
+
+interface FeaturePlanRow {
+  _id: string;
+  name: string;
+  code: string;
+  features: string[];
+  isActive: boolean;
+}
+
+interface FeatureAddonRow {
+  _id: string;
+  name: string;
+  code: string;
+  features: string[];
+  isActive: boolean;
+}
+
+const FEATURE_OPTIONS: { key: string; label: string }[] = [
+  { key: 'cashier.delivery.page', label: 'Cashier 送餐功能' },
+  { key: 'admin.optionGroupTemplates.page', label: '管理员-选项组模板' },
+  { key: 'admin.offers.page', label: '管理员-套餐优惠' },
+  { key: 'admin.coupons.page', label: '管理员-Coupon 管理' },
+  { key: 'admin.orderHistory.page', label: '管理员-订单历史' },
+  { key: 'admin.reports.vatExport.action', label: '报表-VAT 导出' },
+  { key: 'admin.inventory.restoreTime.action', label: '库存-恢复供应时间' },
+  { key: 'platform.postOrderAds.manage.action', label: '平台-广告管理' },
+  { key: 'customer.postOrderAds.view.action', label: '顾客端-广告展示' },
+];
 
 export default function PlatformStoresPage() {
   const [stores, setStores] = useState<StoreRow[]>([]);
@@ -23,6 +54,23 @@ export default function PlatformStoresPage() {
   const [newSlug, setNewSlug] = useState('');
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [createStoreOpen, setCreateStoreOpen] = useState(false);
+  const [productsOpen, setProductsOpen] = useState(false);
+  const [plans, setPlans] = useState<FeaturePlanRow[]>([]);
+  const [addons, setAddons] = useState<FeatureAddonRow[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [newPlanName, setNewPlanName] = useState('');
+  const [newPlanCode, setNewPlanCode] = useState('');
+  const [newPlanFeatures, setNewPlanFeatures] = useState<string[]>([]);
+  const [newPlanOpen, setNewPlanOpen] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<FeaturePlanRow | null>(null);
+  const [editPlanName, setEditPlanName] = useState('');
+  const [editPlanFeatures, setEditPlanFeatures] = useState<string[]>([]);
+  const [editPlanActive, setEditPlanActive] = useState(true);
+  const [newAddonName, setNewAddonName] = useState('');
+  const [newAddonCode, setNewAddonCode] = useState('');
+  const [newAddonFeatures, setNewAddonFeatures] = useState<string[]>([]);
+  const [newAddonOpen, setNewAddonOpen] = useState(false);
 
   const [expanded, setExpanded] = useState<string | null>(null);
   const [adminsByStore, setAdminsByStore] = useState<Record<string, AdminRow[]>>({});
@@ -36,6 +84,10 @@ export default function PlatformStoresPage() {
   const [purgeOpenFor, setPurgeOpenFor] = useState<string | null>(null);
   const [purgeSlugInput, setPurgeSlugInput] = useState('');
   const [purging, setPurging] = useState(false);
+  const [packageEditStoreId, setPackageEditStoreId] = useState<string | null>(null);
+  const [pkgBasePlanId, setPkgBasePlanId] = useState('');
+  const [pkgAddOnIds, setPkgAddOnIds] = useState<string[]>([]);
+  const [pkgOverrides, setPkgOverrides] = useState('{}');
 
   const loadStores = useCallback(async () => {
     setErr('');
@@ -49,15 +101,38 @@ export default function PlatformStoresPage() {
     setStores(await res.json());
   }, []);
 
+  const loadProducts = useCallback(async () => {
+    setLoadingProducts(true);
+    try {
+      const [pRes, aRes] = await Promise.all([
+        platformApiFetch('/api/platform/feature-plans'),
+        platformApiFetch('/api/platform/feature-addons'),
+      ]);
+      if (pRes.ok) setPlans(await pRes.json());
+      if (aRes.ok) setAddons(await aRes.json());
+    } finally {
+      setLoadingProducts(false);
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      await loadStores();
+      await Promise.all([loadStores(), loadProducts()]);
       if (!cancelled) setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [loadStores]);
+  }, [loadStores, loadProducts]);
+
+  const toggleInList = (list: string[], key: string) => (
+    list.includes(key) ? list.filter(k => k !== key) : [...list, key]
+  );
+
+  const isAdsAddon = (addon: FeatureAddonRow): boolean => (
+    addon.features.includes('platform.postOrderAds.manage.action') ||
+    addon.features.includes('customer.postOrderAds.view.action')
+  );
 
   const loadAdmins = async (storeId: string) => {
     setAdmLoad(storeId);
@@ -79,6 +154,39 @@ export default function PlatformStoresPage() {
     }
     setExpanded(id);
     if (!adminsByStore[id]) void loadAdmins(id);
+  };
+
+  const openPackageEditor = (store: StoreRow) => {
+    setPackageEditStoreId(store._id);
+    setPkgBasePlanId(store.basePlanId || '');
+    setPkgAddOnIds(store.enabledAddOnIds || []);
+    setPkgOverrides(JSON.stringify(store.featureOverrides || {}, null, 2));
+    setErr('');
+  };
+
+  const closePackageEditor = () => {
+    setPackageEditStoreId(null);
+    setPkgBasePlanId('');
+    setPkgAddOnIds([]);
+    setPkgOverrides('{}');
+  };
+
+  const savePackageEditor = async () => {
+    if (!packageEditStoreId) return;
+    let parsedOverrides: Record<string, boolean> = {};
+    try {
+      parsedOverrides = pkgOverrides.trim() ? JSON.parse(pkgOverrides) : {};
+    } catch {
+      setErr('featureOverrides JSON 格式错误');
+      return;
+    }
+    await patchStore(packageEditStoreId, {
+      basePlanId: pkgBasePlanId || null,
+      enabledAddOnIds: pkgAddOnIds,
+      featureOverrides: parsedOverrides,
+    });
+    await loadStores();
+    closePackageEditor();
   };
 
   const createStore = async (e: React.FormEvent) => {
@@ -116,6 +224,92 @@ export default function PlatformStoresPage() {
       const j = await res.json().catch(() => ({}));
       setErr(j.error?.message || '更新失败');
     }
+  };
+
+  const createPlan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPlanName.trim() || !newPlanCode.trim()) return;
+    const res = await platformApiFetch('/api/platform/feature-plans', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: newPlanName.trim(),
+        code: newPlanCode.trim().toLowerCase(),
+        features: newPlanFeatures,
+      }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      setErr(j.error?.message || '创建版本失败');
+      return;
+    }
+    setNewPlanName('');
+    setNewPlanCode('');
+    setNewPlanFeatures([]);
+    setNewPlanOpen(false);
+    await loadProducts();
+  };
+
+  const createAddon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAddonName.trim() || !newAddonCode.trim()) return;
+    const res = await platformApiFetch('/api/platform/feature-addons', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: newAddonName.trim(),
+        code: newAddonCode.trim().toLowerCase(),
+        features: newAddonFeatures,
+      }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      setErr(j.error?.message || '创建 Add-on 失败');
+      return;
+    }
+    setNewAddonName('');
+    setNewAddonCode('');
+    setNewAddonFeatures([]);
+    setNewAddonOpen(false);
+    await loadProducts();
+  };
+
+  const openEditPlan = (plan: FeaturePlanRow) => {
+    setEditingPlan(plan);
+    setEditPlanName(plan.name);
+    setEditPlanFeatures(plan.features || []);
+    setEditPlanActive(!!plan.isActive);
+  };
+
+  const saveEditPlan = async () => {
+    if (!editingPlan) return;
+    const res = await platformApiFetch(`/api/platform/feature-plans/${editingPlan._id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: editPlanName.trim(),
+        features: editPlanFeatures,
+        isActive: editPlanActive,
+      }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      setErr(j.error?.message || '更新版本失败');
+      return;
+    }
+    setEditingPlan(null);
+    await loadProducts();
+  };
+
+  const deletePlan = async (planId: string) => {
+    if (!confirm('确认删除该 Plan？')) return;
+    const res = await platformApiFetch(`/api/platform/feature-plans/${planId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      setErr(j.error?.message || '删除版本失败');
+      return;
+    }
+    await loadProducts();
   };
 
   const addAdmin = async (e: React.FormEvent, storeId: string) => {
@@ -216,22 +410,137 @@ export default function PlatformStoresPage() {
       )}
 
       <div className="card" style={{ padding: 20, marginBottom: 24 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 14 }}>新建店铺</h2>
-        <form onSubmit={createStore} style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
-          <div>
-            <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>URL 标识（小写、数字、连字符）</label>
-            <input className="input" style={{ width: 200 }} placeholder="例 my-shop" value={newSlug}
-              onChange={e => setNewSlug(e.target.value)} />
-          </div>
-          <div>
-            <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>显示名称</label>
-            <input className="input" style={{ width: 220 }} placeholder="例 某某茶餐厅" value={newName}
-              onChange={e => setNewName(e.target.value)} />
-          </div>
-          <button type="submit" className="btn btn-primary" disabled={creating} style={{ background: '#1a237e' }}>
-            {creating ? '创建中…' : '创建店铺'}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: createStoreOpen ? 14 : 0 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 600 }}>新建店铺</h2>
+          <button className="btn btn-outline" type="button" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => setCreateStoreOpen(v => !v)}>
+            {createStoreOpen ? '收起' : '展开'}
           </button>
-        </form>
+        </div>
+        {createStoreOpen ? (
+          <form onSubmit={createStore} style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
+            <div>
+              <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>URL 标识（小写、数字、连字符）</label>
+              <input className="input" style={{ width: 200 }} placeholder="例 my-shop" value={newSlug}
+                onChange={e => setNewSlug(e.target.value)} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>显示名称</label>
+              <input className="input" style={{ width: 220 }} placeholder="例 某某茶餐厅" value={newName}
+                onChange={e => setNewName(e.target.value)} />
+            </div>
+            <button type="submit" className="btn btn-primary" disabled={creating} style={{ background: '#1a237e' }}>
+              {creating ? '创建中…' : '创建店铺'}
+            </button>
+          </form>
+        ) : null}
+      </div>
+
+      <div className="card" style={{ padding: 20, marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: productsOpen ? 14 : 0 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 600 }}>版本包（Base Plan）与 Add-on</h2>
+          <button className="btn btn-outline" type="button" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => setProductsOpen(v => !v)}>
+            {productsOpen ? '收起' : '展开'}
+          </button>
+        </div>
+        {productsOpen ? (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div style={{ border: '1px solid #eee', borderRadius: 8, padding: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontWeight: 600 }}>新建 Base Plan</div>
+                  <button type="button" className="btn btn-outline" style={{ fontSize: 12, padding: '4px 10px' }} onClick={() => setNewPlanOpen(v => !v)}>
+                    {newPlanOpen ? '收起' : '展开'}
+                  </button>
+                </div>
+                {newPlanOpen ? (
+                  <form onSubmit={createPlan} style={{ marginTop: 8 }}>
+                    <input className="input" style={{ width: '100%', marginBottom: 8 }} placeholder="名称（如 Pro Base）" value={newPlanName} onChange={e => setNewPlanName(e.target.value)} />
+                    <input className="input" style={{ width: '100%', marginBottom: 8 }} placeholder="Code（如 pro-base）" value={newPlanCode} onChange={e => setNewPlanCode(e.target.value)} />
+                    <div style={{ border: '1px solid #eee', borderRadius: 6, padding: 8, marginBottom: 8, maxHeight: 180, overflowY: 'auto' }}>
+                      {FEATURE_OPTIONS.map(opt => (
+                        <label key={opt.key} style={{ display: 'block', fontSize: 12, marginBottom: 6 }}>
+                          <input
+                            type="checkbox"
+                            checked={newPlanFeatures.includes(opt.key)}
+                            onChange={() => setNewPlanFeatures(prev => toggleInList(prev, opt.key))}
+                            style={{ marginRight: 6 }}
+                          />
+                          {opt.label}
+                          <span style={{ color: '#888', marginLeft: 6 }}>{opt.key}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <button className="btn btn-primary" type="submit">创建 Plan</button>
+                  </form>
+                ) : null}
+              </div>
+              <div style={{ border: '1px solid #eee', borderRadius: 8, padding: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontWeight: 600 }}>新建 Add-on</div>
+                  <button type="button" className="btn btn-outline" style={{ fontSize: 12, padding: '4px 10px' }} onClick={() => setNewAddonOpen(v => !v)}>
+                    {newAddonOpen ? '收起' : '展开'}
+                  </button>
+                </div>
+                {newAddonOpen ? (
+                  <form onSubmit={createAddon} style={{ marginTop: 8 }}>
+                    <input className="input" style={{ width: '100%', marginBottom: 8 }} placeholder="名称（如 VAT Export）" value={newAddonName} onChange={e => setNewAddonName(e.target.value)} />
+                    <input className="input" style={{ width: '100%', marginBottom: 8 }} placeholder="Code（如 vat-export）" value={newAddonCode} onChange={e => setNewAddonCode(e.target.value)} />
+                    <div style={{ border: '1px solid #eee', borderRadius: 6, padding: 8, marginBottom: 8, maxHeight: 180, overflowY: 'auto' }}>
+                      {FEATURE_OPTIONS.map(opt => (
+                        <label key={opt.key} style={{ display: 'block', fontSize: 12, marginBottom: 6 }}>
+                          <input
+                            type="checkbox"
+                            checked={newAddonFeatures.includes(opt.key)}
+                            onChange={() => setNewAddonFeatures(prev => toggleInList(prev, opt.key))}
+                            style={{ marginRight: 6 }}
+                          />
+                          {opt.label}
+                          <span style={{ color: '#888', marginLeft: 6 }}>{opt.key}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <button className="btn btn-primary" type="submit">创建 Add-on</button>
+                  </form>
+                ) : null}
+              </div>
+            </div>
+            <div style={{ marginTop: 12, fontSize: 12, color: '#666' }}>
+              {loadingProducts ? '加载版本包中…' : `Plan ${plans.length} 个，Add-on ${addons.length} 个`}
+            </div>
+            <div style={{ marginTop: 16, border: '1px solid #eee', borderRadius: 8, overflow: 'hidden' }}>
+              <div style={{ padding: '10px 12px', background: '#fafafa', fontWeight: 600 }}>所有 Plan</div>
+              {plans.length === 0 ? (
+                <div style={{ padding: 12, fontSize: 13, color: '#888' }}>暂无 Plan</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: '#f7f7f7', textAlign: 'left' }}>
+                      <th style={{ padding: '8px 10px' }}>名称</th>
+                      <th style={{ padding: '8px 10px' }}>Code</th>
+                      <th style={{ padding: '8px 10px' }}>状态</th>
+                      <th style={{ padding: '8px 10px' }}>功能数</th>
+                      <th style={{ padding: '8px 10px' }}>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {plans.map(p => (
+                      <tr key={p._id} style={{ borderTop: '1px solid #eee' }}>
+                        <td style={{ padding: '8px 10px' }}>{p.name}</td>
+                        <td style={{ padding: '8px 10px', color: '#666' }}>{p.code}</td>
+                        <td style={{ padding: '8px 10px' }}>{p.isActive ? '启用' : '停用'}</td>
+                        <td style={{ padding: '8px 10px' }}>{p.features?.length || 0}</td>
+                        <td style={{ padding: '8px 10px', display: 'flex', gap: 8 }}>
+                          <button className="btn btn-outline" type="button" style={{ fontSize: 12, padding: '4px 10px' }} onClick={() => openEditPlan(p)}>修改</button>
+                          <button className="btn btn-outline" type="button" style={{ fontSize: 12, padding: '4px 10px', color: '#c62828', borderColor: '#ffcdd2' }} onClick={() => void deletePlan(p._id)}>删除</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        ) : null}
       </div>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -247,6 +556,7 @@ export default function PlatformStoresPage() {
                 <th style={{ padding: '12px 16px' }}>标识 / 登录路径</th>
                 <th style={{ padding: '12px 16px' }}>名称</th>
                 <th style={{ padding: '12px 16px' }}>状态</th>
+                <th style={{ padding: '12px 16px' }}>功能包分配</th>
                 <th style={{ padding: '12px 16px' }}>操作</th>
               </tr>
             </thead>
@@ -259,6 +569,14 @@ export default function PlatformStoresPage() {
                       <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
                         <a href={`/${s.slug}/login`} target="_blank" rel="noreferrer">{`${origin}/${s.slug}/login`}</a>
                       </div>
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        style={{ marginTop: 8, fontSize: 11, padding: '4px 8px' }}
+                        onClick={() => openPackageEditor(s)}
+                      >
+                        配置功能包
+                      </button>
                     </td>
                     <td style={{ padding: '12px 16px' }}>{s.displayName}</td>
                     <td style={{ padding: '12px 16px' }}>
@@ -270,6 +588,14 @@ export default function PlatformStoresPage() {
                         <option value="suspended">暂停</option>
                         <option value="expired">过期</option>
                       </select>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ fontWeight: 600 }}>
+                        {plans.find(p => p._id === s.basePlanId)?.name || '(未分配)'}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                        Add-ons: {(s.enabledAddOnIds || []).length}
+                      </div>
                     </td>
                     <td style={{ padding: '12px 16px' }}>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
@@ -291,7 +617,7 @@ export default function PlatformStoresPage() {
                   </tr>
                   {purgeOpenFor === s._id && (
                     <tr>
-                      <td colSpan={4} style={{ padding: '12px 16px 16px', background: '#fff3e0', borderTop: '1px solid #ffe0b2' }}>
+                      <td colSpan={5} style={{ padding: '12px 16px 16px', background: '#fff3e0', borderTop: '1px solid #ffe0b2' }}>
                         <div style={{ fontSize: 13, color: '#bf360c', fontWeight: 600, marginBottom: 8 }}>危险：永久删除店铺</div>
                         <p style={{ fontSize: 13, color: '#5d4037', margin: '0 0 12px', lineHeight: 1.5 }}>
                           将删除该店下<strong>全部</strong>数据：分类与菜品、过敏原、选项模板与规则、优惠与优惠券、订单与结账、日序号、系统配置、店内账号及与本店相关的审计日志。此操作<strong>不可恢复</strong>。
@@ -312,7 +638,7 @@ export default function PlatformStoresPage() {
                   )}
                   {expanded === s._id && (
                     <tr>
-                      <td colSpan={4} style={{ padding: '0 16px 20px', background: '#fafafa' }}>
+                      <td colSpan={5} style={{ padding: '0 16px 20px', background: '#fafafa' }}>
                         <div style={{ padding: '16px 0' }}>
                           <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 13 }}>店内账号（店主 / 收银员）</div>
                           {admLoad === s._id ? (
@@ -370,6 +696,90 @@ export default function PlatformStoresPage() {
           </table>
         )}
       </div>
+      {packageEditStoreId ? (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 620, maxWidth: '94vw', background: '#fff', borderRadius: 12, padding: 16, maxHeight: '88vh', overflowY: 'auto' }}>
+            <h3 style={{ fontSize: 17, fontWeight: 700, marginBottom: 12 }}>店铺功能包配置</h3>
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>Base Plan</label>
+              <select
+                value={pkgBasePlanId}
+                onChange={e => setPkgBasePlanId(e.target.value)}
+                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #ccc', width: 240 }}
+              >
+                <option value="">(无)</option>
+                {plans.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>Add-ons（可多选）</label>
+              <select
+                multiple
+                value={pkgAddOnIds}
+                onChange={e => setPkgAddOnIds(Array.from(e.currentTarget.selectedOptions).map(o => o.value))}
+                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #ccc', width: 340, minHeight: 120 }}
+              >
+                {addons.map(a => (
+                  <option
+                    key={a._id}
+                    value={a._id}
+                    disabled={(() => {
+                      const selectedPlan = plans.find(p => p._id === pkgBasePlanId);
+                      const enterprise = !!selectedPlan && selectedPlan.code.toLowerCase().includes('enterprise');
+                      return enterprise && isAdsAddon(a);
+                    })()}
+                  >
+                    {a.name}{isAdsAddon(a) ? '（广告）' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>店铺覆盖（JSON）</label>
+              <textarea
+                className="input"
+                style={{ width: '100%', minHeight: 140 }}
+                value={pkgOverrides}
+                onChange={e => setPkgOverrides(e.target.value)}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button type="button" className="btn btn-outline" onClick={closePackageEditor}>取消</button>
+              <button type="button" className="btn btn-primary" onClick={() => void savePackageEditor()}>保存</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {editingPlan ? (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 2200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 620, maxWidth: '94vw', background: '#fff', borderRadius: 12, padding: 16, maxHeight: '88vh', overflowY: 'auto' }}>
+            <h3 style={{ fontSize: 17, fontWeight: 700, marginBottom: 12 }}>修改 Plan</h3>
+            <input className="input" style={{ width: '100%', marginBottom: 10 }} value={editPlanName} onChange={e => setEditPlanName(e.target.value)} />
+            <label style={{ display: 'block', fontSize: 13, marginBottom: 10 }}>
+              <input type="checkbox" checked={editPlanActive} onChange={e => setEditPlanActive(e.target.checked)} style={{ marginRight: 6 }} />
+              启用
+            </label>
+            <div style={{ border: '1px solid #eee', borderRadius: 6, padding: 8, marginBottom: 12, maxHeight: 280, overflowY: 'auto' }}>
+              {FEATURE_OPTIONS.map(opt => (
+                <label key={opt.key} style={{ display: 'block', fontSize: 12, marginBottom: 6 }}>
+                  <input
+                    type="checkbox"
+                    checked={editPlanFeatures.includes(opt.key)}
+                    onChange={() => setEditPlanFeatures(prev => toggleInList(prev, opt.key))}
+                    style={{ marginRight: 6 }}
+                  />
+                  {opt.label}
+                  <span style={{ color: '#888', marginLeft: 6 }}>{opt.key}</span>
+                </label>
+              ))}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button type="button" className="btn btn-outline" onClick={() => setEditingPlan(null)}>取消</button>
+              <button type="button" className="btn btn-primary" onClick={() => void saveEditPlan()}>保存</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

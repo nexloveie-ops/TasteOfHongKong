@@ -4,6 +4,8 @@ import { getModels } from '../getModels';
 import { requirePermission } from '../middleware/auth';
 import { requireAuthSameStore } from '../middleware/authForStore';
 import { createAppError } from '../middleware/errorHandler';
+import { requireFeature } from '../middleware/featureAccess';
+import { FeatureKeys } from '../utils/featureCatalog';
 
 const router = Router();
 
@@ -17,7 +19,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
-router.get('/all', ...requireAuthSameStore, requirePermission('admin:manage'), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/all', ...requireAuthSameStore, requirePermission('admin:manage'), requireFeature(FeatureKeys.AdminCouponsPage), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { Coupon } = getModels();
     const coupons = await Coupon.find({ storeId: req.storeId }).sort({ createdAt: -1 }).lean();
@@ -27,7 +29,7 @@ router.get('/all', ...requireAuthSameStore, requirePermission('admin:manage'), a
   }
 });
 
-router.post('/', ...requireAuthSameStore, requirePermission('admin:manage'), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/', ...requireAuthSameStore, requirePermission('admin:manage'), requireFeature(FeatureKeys.AdminCouponsPage), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { Coupon } = getModels();
     const { name, nameEn, amount, active } = req.body;
@@ -46,7 +48,7 @@ router.post('/', ...requireAuthSameStore, requirePermission('admin:manage'), asy
   }
 });
 
-router.put('/:id', ...requireAuthSameStore, requirePermission('admin:manage'), async (req: Request, res: Response, next: NextFunction) => {
+router.put('/:id', ...requireAuthSameStore, requirePermission('admin:manage'), requireFeature(FeatureKeys.AdminCouponsPage), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { Coupon } = getModels();
     const { id } = req.params;
@@ -65,7 +67,7 @@ router.put('/:id', ...requireAuthSameStore, requirePermission('admin:manage'), a
   }
 });
 
-router.delete('/:id', ...requireAuthSameStore, requirePermission('admin:manage'), async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/:id', ...requireAuthSameStore, requirePermission('admin:manage'), requireFeature(FeatureKeys.AdminCouponsPage), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { Coupon } = getModels();
     const { id } = req.params;

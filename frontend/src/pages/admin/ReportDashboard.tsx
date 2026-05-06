@@ -86,7 +86,7 @@ function getWeekRange(): { start: string; end: string } {
 
 export default function ReportDashboard() {
   const { t } = useTranslation();
-  const { token } = useAuth();
+  const { token, hasFeature } = useAuth();
 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -262,14 +262,16 @@ export default function ReportDashboard() {
         <button className="btn btn-primary" onClick={fetchStats} disabled={loading || !startDate || !endDate}>
           {loading ? t('common.loading') : t('common.search')}
         </button>
-        <button
-          type="button"
-          className="btn btn-outline"
-          onClick={exportVatPdf}
-          disabled={pdfExporting || !startDate || !endDate}
-        >
-          {pdfExporting ? t('common.loading') : t('admin.exportVatPdf')}
-        </button>
+        {hasFeature('admin.reports.vatExport.action') ? (
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={exportVatPdf}
+            disabled={pdfExporting || !startDate || !endDate}
+          >
+            {pdfExporting ? t('common.loading') : t('admin.exportVatPdf')}
+          </button>
+        ) : null}
       </div>
 
       {/* Stats display */}

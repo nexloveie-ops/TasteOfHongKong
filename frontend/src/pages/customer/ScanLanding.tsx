@@ -23,6 +23,8 @@ export default function ScanLanding() {
       navigate(`menu?table=${params.tableNumber}&seat=${params.seatNumber}`, { replace: true });
     } else if (params.type === 'takeout') {
       navigate('menu?type=takeout', { replace: true });
+    } else if (params.type === 'delivery') {
+      navigate('menu?type=delivery', { replace: true });
     }
   }, [params, navigate, loading, isOpen]);
 
