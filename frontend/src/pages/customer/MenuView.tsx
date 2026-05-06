@@ -226,12 +226,14 @@ export default function MenuView() {
             <h1 style={{ fontFamily: "'Noto Serif SC', serif", fontSize: 24, fontWeight: 700, letterSpacing: 3, marginBottom: 2 }}>{heroTitle}</h1>
             <div style={{ fontSize: 11, fontWeight: 300, letterSpacing: 5, color: '#F0D68A' }}>{heroSub}</div>
           </div>
-          <div style={{ position: 'absolute', top: 8, right: 12, zIndex: 1, textAlign: 'right', color: 'rgba(255,255,255,0.7)', fontSize: 9, lineHeight: 1.5 }}>
+          <div style={{ position: 'absolute', top: 8, right: 12, zIndex: 1, textAlign: 'right', color: 'rgba(255,255,255,0.75)', fontSize: 9, lineHeight: 1.45, maxWidth: 'min(220px, 48vw)' }}>
+            <div style={{ fontWeight: 700, color: '#F0D68A', marginBottom: 2 }}>{t('customer.footerCompany')}</div>
             <div>
-              Powered by{' '}
-              <span style={{ fontWeight: 600, color: '#F0D68A' }}>L&Z Techserve Limited · F&B</span>
+              <span>{t('customer.footerAdContact')}</span>{' '}
+              <a href="mailto:info@lztechserve.com" style={{ color: '#F0D68A', fontWeight: 600, textDecoration: 'none' }}>
+                info@lztechserve.com
+              </a>
             </div>
-            <div>info@lztechserve.com</div>
           </div>
         </div>
         {/* Active offers — carousel */}

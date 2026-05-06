@@ -71,6 +71,8 @@
     "loadingOrder": "Loading order...",
     "orderNotFound": "Order not found",
     "postOrderSponsored": "Sponsored",
+    "footerCompany": "L&Z Techserve LTD",
+    "footerAdContact": "For advertising, contact",
     "updateSuccess": "Order updated successfully",
     "updateFailed": "Failed to update order",
     "expand": "More",

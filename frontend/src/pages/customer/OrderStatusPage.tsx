@@ -245,23 +245,35 @@ export default function OrderStatusPage() {
   const statusColor = order.status === 'pending' ? 'var(--gold-primary)' : order.status === 'paid_online' ? '#2E7D32' : order.status === 'checked_out' ? 'var(--blue)' : 'var(--green)';
 
   return (
-    <div style={{ padding: 16, paddingBottom: 80 }}>
-      {/* Status header */}
+    <div style={{ padding: '12px 16px', paddingBottom: 24 }}>
+      {/* Status header — compact row to leave room for line items + ads */}
       <div style={{
-        background: 'var(--bg-white)', borderRadius: 12, padding: 20, marginBottom: 16,
-        border: '1px solid rgba(232,213,184,0.5)', textAlign: 'center',
+        background: 'var(--bg-white)', borderRadius: 10, padding: '10px 14px', marginBottom: 12,
+        border: '1px solid rgba(232,213,184,0.5)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap',
       }}>
-        <div style={{ fontSize: 13, color: 'var(--text-light)', marginBottom: 4 }}>{t('customer.orderNumber')}</div>
-        <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Noto Serif SC', serif", marginBottom: 8 }}>
-          {order.dailyOrderNumber ? `#${order.dailyOrderNumber}` : order._id.slice(-8).toUpperCase()}
+        <div style={{ minWidth: 0, textAlign: 'left' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-light)', lineHeight: 1.2, marginBottom: 2 }}>{t('customer.orderNumber')}</div>
+          <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'Noto Serif SC', serif", lineHeight: 1.2 }}>
+            {order.dailyOrderNumber ? `#${order.dailyOrderNumber}` : order._id.slice(-8).toUpperCase()}
+          </div>
         </div>
         <span style={{
-          display: 'inline-block', padding: '4px 14px', borderRadius: 20,
-          background: statusColor + '20', color: statusColor, fontWeight: 600, fontSize: 13,
+          display: 'inline-block', padding: '3px 10px', borderRadius: 14,
+          background: statusColor + '20', color: statusColor, fontWeight: 600, fontSize: 12,
+          flexShrink: 0,
         }}>{statusLabel}</span>
         {isPaidOnline && (
-          <div style={{ marginTop: 14, padding: '12px 16px', background: '#E8F5E9', border: '2px solid #4CAF50', borderRadius: 10, textAlign: 'center' }}>
-            <p style={{ fontSize: 15, fontWeight: 700, color: '#2E7D32', lineHeight: 1.6 }}>
+          <div style={{
+            flexBasis: '100%',
+            marginTop: 2,
+            padding: '8px 10px',
+            background: '#E8F5E9',
+            border: '1px solid #81C784',
+            borderRadius: 8,
+            textAlign: 'center',
+          }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: '#2E7D32', lineHeight: 1.4, margin: 0 }}>
               {t('customer.paymentSuccess')}
             </p>
           </div>
@@ -363,7 +375,7 @@ export default function OrderStatusPage() {
         )}
         {isPaidOnline && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ padding: '12px 16px', background: '#E8F5E9', border: '2px solid #4CAF50', borderRadius: 10, textAlign: 'center', fontSize: 14, color: '#2E7D32', fontWeight: 600 }}>
+            <div style={{ padding: '8px 12px', background: '#E8F5E9', border: '1px solid #81C784', borderRadius: 8, textAlign: 'center', fontSize: 13, color: '#2E7D32', fontWeight: 600 }}>
               ✅ {t('customer.paymentSuccess')}
             </div>
             <button className="btn btn-outline" style={{ width: '100%' }} onClick={() => navigate(menuHref)}>
@@ -384,12 +396,12 @@ export default function OrderStatusPage() {
       </div>
 
       {order && POST_ORDER_AD_STATUSES.has(order.status) && postOrderAds.length > 0 && (
-        <div style={{ marginTop: 20 }}>
+        <div style={{ marginTop: 14 }}>
           <div style={{
-            fontSize: 11,
+            fontSize: 10,
             color: 'var(--text-light)',
-            marginBottom: 8,
-            letterSpacing: 0.04,
+            marginBottom: 6,
+            letterSpacing: 0.03,
           }}>
             {t('customer.postOrderSponsored')}
           </div>
