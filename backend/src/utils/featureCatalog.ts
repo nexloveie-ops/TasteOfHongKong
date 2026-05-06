@@ -6,6 +6,7 @@ export const FeatureKeys = {
   AdminOptionTemplatePage: 'admin.optionGroupTemplates.page',
   AdminOffersPage: 'admin.offers.page',
   AdminCouponsPage: 'admin.coupons.page',
+  /** 仅控制侧边栏「订单历史」页；营业报表 `/admin/reports` 点击钻取走 `/api/reports/orders`，只要求 `report:view`，不依赖本 key */
   AdminOrderHistoryPage: 'admin.orderHistory.page',
   AdminReportsVatExportAction: 'admin.reports.vatExport.action',
   AdminInventoryRestoreTimeAction: 'admin.inventory.restoreTime.action',

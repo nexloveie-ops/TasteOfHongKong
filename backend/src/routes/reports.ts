@@ -18,8 +18,8 @@ function reportModels() {
 
 const router = Router();
 
-// GET /api/reports/orders — Order history query (requires auth + report:view)
-router.get('/orders', ...requireAuthSameStore, requirePermission('report:view'), requireFeature(FeatureKeys.AdminOrderHistoryPage), async (req: Request, res: Response, next: NextFunction) => {
+// GET /api/reports/orders — 报表钻取与订单历史列表共用（需 report:view；勿绑定 admin.orderHistory.page，否则营业报表点击明细会 403 且无数据）
+router.get('/orders', ...requireAuthSameStore, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { Order, Checkout } = reportModels();
     const { startDate, endDate, type, paymentMethod, source, status } = req.query;

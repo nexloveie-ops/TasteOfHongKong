@@ -181,7 +181,13 @@ export default function ReportDashboard() {
       const res = await apiFetch(`/api/reports/orders?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) setModalOrders(await res.json());
+      if (res.ok) {
+        setModalOrders(await res.json());
+      } else {
+        const j = await res.json().catch(() => ({})) as { error?: { message?: string } };
+        alert(j?.error?.message || `加载明细失败（HTTP ${res.status}）`);
+        setModalOrders([]);
+      }
     } catch { /* ignore */ }
     finally { setModalLoading(false); }
   }, [token, startDate, endDate]);
