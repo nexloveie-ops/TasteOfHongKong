@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { apiFetch } from '../../api/client';
@@ -22,7 +22,10 @@ interface DetailedStats {
   phoneCount: number;
   phoneRevenue: number;
   deliveryOrderCount: number;
-  deliveryFeeRevenue: number;
+  /** 送餐单菜品合计（不含送餐费），后端字段 deliveryOrdersGoodsTotal */
+  deliveryOrdersGoodsTotal: number;
+  /** 送餐费合计（delivery_fee 行 + legacy） */
+  deliveryFeesTotal: number;
   dineInScanCount: number;
   dineInCashierCount: number;
   takeoutScanCount: number;
@@ -136,10 +139,12 @@ export default function ReportDashboard() {
       });
       if (res.ok) {
         const data = (await res.json()) as DetailedStats;
+        const d = data as DetailedStats & { deliveryFeeRevenue?: number };
         setStats({
           ...data,
-          deliveryOrderCount: data.deliveryOrderCount ?? 0,
-          deliveryFeeRevenue: data.deliveryFeeRevenue ?? 0,
+          deliveryOrderCount: d.deliveryOrderCount ?? 0,
+          deliveryOrdersGoodsTotal: d.deliveryOrdersGoodsTotal ?? d.deliveryFeeRevenue ?? 0,
+          deliveryFeesTotal: d.deliveryFeesTotal ?? 0,
         });
       }
     } catch { /* ignore */ }
@@ -334,8 +339,14 @@ export default function ReportDashboard() {
                 onClick={() => openDetail({ title: '🎁 Bundle Orders', icon: '🎁', filters: { hasBundle: 'true' } })} />
               {canDeliveryReports ? (
                 <StatCard
-                  label="送餐费合计"
-                  value={`${stats.deliveryOrderCount} 单 · ${euro(stats.deliveryFeeRevenue)}`}
+                  label="送餐订单合集"
+                  value={(
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>{stats.deliveryOrderCount} 单</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: '#E65100' }}>菜品（不含运费）{euro(stats.deliveryOrdersGoodsTotal)}</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: '#BF360C' }}>送餐费 {euro(stats.deliveryFeesTotal)}</div>
+                    </div>
+                  )}
                   color="#E65100"
                   icon="🚚"
                   onClick={() => openDetail({ title: '🚚 送餐订单', icon: '🚚', filters: { type: 'delivery' } })}
@@ -412,15 +423,16 @@ export default function ReportDashboard() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                     <span style={{ fontSize: 24 }}>🚚</span>
                     <div>
-                      <div style={{ fontSize: 12, color: 'var(--text-light)' }}>送餐订单 / 运费合计</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-light)' }}>送餐订单合集</div>
                       <div style={{ fontSize: 28, fontWeight: 700, color: '#E65100' }}>{stats.deliveryOrderCount}</div>
                     </div>
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#E65100', borderTop: '1px solid var(--border, #eee)', paddingTop: 10 }}>
-                    运费 {euro(stats.deliveryFeeRevenue)}
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#E65100', borderTop: '1px solid var(--border, #eee)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span>菜品合计（不含送餐费）{euro(stats.deliveryOrdersGoodsTotal)}</span>
+                    <span style={{ color: '#BF360C' }}>送餐费合计 {euro(stats.deliveryFeesTotal)}</span>
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.45 }}>
-                    顾客扫码 Stripe 等网付：整单金额计入上方「Online」与「净营业额」；此处仅为运费小计。
+                    菜品金额 = 各单结账实收（与净营业额同一 checkout 口径）− 送餐费；送餐费为订单上运费行/字段汇总。扫码网付整单仍体现在「Online / 净营业额」。
                   </div>
                 </div>
               ) : null}
@@ -612,8 +624,9 @@ export default function ReportDashboard() {
 function StatCard({
   label, value, color, icon, onClick,
 }: {
-  label: string; value: string; color: string; icon: string; onClick?: () => void;
+  label: string; value: ReactNode; color: string; icon: string; onClick?: () => void;
 }) {
+  const valueIsPlain = typeof value === 'string' || typeof value === 'number';
   return (
     <div className="card" style={{ padding: 20, textAlign: 'center', cursor: onClick ? 'pointer' : 'default', transition: 'box-shadow 0.2s' }}
       onClick={onClick}
@@ -621,7 +634,12 @@ function StatCard({
       onMouseLeave={e => { e.currentTarget.style.boxShadow = ''; }}>
       <div style={{ fontSize: 28, marginBottom: 8 }}>{icon}</div>
       <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 700, color, fontFamily: "'Noto Serif SC', serif" }}>{value}</div>
+      <div style={{
+        fontSize: valueIsPlain ? 24 : undefined,
+        fontWeight: valueIsPlain ? 700 : undefined,
+        color: valueIsPlain ? color : undefined,
+        fontFamily: "'Noto Serif SC', serif",
+      }}>{value}</div>
       {onClick && <div style={{ fontSize: 10, color: 'var(--text-light)', marginTop: 6 }}>点击查看详情 →</div>}
     </div>
   );

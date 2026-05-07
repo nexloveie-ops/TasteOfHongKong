@@ -8,33 +8,13 @@ import { requireFeature } from '../middleware/featureAccess';
 import { FeatureKeys } from '../utils/featureCatalog';
 import { aggregateVatSalesByMonth } from '../utils/vatReportAggregation';
 import { buildVatReportPdfBuffer } from '../utils/vatReportPdf';
+import { deliveryFeePortionEuro, deliveryOrderGoodsTotalFromCheckoutEuro } from '../utils/orderPayableTotal';
 
 function reportModels() {
   return getModels() as {
     Order: mongoose.Model<any>;
     Checkout: mongoose.Model<any>;
   };
-}
-
-/** Non-refunded delivery fee: from lineKind delivery_fee rows, else legacy order.deliveryFeeEuro */
-function deliveryFeeAmountFromOrder(order: Record<string, unknown>): number {
-  const type = order.type as string | undefined;
-  const items = (order.items || []) as Array<{
-    lineKind?: string;
-    refunded?: boolean;
-    unitPrice: number;
-    quantity: number;
-    selectedOptions?: { extraPrice?: number }[];
-  }>;
-  let fromLines = 0;
-  for (const item of items) {
-    if (item.lineKind !== 'delivery_fee' || item.refunded) continue;
-    const opt = (item.selectedOptions || []).reduce((s, o) => s + (o.extraPrice || 0), 0);
-    fromLines += (item.unitPrice + opt) * item.quantity;
-  }
-  if (fromLines > 0) return fromLines;
-  if (type === 'delivery') return Number(order.deliveryFeeEuro) || 0;
-  return 0;
 }
 
 const router = Router();
@@ -367,7 +347,10 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
     let takeoutCount = 0;
     let phoneCount = 0;
     let deliveryOrderCount = 0;
-    let deliveryFeeRevenue = 0;
+    /** 送餐订单菜品合计：各单 **checkout 实收 totalAmount** − 送餐费（与净营业额结账口径一致） */
+    let deliveryOrdersGoodsTotal = 0;
+    /** 送餐费行 / legacy deliveryFeeEuro 汇总（非退款行） */
+    let deliveryFeesTotal = 0;
     let dineInScanCount = 0;
     let dineInCashierCount = 0;
     let dineInRevenue = 0;
@@ -393,7 +376,14 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
         phoneRevenue += checkout?.totalAmount ?? orderItemTotal;
       } else if (order.type === 'delivery') {
         deliveryOrderCount++;
-        deliveryFeeRevenue += deliveryFeeAmountFromOrder(order);
+        const c = orderCheckoutMap.get(String(order._id)) as { totalAmount?: number } | undefined;
+        deliveryOrdersGoodsTotal += deliveryOrderGoodsTotalFromCheckoutEuro(
+          order as Parameters<typeof deliveryOrderGoodsTotalFromCheckoutEuro>[0],
+          c?.totalAmount,
+        );
+        deliveryFeesTotal += deliveryFeePortionEuro(
+          order as Parameters<typeof deliveryFeePortionEuro>[0],
+        );
       }
     }
 
@@ -454,7 +444,8 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
       phoneCount,
       phoneRevenue: Math.round(phoneRevenue * 100) / 100,
       deliveryOrderCount,
-      deliveryFeeRevenue: Math.round(deliveryFeeRevenue * 100) / 100,
+      deliveryOrdersGoodsTotal: Math.round(deliveryOrdersGoodsTotal * 100) / 100,
+      deliveryFeesTotal: Math.round(deliveryFeesTotal * 100) / 100,
       dineInScanCount,
       dineInCashierCount,
       takeoutScanCount: takeoutCount,
