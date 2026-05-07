@@ -3,7 +3,8 @@ import { apiFetch } from '../../api/client';
 
 interface ReceiptOrderItem {
   _id: string;
-  menuItemId: string;
+  menuItemId?: string;
+  lineKind?: string;
   quantity: number;
   unitPrice: number;
   itemName: string;
@@ -22,6 +23,9 @@ interface ReceiptOrder {
   items: ReceiptOrderItem[];
   customerName?: string;
   customerPhone?: string;
+  deliveryAddress?: string;
+  postalCode?: string;
+  deliveryFeeEuro?: number;
 }
 
 interface ReceiptData {
@@ -67,6 +71,19 @@ function escapeReceiptHtml(s: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+/** Delivery fee as an order line vs legacy order.deliveryFeeEuro only */
+function receiptDeliveryFeeBreakdown(receipt: ReceiptData): { deliveryAmt: number; showLegacyDeliveryRow: boolean } {
+  let fromItems = 0;
+  for (const o of receipt.orders) {
+    for (const i of o.items) {
+      if (i.lineKind === 'delivery_fee') fromItems += i.unitPrice * i.quantity;
+    }
+  }
+  const fromField = receipt.orders.reduce((s, o) => s + (o.deliveryFeeEuro ?? 0), 0);
+  if (fromItems > 0) return { deliveryAmt: fromItems, showLegacyDeliveryRow: false };
+  return { deliveryAmt: fromField, showLegacyDeliveryRow: fromField > 0 };
 }
 
 function parseQRCodes(text: string): Array<{ type: 'text' | 'qr'; value: string }> {
@@ -152,6 +169,20 @@ function buildReceiptHTML(
     if (guestName) {
       html += `<div style="font-size:14px;margin-top:2px">客人姓名 / Name: ${escapeReceiptHtml(guestName)}</div>`;
     }
+    const delForAddr =
+      receipt.orders.find(o => o.type === 'delivery')
+      ?? receipt.orders.find(o => !!(o.deliveryAddress?.trim() || o.postalCode?.trim()));
+    if (delForAddr && (delForAddr.deliveryAddress?.trim() || delForAddr.postalCode?.trim())) {
+      html += `<div style="font-size:11px;margin-top:8px;color:#333;font-weight:bold">送餐信息（客人填写 · By guest）</div>`;
+      const addr = delForAddr.deliveryAddress?.trim();
+      const pc = delForAddr.postalCode?.trim();
+      if (addr) {
+        html += `<div style="font-size:14px;margin-top:4px;text-align:left;max-width:100%;word-wrap:break-word">送餐地址 / Guest delivery address:<br/>${escapeReceiptHtml(addr)}</div>`;
+      }
+      if (pc) {
+        html += `<div style="font-size:14px;margin-top:4px">送餐邮编 / Guest postcode: ${escapeReceiptHtml(pc)}</div>`;
+      }
+    }
   }
   html += `</div><div class="divider"></div>`;
 
@@ -172,15 +203,23 @@ function buildReceiptHTML(
   html += `</table><div class="divider"></div>`;
 
   // Total
+  const { deliveryAmt, showLegacyDeliveryRow } = receiptDeliveryFeeBreakdown(receipt);
   const totalBundleDiscount = (bundleDiscounts || []).reduce((s, b) => s + b.discount, 0);
   if (totalBundleDiscount > 0) {
-    const subtotal = receipt.totalAmount + totalBundleDiscount;
+    const foodAfterBundles = receipt.totalAmount - deliveryAmt;
+    const subtotal = foodAfterBundles + totalBundleDiscount;
     html += `<div class="row"><span>Subtotal</span><span>€${subtotal.toFixed(2)}</span></div>`;
     for (const bd of bundleDiscounts || []) {
       html += `<div class="row"><span>🎁 ${bd.nameEn || bd.name}</span><span>-€${bd.discount.toFixed(2)}</span></div>`;
     }
+    if (showLegacyDeliveryRow) {
+      html += `<div class="row"><span>Delivery</span><span>€${deliveryAmt.toFixed(2)}</span></div>`;
+    }
     html += `<div class="row" style="font-size:18px;margin-top:4px"><span>Total</span><span>€${receipt.totalAmount.toFixed(2)}</span></div>`;
   } else {
+    if (showLegacyDeliveryRow) {
+      html += `<div class="row"><span>Delivery</span><span>€${deliveryAmt.toFixed(2)}</span></div>`;
+    }
     html += `<div class="row" style="font-size:18px"><span>Total</span><span>€${receipt.totalAmount.toFixed(2)}</span></div>`;
   }
   html += `<div class="row" style="margin-top:4px"><span>Payment</span><span>${paymentLabel}</span></div>`;
@@ -330,6 +369,13 @@ export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, b
   const isDeliveryPreview = receipt.orders.some(o => o.type === 'delivery');
   const previewGuestTel = !isDineIn ? receipt.orders.map(o => o.customerPhone?.trim()).find(Boolean) : undefined;
   const previewGuestName = !isDineIn ? receipt.orders.map(o => o.customerName?.trim()).find(Boolean) : undefined;
+  const previewDel =
+    isDeliveryPreview || receipt.orders.some(o => o.deliveryAddress?.trim() || o.postalCode?.trim())
+      ? (receipt.orders.find(o => o.type === 'delivery')
+        ?? receipt.orders.find(o => !!(o.deliveryAddress?.trim() || o.postalCode?.trim())))
+      : undefined;
+  const previewDeliveryAddr = previewDel?.deliveryAddress?.trim();
+  const previewDeliveryPc = previewDel?.postalCode?.trim();
   const checkedOutAt = new Date(receipt.checkedOutAt);
   const paymentLabel = receipt.paymentMethod === 'cash' ? 'Cash' : receipt.paymentMethod === 'card' ? 'Card' : receipt.paymentMethod === 'online' ? 'Online' : 'Mixed';
   const restaurantName = config.restaurant_name_en || config.restaurant_name_zh || '';
@@ -361,6 +407,15 @@ export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, b
           {!isDineIn && previewGuestName ? (
             <div style={{ fontSize: 14, marginTop: 2 }}>客人姓名 / Name: {previewGuestName}</div>
           ) : null}
+          {(previewDeliveryAddr || previewDeliveryPc) ? (
+            <div style={{ fontSize: 11, marginTop: 8, color: '#333' }}>送餐信息（客人填写 · By guest）</div>
+          ) : null}
+          {previewDeliveryAddr ? (
+            <div style={{ fontSize: 14, marginTop: 4, textAlign: 'left', wordWrap: 'break-word' }}>送餐地址 / Guest delivery address:<br />{previewDeliveryAddr}</div>
+          ) : null}
+          {previewDeliveryPc ? (
+            <div style={{ fontSize: 14, marginTop: 4 }}>送餐邮编 / Guest postcode: {previewDeliveryPc}</div>
+          ) : null}
         </div>
       </div>
 
@@ -379,20 +434,32 @@ export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, b
 
       <div style={{ borderTop: '2px dashed #000', margin: '8px 0' }} />
       {(() => {
+        const { deliveryAmt, showLegacyDeliveryRow } = receiptDeliveryFeeBreakdown(receipt);
         const totalBD = (bundleDiscounts || []).reduce((s, b) => s + b.discount, 0);
         if (totalBD > 0) {
-          const subtotal = receipt.totalAmount + totalBD;
+          const foodAfterBundles = receipt.totalAmount - deliveryAmt;
+          const subtotal = foodAfterBundles + totalBD;
           return (
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Subtotal</span><span>€{subtotal.toFixed(2)}</span></div>
               {(bundleDiscounts || []).map((bd, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span>🎁 {bd.nameEn || bd.name}</span><span>-€{bd.discount.toFixed(2)}</span></div>
               ))}
+              {showLegacyDeliveryRow ? (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Delivery</span><span>€{deliveryAmt.toFixed(2)}</span></div>
+              ) : null}
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17, marginTop: 4 }}><span>Total</span><span>€{receipt.totalAmount.toFixed(2)}</span></div>
             </>
           );
         }
-        return <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17 }}><span>Total</span><span>€{receipt.totalAmount.toFixed(2)}</span></div>;
+        return (
+          <>
+            {showLegacyDeliveryRow ? (
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Delivery</span><span>€{deliveryAmt.toFixed(2)}</span></div>
+            ) : null}
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17 }}><span>Total</span><span>€{receipt.totalAmount.toFixed(2)}</span></div>
+          </>
+        );
       })()}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}><span>Payment</span><span>{paymentLabel}</span></div>
 

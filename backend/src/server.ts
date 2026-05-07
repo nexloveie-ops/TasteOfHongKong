@@ -1,6 +1,7 @@
 import express from 'express';
 import http from 'http';
 import cors from 'cors';
+import fs from 'fs';
 import path from 'path';
 import { Server as SocketIOServer } from 'socket.io';
 import dotenv from 'dotenv';
@@ -23,6 +24,7 @@ import { createPaymentsRouter } from './routes/payments';
 import couponsRouter from './routes/coupons';
 import platformRouter from './routes/platform';
 import publicAdsRouter from './routes/publicAds';
+import geoRouter from './routes/geo';
 import { storeIoRoom } from './socketRooms';
 
 dotenv.config();
@@ -114,12 +116,32 @@ app.use('/api/payments', createPaymentsRouter(io));
 // Coupons routes
 app.use('/api/coupons', couponsRouter);
 
+// Geocoding (cashier / delivery helpers; requires auth + store)
+app.use('/api/geo', geoRouter);
+
 // Serve frontend static files in production（放在 /api 之后）
 app.use(express.static(publicPath));
 
 // SPA fallback: serve index.html for non-API routes (Express 5 syntax)
-app.get('/{*splat}', (_req, res) => {
-  res.sendFile(path.join(publicPath, 'index.html'));
+app.get('/{*splat}', (req, res) => {
+  const pathOnly = (req.originalUrl || req.path || '').split('?')[0];
+  if (pathOnly.startsWith('/api')) {
+    res.status(404).json({
+      error: { code: 'NOT_FOUND', message: `No API handler for ${req.method} ${pathOnly}` },
+    });
+    return;
+  }
+  const indexHtml = path.join(publicPath, 'index.html');
+  if (!fs.existsSync(indexHtml)) {
+    res
+      .status(404)
+      .type('text/plain')
+      .send(
+        'Front-end not built: backend/public/index.html is missing. In development use Vite (e.g. :5173); in production run the frontend build into backend/public/.',
+      );
+    return;
+  }
+  res.sendFile(indexHtml);
 });
 
 // Unified error handler (must be after all routes)

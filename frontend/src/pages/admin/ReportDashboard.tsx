@@ -21,6 +21,8 @@ interface DetailedStats {
   takeoutCount: number;
   phoneCount: number;
   phoneRevenue: number;
+  deliveryOrderCount: number;
+  deliveryFeeRevenue: number;
   dineInScanCount: number;
   dineInCashierCount: number;
   takeoutScanCount: number;
@@ -38,6 +40,7 @@ interface DetailedStats {
 
 interface OrderItem {
   _id: string;
+  lineKind?: string;
   quantity: number;
   unitPrice: number;
   itemName: string;
@@ -87,6 +90,7 @@ function getWeekRange(): { start: string; end: string } {
 export default function ReportDashboard() {
   const { t } = useTranslation();
   const { token, hasFeature } = useAuth();
+  const canDeliveryReports = hasFeature('cashier.delivery.page');
 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -120,7 +124,14 @@ export default function ReportDashboard() {
       const res = await apiFetch(`/api/reports/detailed?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) setStats(await res.json());
+      if (res.ok) {
+        const data = (await res.json()) as DetailedStats;
+        setStats({
+          ...data,
+          deliveryOrderCount: data.deliveryOrderCount ?? 0,
+          deliveryFeeRevenue: data.deliveryFeeRevenue ?? 0,
+        });
+      }
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, [token, startDate, endDate]);
@@ -303,6 +314,15 @@ export default function ReportDashboard() {
                 onClick={() => openDetail({ title: '🎟️ Coupon Orders', icon: '🎟️', filters: { hasCoupon: 'true' } })} />
               <StatCard label="Bundle" value={`${stats.bundleOfferCount} 次 · -${euro(stats.bundleOfferDiscount)}`} color="#00897B" icon="🎁"
                 onClick={() => openDetail({ title: '🎁 Bundle Orders', icon: '🎁', filters: { hasBundle: 'true' } })} />
+              {canDeliveryReports ? (
+                <StatCard
+                  label="送餐费合计"
+                  value={`${stats.deliveryOrderCount} 单 · ${euro(stats.deliveryFeeRevenue)}`}
+                  color="#E65100"
+                  icon="🚚"
+                  onClick={() => openDetail({ title: '🚚 送餐订单', icon: '🚚', filters: { type: 'delivery' } })}
+                />
+              ) : null}
               <StatCard label="退单" value={`${stats.refundedCount} 项 · ${euro(stats.refundedAmount)}`} color="#F44336" icon="↩️"
                 onClick={() => openDetail({ title: '↩️ 退单记录', icon: '↩️', filters: { status: 'refunded' } })} />
             </div>
@@ -365,6 +385,24 @@ export default function ReportDashboard() {
                   </div>
                 </div>
               )}
+
+              {canDeliveryReports ? (
+                <div className="card" style={{ padding: 20, cursor: 'pointer', transition: 'box-shadow 0.2s' }}
+                  onClick={() => openDetail({ title: '🚚 送餐订单', icon: '🚚', filters: { type: 'delivery' } })}
+                  onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)')}
+                  onMouseLeave={e => (e.currentTarget.style.boxShadow = '')}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                    <span style={{ fontSize: 24 }}>🚚</span>
+                    <div>
+                      <div style={{ fontSize: 12, color: 'var(--text-light)' }}>送餐订单 / 运费合计</div>
+                      <div style={{ fontSize: 28, fontWeight: 700, color: '#E65100' }}>{stats.deliveryOrderCount}</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#E65100', borderTop: '1px solid var(--border, #eee)', paddingTop: 10 }}>
+                    运费 {euro(stats.deliveryFeeRevenue)}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
 

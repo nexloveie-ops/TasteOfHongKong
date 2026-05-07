@@ -7,6 +7,7 @@ import { useRestaurantConfig } from '../hooks/useRestaurantConfig';
 
 const sidebarItems = [
   { path: 'restaurant', icon: '🏪', key: 'admin.restaurantInfo' },
+  { path: 'delivery-fees', icon: '🚚', key: 'admin.deliveryFeesNav', featureKey: 'cashier.delivery.page' },
   { path: 'categories', icon: '📂', key: 'admin.categories' },
   { path: 'menu-items', icon: '🍽️', key: 'admin.menuItems' },
   { path: 'option-group-templates', icon: '🧩', key: 'admin.optionGroupTemplatesNav', featureKey: 'admin.optionGroupTemplates.page' },

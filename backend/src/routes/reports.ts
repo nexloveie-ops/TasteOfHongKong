@@ -16,6 +16,27 @@ function reportModels() {
   };
 }
 
+/** Non-refunded delivery fee: from lineKind delivery_fee rows, else legacy order.deliveryFeeEuro */
+function deliveryFeeAmountFromOrder(order: Record<string, unknown>): number {
+  const type = order.type as string | undefined;
+  const items = (order.items || []) as Array<{
+    lineKind?: string;
+    refunded?: boolean;
+    unitPrice: number;
+    quantity: number;
+    selectedOptions?: { extraPrice?: number }[];
+  }>;
+  let fromLines = 0;
+  for (const item of items) {
+    if (item.lineKind !== 'delivery_fee' || item.refunded) continue;
+    const opt = (item.selectedOptions || []).reduce((s, o) => s + (o.extraPrice || 0), 0);
+    fromLines += (item.unitPrice + opt) * item.quantity;
+  }
+  if (fromLines > 0) return fromLines;
+  if (type === 'delivery') return Number(order.deliveryFeeEuro) || 0;
+  return 0;
+}
+
 const router = Router();
 
 // GET /api/reports/orders — 报表钻取与订单历史列表共用（需 report:view；勿绑定 admin.orderHistory.page，否则营业报表点击明细会 403 且无数据）
@@ -46,7 +67,7 @@ router.get('/orders', ...requireAuthSameStore, requirePermission('report:view'),
       filter.createdAt = dateFilter;
     }
 
-    if (type && ['dine_in', 'takeout', 'phone'].includes(type as string)) {
+    if (type && ['dine_in', 'takeout', 'phone', 'delivery'].includes(type as string)) {
       filter.type = type;
     }
 
@@ -330,6 +351,8 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
     let dineInCount = 0;
     let takeoutCount = 0;
     let phoneCount = 0;
+    let deliveryOrderCount = 0;
+    let deliveryFeeRevenue = 0;
     let dineInScanCount = 0;
     let dineInCashierCount = 0;
     let dineInRevenue = 0;
@@ -353,6 +376,9 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
       } else if (order.type === 'phone') {
         phoneCount++;
         phoneRevenue += checkout?.totalAmount ?? orderItemTotal;
+      } else if (order.type === 'delivery') {
+        deliveryOrderCount++;
+        deliveryFeeRevenue += deliveryFeeAmountFromOrder(order);
       }
     }
 
@@ -362,6 +388,7 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
     for (const order of allOrders) {
       for (const item of order.items) {
         if ((item as unknown as { refunded?: boolean }).refunded) continue;
+        if ((item as { lineKind?: string }).lineKind === 'delivery_fee') continue;
         const key = item.itemName;
         const optExtra = ((item.selectedOptions || []) as { extraPrice?: number }[]).reduce((s, o) => s + (o.extraPrice || 0), 0);
         const existing = itemMap.get(key);
@@ -411,6 +438,8 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
       takeoutRevenue: Math.round(takeoutRevenue * 100) / 100,
       phoneCount,
       phoneRevenue: Math.round(phoneRevenue * 100) / 100,
+      deliveryOrderCount,
+      deliveryFeeRevenue: Math.round(deliveryFeeRevenue * 100) / 100,
       dineInScanCount,
       dineInCashierCount,
       takeoutScanCount: takeoutCount,

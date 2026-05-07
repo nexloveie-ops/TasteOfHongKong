@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, PageSizes, type Color, type PDFFont } from 'pdf-lib';
 import {
+  DELIVERY_VAT_RATE,
   DRINK_VAT_RATE,
   FOOD_VAT_RATE,
   type MonthSalesBuckets,
@@ -250,16 +251,18 @@ export async function buildVatReportPdfBuffer(
 
   for (const mk of sortedMonths) {
     const b = byMonth.get(mk)!;
+    const dGross = b.deliveryGross ?? 0;
     const food = splitVat(b.foodGross, FOOD_VAT_RATE);
     const drink = splitVat(b.drinkGross, DRINK_VAT_RATE);
-    const monthSale = b.foodGross + b.drinkGross;
-    const monthTax = food.vat + drink.vat;
-    const monthNet = food.net + drink.net;
+    const delivery = splitVat(dGross, DELIVERY_VAT_RATE);
+    const monthSale = b.foodGross + b.drinkGross + dGross;
+    const monthTax = food.vat + drink.vat + delivery.vat;
+    const monthNet = food.net + drink.net + delivery.net;
     reportSale += monthSale;
     reportTax += monthTax;
     reportNet += monthNet;
 
-    needVertical(rowH * 4 + 8);
+    needVertical(rowH * 5 + 8);
 
     cx = x0;
     cellRect(cx, yTop, contentW, rowH, monthFill);
@@ -283,6 +286,25 @@ export async function buildVatReportPdfBuffer(
     for (let i = 0; i < 6; i++) {
       cellRect(cx, yTop, colW[i], rowH);
       cellText(cx, yTop, colW[i], rowH, drinkRow[i], {
+        align: i >= 3 ? 'right' : 'left',
+        shrink: i >= 3,
+      });
+      cx += colW[i];
+    }
+    yTop += rowH;
+
+    cx = x0;
+    const deliveryRow = [
+      '',
+      'Delivery fee VAT',
+      '13.5%',
+      fmtEuroPdf(dGross),
+      fmtEuroPdf(delivery.vat),
+      fmtEuroPdf(delivery.net),
+    ];
+    for (let i = 0; i < 6; i++) {
+      cellRect(cx, yTop, colW[i], rowH);
+      cellText(cx, yTop, colW[i], rowH, deliveryRow[i], {
         align: i >= 3 ? 'right' : 'left',
         shrink: i >= 3,
       });
@@ -322,7 +344,7 @@ export async function buildVatReportPdfBuffer(
   cellText(cx + colW[0] + colW[1] + colW[2] + colW[3] + colW[4], yTop, colW[5], rowH, fmtEuroPdf(reportNet), { align: 'right', bold: true, shrink: true });
   yTop += rowH;
 
-  const footerText = `Period: ${periodSafe} | VAT from VAT-inclusive sales (Food 13.5%, Drink 23%). Drink VAT when category name contains "drink" or matches the beverage category label in the menu.`;
+  const footerText = `Period: ${periodSafe} | VAT-inclusive sales: Food 13.5%, Drink 23%, Delivery fee 13.5% (same as food; adjust if required). Drink = category name contains drink/beverage. Delivery = order lines marked delivery_fee.`;
   page.drawText(pdfSafeText(footerText), {
     x: x0,
     y: margin,

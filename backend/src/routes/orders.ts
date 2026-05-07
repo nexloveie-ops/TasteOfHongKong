@@ -8,12 +8,18 @@ import { mergeTemplateOptionGroupsForItem, type MenuItemLike } from '../utils/op
 import type { LeanOptionGroup } from '../utils/optionGroups';
 import { storeIoRoom } from '../socketRooms';
 import { resolveStoreEffectiveFeatures, FeatureKeys } from '../utils/featureCatalog';
+import {
+  DELIVERY_FEE_RULES_CONFIG_KEY,
+  deliveryFeeForDistance,
+  parseDeliveryFeeRulesJson,
+} from '../utils/deliveryFeeRules';
 
 function orderModels() {
   return getModels() as {
     MenuItem: mongoose.Model<any>;
     Order: mongoose.Model<any>;
     DailyOrderCounter: mongoose.Model<any>;
+    SystemConfig: mongoose.Model<any>;
   };
 }
 
@@ -83,7 +89,8 @@ export function createOrdersRouter(io: SocketIOServer): Router {
     menuItemMap: Map<string, MenuItemForOrder>,
   ) {
     const orderItems: {
-      menuItemId: string;
+      menuItemId?: string;
+      lineKind?: string;
       quantity: number;
       unitPrice: number;
       itemName: string;
@@ -101,6 +108,7 @@ export function createOrdersRouter(io: SocketIOServer): Router {
 
       orderItems.push({
         menuItemId: item.menuItemId,
+        lineKind: 'menu',
         quantity: item.quantity,
         unitPrice: menuItem.price,
         itemName,
@@ -112,10 +120,22 @@ export function createOrdersRouter(io: SocketIOServer): Router {
     return orderItems;
   }
 
+  function appendDeliveryFeeLineToOrderItems(orderItems: Record<string, unknown>[], orderType: string, feeEuro: number) {
+    if (orderType !== 'delivery' || !(feeEuro > 0)) return;
+    orderItems.push({
+      lineKind: 'delivery_fee',
+      quantity: 1,
+      unitPrice: feeEuro,
+      itemName: '送餐费',
+      itemNameEn: 'Delivery fee',
+      selectedOptions: [],
+    });
+  }
+
   // POST /api/orders — Create a new order
   router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { MenuItem, Order, DailyOrderCounter } = orderModels();
+      const { MenuItem, Order, DailyOrderCounter, SystemConfig } = orderModels();
       const {
         type,
         tableNumber,
@@ -127,6 +147,7 @@ export function createOrdersRouter(io: SocketIOServer): Router {
         deliveryAddress,
         postalCode,
         deliverySource,
+        deliveryDistanceKm: rawDeliveryDistanceKm,
       } = req.body;
 
       // Customer self-order channels follow business hour restrictions.
@@ -251,6 +272,38 @@ export function createOrdersRouter(io: SocketIOServer): Router {
         orderData.postalCode = String(postalCode || '').trim();
         orderData.deliverySource = String(deliverySource || '').trim();
         orderData.deliveryStage = 'new';
+
+        const feeRow = await SystemConfig.findOne({ storeId: req.storeId, key: DELIVERY_FEE_RULES_CONFIG_KEY }).lean();
+        const deliveryRules = parseDeliveryFeeRulesJson((feeRow as { value?: string } | null)?.value);
+
+        let dist: number | undefined;
+        const rawD = rawDeliveryDistanceKm;
+        if (typeof rawD === 'number' && Number.isFinite(rawD) && rawD >= 0) {
+          dist = rawD;
+        } else if (rawD != null && rawD !== '' && typeof rawD === 'string') {
+          const p = parseFloat(String(rawD).trim());
+          if (Number.isFinite(p) && p >= 0) dist = p;
+        }
+
+        let fee = 0;
+        if (deliveryRules.length > 0) {
+          const src = String(deliverySource || '').trim();
+          if (src === 'phone') {
+            if (dist === undefined) {
+              throw createAppError(
+                'VALIDATION_ERROR',
+                '已配置距离阶梯送餐费：收银员下单需提供 deliveryDistanceKm（公里，可由邮编解析）',
+              );
+            }
+            fee = deliveryFeeForDistance(deliveryRules, dist);
+          } else {
+            fee = dist !== undefined ? deliveryFeeForDistance(deliveryRules, dist) : 0;
+          }
+        }
+
+        if (dist !== undefined) orderData.deliveryDistanceKm = dist;
+        orderData.deliveryFeeEuro = fee;
+        appendDeliveryFeeLineToOrderItems(orderItems as Record<string, unknown>[], type, fee);
       }
 
       if (type === 'phone') {
@@ -605,6 +658,11 @@ export function createOrdersRouter(io: SocketIOServer): Router {
 
       // Build updated order items with price/name snapshots
       const orderItems = await buildOrderItemsPayload(req.storeId!, items, menuItemMap);
+      appendDeliveryFeeLineToOrderItems(
+        orderItems as Record<string, unknown>[],
+        order.type,
+        Number(order.deliveryFeeEuro) || 0,
+      );
 
       const updated = await Order.findOneAndUpdate(
         { _id: id, storeId: req.storeId },

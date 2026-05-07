@@ -24,7 +24,9 @@ interface OrderRow {
   postalCode?: string;
   deliverySource?: 'phone' | 'qr';
   deliveryStage?: DeliveryStage;
-  items: { _id: string; quantity: number; unitPrice: number; itemName: string; selectedOptions?: { extraPrice?: number }[] }[];
+  deliveryDistanceKm?: number;
+  deliveryFeeEuro?: number;
+  items: { _id: string; quantity: number; unitPrice: number; itemName: string; lineKind?: string; selectedOptions?: { extraPrice?: number }[] }[];
   appliedBundles?: { discount: number }[];
   createdAt: string;
 }
@@ -52,7 +54,10 @@ function calcTotal(order: OrderRow): number {
     return sum + (item.unitPrice + extra) * item.quantity;
   }, 0);
   const disc = (order.appliedBundles || []).reduce((s, b) => s + b.discount, 0);
-  return itemTotal - disc;
+  const hasFeeLine = order.items.some((i) => i.lineKind === 'delivery_fee');
+  const deliveryExtra =
+    order.type === 'delivery' && !hasFeeLine ? (Number(order.deliveryFeeEuro) || 0) : 0;
+  return itemTotal - disc + deliveryExtra;
 }
 
 export default function UnifiedOrderCenter() {
@@ -306,7 +311,8 @@ export default function UnifiedOrderCenter() {
       <h2 style="margin:0 0 6px;">送餐备餐单</h2>
       <div style="font-size:12px;color:#555;margin-bottom:6px;">#${order.dailyOrderNumber ?? '--'} · ${now.toLocaleString()}</div>
       <div style="font-size:12px;margin-bottom:6px;">${order.customerName || ''} · ${order.customerPhone || ''}</div>
-      <div style="font-size:12px;margin-bottom:8px;">${order.deliveryAddress || ''} ${order.postalCode || ''}</div>
+      <div style="font-size:11px;color:#666;margin-bottom:2px;">送餐地址（客人）/ Guest delivery</div>
+      <div style="font-size:12px;margin-bottom:8px;white-space:pre-wrap;word-break:break-word;">${(order.deliveryAddress || '').replace(/</g, '&lt;')}<br/>送餐邮编 / Postcode: ${(order.postalCode || '').replace(/</g, '&lt;')}</div>
       <hr/>
       ${rows}
       <hr/>
@@ -315,14 +321,28 @@ export default function UnifiedOrderCenter() {
     printViaIframe(html, 1);
   }, []);
 
-  const printOrderTicket = useCallback((order: OrderRow) => {
-    const receiptOrderType = order.type === 'delivery' ? 'phone' : order.type;
-    const receiptItems = order.items.map((item) => ({
+  const printOrderTicket = useCallback(async (order: OrderRow) => {
+    let src = order;
+    if (order.type === 'delivery') {
+      try {
+        const res = await apiFetch(`/api/orders/${order._id}`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          const full = await res.json() as OrderRow;
+          src = { ...order, ...full };
+        }
+      } catch {
+        /* keep list row */
+      }
+    }
+    const receiptOrderType = src.type;
+    const receiptItems = src.items.map((item) => ({
       _id: item._id,
-      menuItemId: item._id,
+      ...(item.lineKind === 'delivery_fee' ? {} : { menuItemId: item._id }),
+      lineKind: item.lineKind,
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       itemName: item.itemName,
+      itemNameEn: (item as { itemNameEn?: string }).itemNameEn,
       selectedOptions: (item.selectedOptions || []).map((opt) => ({
         groupName: '',
         choiceName: '',
@@ -330,32 +350,35 @@ export default function UnifiedOrderCenter() {
       })),
     }));
     const receiptData = {
-      checkoutId: order._id,
+      checkoutId: src._id,
       type: 'seat' as const,
-      totalAmount: calcTotal(order),
-      paymentMethod: order.status === 'paid_online' ? 'online' as const : 'cash' as const,
+      totalAmount: calcTotal(src),
+      paymentMethod: src.status === 'paid_online' ? 'online' as const : 'cash' as const,
       checkedOutAt: new Date().toISOString(),
-      tableNumber: order.tableNumber,
+      tableNumber: src.tableNumber,
       orders: [{
-        _id: order._id,
+        _id: src._id,
         type: receiptOrderType,
-        seatNumber: order.seatNumber,
-        dailyOrderNumber: order.dailyOrderNumber,
-        status: order.status,
+        seatNumber: src.seatNumber,
+        dailyOrderNumber: src.dailyOrderNumber,
+        status: src.status,
         items: receiptItems,
-        customerName: order.customerName,
-        customerPhone: order.customerPhone,
+        customerName: src.customerName,
+        customerPhone: src.customerPhone,
+        deliveryAddress: src.deliveryAddress,
+        postalCode: src.postalCode,
+        deliveryFeeEuro: src.deliveryFeeEuro,
       }],
     };
     const html = buildReceiptHTML(receiptData, config);
     printViaIframe(html, 1);
-  }, [config]);
+  }, [config, token]);
 
   /** 堂食顾客已在线付款：打印出餐小票 → 后端记 completed + 在线 Checkout → 本单从订单中心移除（流程终结） */
   const completeDineInOnlinePaid = useCallback(async (order: OrderRow) => {
     setBusyId(order._id);
     try {
-      printOrderTicket(order);
+      void printOrderTicket(order);
       const res = await apiFetch(`/api/orders/dine-in/${order._id}/complete-online-paid`, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}` },
@@ -445,6 +468,8 @@ export default function UnifiedOrderCenter() {
     guestPhone: isEn ? 'Guest tel.' : '客人电话',
     address: isEn ? 'Address' : '地址',
     postalCode: isEn ? 'Postal Code' : '邮编',
+    guestDeliveryAddress: isEn ? 'Delivery address (guest)' : '送餐地址（客人填写）',
+    guestDeliveryPostcode: isEn ? 'Postcode (guest)' : '送餐邮编（客人填写）',
     items: isEn ? 'Items' : '菜品',
     clickToView: isEn ? 'Click to view details' : '点击查看详情',
     orderNo: isEn ? 'Order no.' : '订单号',
@@ -558,7 +583,7 @@ export default function UnifiedOrderCenter() {
                                   style={{ fontSize: 10, padding: '1px 6px', lineHeight: 1.1 }}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    printOrderTicket(o);
+                                    void printOrderTicket(o);
                                   }}
                                   title={L.printReceipt}
                                 >
@@ -614,7 +639,7 @@ export default function UnifiedOrderCenter() {
                         style={{ fontSize: 11, padding: '2px 8px', lineHeight: 1.2 }}
                         onClick={(e) => {
                           e.stopPropagation();
-                          printOrderTicket(o);
+                          void printOrderTicket(o);
                         }}
                         title={L.printReceipt}
                       >
@@ -800,9 +825,21 @@ export default function UnifiedOrderCenter() {
               <div style={{ border: '1px solid #eee', borderRadius: 10, padding: 10, marginBottom: 10, lineHeight: 1.6 }}>
                 <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>配送信息</div>
                 <div style={{ fontSize: 13 }}>{L.customer}: {detailModalOrder.customerName || '-'} · {detailModalOrder.customerPhone || '-'}</div>
-                <div style={{ fontSize: 13 }}>{L.address}: {detailModalOrder.deliveryAddress || '-'}</div>
-                <div style={{ fontSize: 13 }}>{L.postalCode}: {detailModalOrder.postalCode || '-'}</div>
+                <div style={{ fontSize: 12, color: '#888', marginBottom: 2 }}>{L.guestDeliveryAddress}</div>
+                <div style={{ fontSize: 13 }}>{detailModalOrder.deliveryAddress || '-'}</div>
+                <div style={{ fontSize: 12, color: '#888', marginTop: 6, marginBottom: 2 }}>{L.guestDeliveryPostcode}</div>
+                <div style={{ fontSize: 13 }}>{detailModalOrder.postalCode || '-'}</div>
                 <div style={{ fontSize: 13 }}>{L.deliverySource}: {deliverySourceLabel(detailModalOrder.deliverySource)} · {L.stage}: {deliveryStageLabel(detailModalOrder.deliveryStage)}</div>
+                {detailModalOrder.deliveryDistanceKm != null ? (
+                  <div style={{ fontSize: 12, marginTop: 6, color: '#555' }}>
+                    {isEn ? 'Straight-line km' : '直线距离'}: {detailModalOrder.deliveryDistanceKm} km
+                  </div>
+                ) : null}
+                {(detailModalOrder.deliveryFeeEuro ?? 0) > 0 ? (
+                  <div style={{ fontSize: 13, marginTop: 6, fontWeight: 600 }}>
+                    {isEn ? 'Delivery fee' : '送餐费'}: €{Number(detailModalOrder.deliveryFeeEuro).toFixed(2)}
+                  </div>
+                ) : null}
               </div>
             ) : null}
             <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{L.items}</div>

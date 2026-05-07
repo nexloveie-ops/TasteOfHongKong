@@ -7,7 +7,8 @@ import { apiFetch } from '../../api/client';
 
 interface OrderItem {
   _id: string;
-  menuItemId: string;
+  menuItemId?: string;
+  lineKind?: string;
   itemName: string;
   itemNameEn?: string;
   quantity: number;
@@ -37,6 +38,9 @@ interface SearchResult {
     status?: string;
     customerName?: string;
     customerPhone?: string;
+    deliveryAddress?: string;
+    postalCode?: string;
+    deliveryFeeEuro?: number;
     appliedBundles?: AppliedBundleLite[];
     items: OrderItem[];
   }[];
@@ -107,6 +111,9 @@ export default function ReprintReceipt() {
         status: 'checked_out',
         customerName: o.customerName,
         customerPhone: o.customerPhone,
+        deliveryAddress: o.deliveryAddress,
+        postalCode: o.postalCode,
+        deliveryFeeEuro: o.deliveryFeeEuro,
         items: o.items,
       })),
     };

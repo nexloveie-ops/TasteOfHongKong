@@ -34,6 +34,7 @@ import ReportDashboard from './pages/admin/ReportDashboard';
 import UserManager from './pages/admin/UserManager';
 import SystemConfig from './pages/admin/SystemConfig';
 import RestaurantInfo from './pages/admin/RestaurantInfo';
+import DeliveryFeeSettings from './pages/admin/DeliveryFeeSettings';
 import OfferManager from './pages/admin/OfferManager';
 import CouponManager from './pages/admin/CouponManager';
 import BusinessHours from './pages/admin/BusinessHours';
@@ -121,6 +122,7 @@ export default function App() {
             <Route path="admin" element={<RequireOwner><AdminLayout /></RequireOwner>}>
               <Route index element={<CategoryManager />} />
               <Route path="restaurant" element={<RestaurantInfo />} />
+              <Route path="delivery-fees" element={<RequireFeature featureKey="cashier.delivery.page"><DeliveryFeeSettings /></RequireFeature>} />
               <Route path="categories" element={<CategoryManager />} />
               <Route path="menu-items" element={<MenuItemManager />} />
               <Route path="option-group-templates" element={<RequireFeature featureKey="admin.optionGroupTemplates.page"><OptionGroupTemplates /></RequireFeature>} />

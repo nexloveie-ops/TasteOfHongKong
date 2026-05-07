@@ -139,7 +139,12 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
       }, 0);
       const bundleDiscount = ((order as unknown as { appliedBundles?: { discount: number }[] }).appliedBundles || [])
         .reduce((s: number, b: { discount: number }) => s + b.discount, 0);
-      const autoTotal = itemTotal - bundleDiscount;
+      const hasDeliveryFeeLine = (order.items as { lineKind?: string }[]).some((i) => i.lineKind === 'delivery_fee');
+      const deliveryLegacy =
+        order.type === 'delivery' && !hasDeliveryFeeLine
+          ? Number((order as unknown as { deliveryFeeEuro?: number }).deliveryFeeEuro) || 0
+          : 0;
+      const autoTotal = itemTotal - bundleDiscount + deliveryLegacy;
       const totalAmount = (totalAmountOverride != null && typeof totalAmountOverride === 'number' && totalAmountOverride >= 0)
         ? totalAmountOverride
         : autoTotal;
@@ -247,6 +252,10 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
           items: o.items,
           customerName: (o as { customerName?: string }).customerName,
           customerPhone: (o as { customerPhone?: string }).customerPhone,
+          deliveryAddress: (o as { deliveryAddress?: string }).deliveryAddress,
+          postalCode: (o as { postalCode?: string }).postalCode,
+          deliveryFeeEuro: (o as { deliveryFeeEuro?: number }).deliveryFeeEuro,
+          deliveryDistanceKm: (o as { deliveryDistanceKm?: number }).deliveryDistanceKm,
         })),
       });
     } catch (err) {
@@ -324,6 +333,10 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
             status: o.status,
             customerName: (o as { customerName?: string }).customerName,
             customerPhone: (o as { customerPhone?: string }).customerPhone,
+            deliveryAddress: (o as { deliveryAddress?: string }).deliveryAddress,
+            postalCode: (o as { postalCode?: string }).postalCode,
+            deliveryFeeEuro: (o as { deliveryFeeEuro?: number }).deliveryFeeEuro,
+            deliveryDistanceKm: (o as { deliveryDistanceKm?: number }).deliveryDistanceKm,
             appliedBundles: ((o as Record<string, unknown>).appliedBundles as unknown[]) ?? [],
             items: o.items,
           })),

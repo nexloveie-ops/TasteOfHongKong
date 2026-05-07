@@ -7,6 +7,7 @@ export interface LineLikeForBundle {
   quantity: number;
   unitPrice: number;
   selectedOptions?: { extraPrice?: number }[];
+  lineKind?: string;
 }
 
 export function lineGrossEuro(line: LineLikeForBundle): number {
@@ -20,9 +21,17 @@ export function bundleAdjustedLineTotals(
   appliedBundles?: AppliedBundleLite[] | null,
 ): Map<string, number> {
   const bundleDiscount = (appliedBundles || []).reduce((s, b) => s + (b.discount ?? 0), 0);
-  const rows = items.map((item) => ({ id: item._id, gross: lineGrossEuro(item) }));
-  const sumGross = rows.reduce((s, r) => s + r.gross, 0);
   const out = new Map<string, number>();
+
+  const ineligible = items.filter((i) => i.lineKind === 'delivery_fee');
+  const eligible = items.filter((i) => i.lineKind !== 'delivery_fee');
+
+  for (const item of ineligible) {
+    out.set(item._id, Math.round(lineGrossEuro(item) * 100) / 100);
+  }
+
+  const rows = eligible.map((item) => ({ id: item._id, gross: lineGrossEuro(item) }));
+  const sumGross = rows.reduce((s, r) => s + r.gross, 0);
 
   if (rows.length === 0) return out;
   if (sumGross <= 0 || bundleDiscount <= 0) {

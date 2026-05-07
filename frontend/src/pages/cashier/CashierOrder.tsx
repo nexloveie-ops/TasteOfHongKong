@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import OptionSelectModal, { type OptionGroup } from '../../components/customer/OptionSelectModal';
@@ -6,6 +6,12 @@ import type { CartItemOption } from '../../context/CartContext';
 import ReceiptPrint from '../../components/cashier/ReceiptPrint';
 import { buildReceiptHTML, printViaIframe } from '../../components/cashier/ReceiptPrint';
 import { matchBundles, calcBundleTotal, type OfferData, type MatchedBundle } from '../../utils/bundleMatcher';
+import {
+  DELIVERY_FEE_RULES_CONFIG_KEY,
+  deliveryFeeForDistance,
+  parseDeliveryFeeRulesJson,
+  type DeliveryFeeTier,
+} from '../../utils/deliveryFeeRules';
 import { apiFetch } from '../../api/client';
 
 interface Translation { locale: string; name: string; description?: string; }
@@ -50,6 +56,11 @@ export default function CashierOrder() {
   const [deliveryCustomerPhone, setDeliveryCustomerPhone] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [deliveryPostalCode, setDeliveryPostalCode] = useState('');
+  const [deliveryFeeRules, setDeliveryFeeRules] = useState<DeliveryFeeTier[]>([]);
+  const [deliveryGeoLoading, setDeliveryGeoLoading] = useState(false);
+  const [deliveryDistanceKm, setDeliveryDistanceKm] = useState<number | null>(null);
+  const [deliveryGeoError, setDeliveryGeoError] = useState('');
+  const eircodeReqRef = useRef(0);
   const [phoneCustomerPhone, setPhoneCustomerPhone] = useState('');
   const [error, setError] = useState('');
   const [optionModal, setOptionModal] = useState<MenuItem | null>(null);
@@ -90,6 +101,69 @@ export default function CashierOrder() {
   }, [lang]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    if (!token || !canDelivery) {
+      setDeliveryFeeRules([]);
+      return;
+    }
+    let cancelled = false;
+    void apiFetch('/api/admin/config', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : {}))
+      .then((d: Record<string, string>) => {
+        if (cancelled) return;
+        const raw = d[DELIVERY_FEE_RULES_CONFIG_KEY];
+        setDeliveryFeeRules(typeof raw === 'string' ? parseDeliveryFeeRulesJson(raw) : []);
+      })
+      .catch(() => {
+        if (!cancelled) setDeliveryFeeRules([]);
+      });
+    return () => { cancelled = true; };
+  }, [token, canDelivery]);
+
+  const lookupEircode = useCallback(async (raw: string) => {
+    const norm = raw.toUpperCase().replace(/[\s-]/g, '');
+    if (norm.length !== 7 || !/^[A-Z][0-9][0-9W][0-9A-Z]{4}$/.test(norm)) {
+      setDeliveryDistanceKm(null);
+      setDeliveryGeoError('');
+      setDeliveryGeoLoading(false);
+      return;
+    }
+    const id = ++eircodeReqRef.current;
+    setDeliveryGeoLoading(true);
+    setDeliveryGeoError('');
+    try {
+      const codeParam = `${norm.slice(0, 3)} ${norm.slice(3)}`;
+      const res = await apiFetch(`/api/geo/eircode?code=${encodeURIComponent(codeParam)}`);
+      const data = (await res.json().catch(() => null)) as { formattedAddress?: string; distanceKm?: number; error?: { message?: string } } | null;
+      if (id !== eircodeReqRef.current) return;
+      if (!res.ok) {
+        const msg = data?.error?.message || `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+      setDeliveryAddress(data?.formattedAddress || '');
+      setDeliveryDistanceKm(typeof data?.distanceKm === 'number' ? data.distanceKm : null);
+    } catch (e) {
+      if (id !== eircodeReqRef.current) return;
+      setDeliveryDistanceKm(null);
+      setDeliveryGeoError(e instanceof Error ? e.message : '解析失败');
+    } finally {
+      if (id === eircodeReqRef.current) setDeliveryGeoLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (orderType !== 'delivery' || !canDelivery) {
+      setDeliveryDistanceKm(null);
+      setDeliveryGeoError('');
+      setDeliveryGeoLoading(false);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      void lookupEircode(deliveryPostalCode);
+    }, 500);
+    return () => window.clearTimeout(t);
+  }, [deliveryPostalCode, orderType, canDelivery, lookupEircode]);
 
   const getName = (translations: Translation[]) => {
     const found = translations.find(t2 => t2.locale === lang) || translations[0];
@@ -181,6 +255,14 @@ export default function CashierOrder() {
 
   const finalTotal = bundleTotals.finalTotal;
 
+  const deliveryFeeAmount = useMemo(() => {
+    if (orderType !== 'delivery' || deliveryDistanceKm == null) return 0;
+    return deliveryFeeForDistance(deliveryFeeRules, deliveryDistanceKm);
+  }, [orderType, deliveryDistanceKm, deliveryFeeRules]);
+
+  const grandTotal = finalTotal + (orderType === 'delivery' ? deliveryFeeAmount : 0);
+  const displayTotal = orderType === 'delivery' ? grandTotal : finalTotal;
+
   // Open payment modal (no API call yet) — or create phone order directly
   const handleOpenPayment = () => {
     if (order.length === 0) return;
@@ -265,7 +347,11 @@ export default function CashierOrder() {
 
   const handleDeliveryPhoneOrder = async () => {
     if (!deliveryCustomerName.trim() || !deliveryCustomerPhone.trim() || !deliveryAddress.trim() || !deliveryPostalCode.trim()) {
-      setError('送餐订单需填写姓名、电话、地址、邮编');
+      setError('送餐订单需填写姓名、电话、邮编、地址');
+      return;
+    }
+    if (deliveryFeeRules.length > 0 && deliveryDistanceKm == null) {
+      setError(t('cashier.deliveryFeeRulesNeedDistance'));
       return;
     }
     setPaying(true);
@@ -283,6 +369,9 @@ export default function CashierOrder() {
       if (matchedBundles.length > 0) {
         orderBody.appliedBundles = matchedBundles.map(b => ({ offerId: b.offer._id, name: b.offer.name, nameEn: b.offer.nameEn, discount: b.savings }));
       }
+      if (deliveryDistanceKm != null) {
+        orderBody.deliveryDistanceKm = deliveryDistanceKm;
+      }
       const orderRes = await apiFetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -293,10 +382,18 @@ export default function CashierOrder() {
       try {
         const configRes = await apiFetch('/api/admin/config');
         const cfg = configRes.ok ? await configRes.json() : {};
+        const rawItems = orderData.items as Array<{
+          unitPrice: number; quantity: number; selectedOptions?: { extraPrice?: number }[];
+        }>;
+        const itemGross = rawItems.reduce((s, i) => {
+          const ox = (i.selectedOptions || []).reduce((a, o) => a + (o.extraPrice || 0), 0);
+          return s + (i.unitPrice + ox) * i.quantity;
+        }, 0);
+        const disc = (orderData.appliedBundles as Array<{ discount: number }> | undefined)?.reduce((a, b) => a + b.discount, 0) ?? 0;
         const receiptData = {
           checkoutId: orderData._id,
           type: 'seat' as const,
-          totalAmount: finalTotal,
+          totalAmount: itemGross - disc,
           paymentMethod: 'cash' as const,
           checkedOutAt: new Date().toISOString(),
           orders: [{
@@ -311,6 +408,12 @@ export default function CashierOrder() {
             customerPhone: (typeof orderData.customerPhone === 'string' && orderData.customerPhone.trim())
               ? orderData.customerPhone.trim()
               : deliveryCustomerPhone.trim(),
+            deliveryAddress: (typeof orderData.deliveryAddress === 'string' && orderData.deliveryAddress.trim())
+              ? orderData.deliveryAddress.trim()
+              : deliveryAddress.trim(),
+            postalCode: (typeof orderData.postalCode === 'string' && orderData.postalCode.trim())
+              ? orderData.postalCode.trim()
+              : deliveryPostalCode.trim(),
           }],
         };
         const html = buildReceiptHTML(receiptData, cfg, undefined, undefined,
@@ -522,8 +625,33 @@ export default function CashierOrder() {
           <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', display: 'grid', gap: 6 }}>
             <input className="input" placeholder="客人姓名" value={deliveryCustomerName} onChange={e => setDeliveryCustomerName(e.target.value)} />
             <input className="input" placeholder="电话" value={deliveryCustomerPhone} onChange={e => setDeliveryCustomerPhone(e.target.value)} />
-            <input className="input" placeholder="地址" value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} />
-            <input className="input" placeholder="邮编" value={deliveryPostalCode} onChange={e => setDeliveryPostalCode(e.target.value)} />
+            <input
+              className="input"
+              placeholder="爱尔兰 Eircode（7 位，如 D02 XY43）"
+              value={deliveryPostalCode}
+              onChange={e => setDeliveryPostalCode(e.target.value)}
+              autoCapitalize="characters"
+            />
+            <input className="input" placeholder="地址（填写邮编后可自动填充）" value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} />
+            {deliveryGeoLoading ? (
+              <div style={{ fontSize: 11, color: 'var(--text-light)' }}>正在解析邮编…</div>
+            ) : null}
+            {deliveryGeoError ? (
+              <div style={{ fontSize: 11, color: 'var(--red-primary)' }}>{deliveryGeoError}</div>
+            ) : null}
+            {deliveryDistanceKm != null && !deliveryGeoLoading ? (
+              <div style={{ fontSize: 12, color: '#1565c0' }}>
+                距店铺直线约 <strong>{deliveryDistanceKm}</strong> km（大圆距离，非行车路线）
+              </div>
+            ) : null}
+            {deliveryFeeRules.length > 0 && deliveryDistanceKm != null ? (
+              <div style={{ fontSize: 12, color: '#1565c0' }}>
+                {t('cashier.deliveryFee')}: <strong>€{deliveryFeeAmount.toFixed(2)}</strong>
+              </div>
+            ) : null}
+            {deliveryFeeRules.length > 0 && !deliveryGeoLoading && deliveryPostalCode.trim().length >= 5 && deliveryDistanceKm == null && !deliveryGeoError ? (
+              <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{t('cashier.deliveryFeeRulesNeedDistance')}</div>
+            ) : null}
           </div>
         )}
 
@@ -594,7 +722,7 @@ export default function CashierOrder() {
               {bundleTotals.bundleDiscount > 0 && (
                 <div style={{ fontSize: 12, color: 'var(--text-light)', textDecoration: 'line-through' }}>€{totalAmount.toFixed(2)}</div>
               )}
-              <span style={{ fontSize: 22, fontWeight: 700, color: 'var(--red-primary)', fontFamily: "'Noto Serif SC', serif" }}>€{finalTotal.toFixed(2)}</span>
+              <span style={{ fontSize: 22, fontWeight: 700, color: 'var(--red-primary)', fontFamily: "'Noto Serif SC', serif" }}>€{displayTotal.toFixed(2)}</span>
             </div>
           </div>
           <button className="btn btn-primary" onClick={handleOpenPayment} disabled={order.length === 0} style={{ width: '100%', fontSize: 15, padding: '12px 0', letterSpacing: 1 }}>

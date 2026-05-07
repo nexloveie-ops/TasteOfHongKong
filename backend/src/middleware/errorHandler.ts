@@ -21,6 +21,7 @@ const STATUS_CODE_MAP: Record<string, number> = {
   PAYMENT_AMOUNT_MISMATCH: 400,
   INVALID_FILE_FORMAT: 400,
   INTERNAL_ERROR: 500,
+  SERVICE_UNAVAILABLE: 503,
 };
 
 export function createAppError(

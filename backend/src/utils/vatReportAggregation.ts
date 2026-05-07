@@ -4,8 +4,10 @@ import { bundleAdjustedLineTotals, lineGrossEuro, type LineLikeForBundle } from 
 
 export const FOOD_VAT_RATE = 0.135;
 export const DRINK_VAT_RATE = 0.23;
+/** Delivery charges treated same as food rate for VAT worksheet (adjust if your accountant specifies otherwise). */
+export const DELIVERY_VAT_RATE = FOOD_VAT_RATE;
 
-export type MonthSalesBuckets = { foodGross: number; drinkGross: number };
+export type MonthSalesBuckets = { foodGross: number; drinkGross: number; deliveryGross: number };
 
 export function irelandMonthKey(d: Date): string {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Dublin', year: 'numeric', month: '2-digit' }).formatToParts(d);
@@ -63,12 +65,14 @@ function itemToLineLike(item: {
   quantity: number;
   unitPrice: number;
   selectedOptions?: { extraPrice?: number }[];
+  lineKind?: string;
 }): LineLikeForBundle {
   return {
     _id: String(item._id),
     quantity: item.quantity,
     unitPrice: item.unitPrice,
     selectedOptions: item.selectedOptions as { extraPrice?: number }[] | undefined,
+    lineKind: item.lineKind,
   };
 }
 
@@ -139,10 +143,11 @@ export async function aggregateVatSalesByMonth(
 
   const orderById = new Map((orders as any[]).map((o) => [String(o._id), o]));
 
-  function bump(monthKey: string, drink: boolean, delta: number) {
-    if (!byMonth.has(monthKey)) byMonth.set(monthKey, { foodGross: 0, drinkGross: 0 });
+  function bump(monthKey: string, bucket: 'food' | 'drink' | 'delivery', delta: number) {
+    if (!byMonth.has(monthKey)) byMonth.set(monthKey, { foodGross: 0, drinkGross: 0, deliveryGross: 0 });
     const b = byMonth.get(monthKey)!;
-    if (drink) b.drinkGross += delta;
+    if (bucket === 'drink') b.drinkGross += delta;
+    else if (bucket === 'delivery') b.deliveryGross += delta;
     else b.foodGross += delta;
   }
 
@@ -176,6 +181,10 @@ export async function aggregateVatSalesByMonth(
         const amt = Math.round(raw * scale * 100) / 100;
         const signed = (item as { refunded?: boolean }).refunded ? -amt : amt;
         if (Math.abs(signed) < 1e-9) continue;
+        if ((item as { lineKind?: string }).lineKind === 'delivery_fee') {
+          bump(monthKey, 'delivery', signed);
+          continue;
+        }
         const mid = (item as { menuItemId?: unknown }).menuItemId?.toString();
         const mi = mid ? menuMap.get(mid) : undefined;
         const cat =
@@ -183,7 +192,7 @@ export async function aggregateVatSalesByMonth(
             ? catMap.get((mi as { categoryId: { toString(): string } }).categoryId.toString())
             : undefined;
         const drink = isDrinkCategory(cat);
-        bump(monthKey, drink, signed);
+        bump(monthKey, drink ? 'drink' : 'food', signed);
       }
     }
   }

@@ -1,7 +1,9 @@
 import mongoose from 'mongoose';
 
 const OrderItemSubdocSchema = new mongoose.Schema({
-  menuItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'MenuItem', required: true },
+  /** menu lines reference MenuItem; delivery_fee lines omit menuItemId */
+  menuItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'MenuItem', required: false },
+  lineKind: { type: String, enum: ['menu', 'delivery_fee'], default: 'menu' },
   quantity: { type: Number, required: true, min: 1 },
   unitPrice: { type: Number, required: true },
   itemName: { type: String, required: true },
@@ -35,6 +37,8 @@ const OrderSchema = new mongoose.Schema({
   postalCode: { type: String, default: '' },
   deliverySource: { type: String, enum: ['phone', 'qr'] },
   deliveryStage: { type: String, enum: ['new', 'accepted', 'picked_up_by_driver', 'out_for_delivery'], default: 'new' },
+  deliveryDistanceKm: { type: Number },
+  deliveryFeeEuro: { type: Number, default: 0 },
   deliveryPaidByDriver: { type: Boolean, default: false },
   status: { type: String, enum: ['pending', 'paid_online', 'checked_out', 'completed', 'refunded', 'checked_out-hide', 'completed-hide'], default: 'pending' },
   items: [OrderItemSubdocSchema],
