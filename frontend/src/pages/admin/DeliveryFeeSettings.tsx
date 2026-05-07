@@ -18,7 +18,7 @@ function nextId() {
 }
 
 function tiersToRows(tiers: DeliveryFeeTier[]): Row[] {
-  return tiers.map((t, i) => ({
+  return tiers.map((t) => ({
     localId: nextId(),
     uptoKm: t.uptoKm == null ? '' : String(t.uptoKm),
     feeEuro: String(t.feeEuro),
