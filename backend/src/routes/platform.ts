@@ -20,6 +20,7 @@ import {
   applyPostOrderAdAutoDeactivateFromCaps,
 } from '../utils/postOrderAdSchedule';
 import { getSlidesFromDoc, parseSlidesFromBody, requireNonEmptySlides } from '../utils/postOrderAdSlides';
+import { FeatureKeys } from '../utils/featureCatalog';
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -96,6 +97,92 @@ const ADS_FEATURE_KEYS = new Set<string>([
   'customer.postOrderAds.view.action',
 ]);
 
+const DEFAULT_PLAN_PRESETS: Array<{ name: string; code: string; description: string; features: string[] }> = [
+  {
+    name: 'Free Base',
+    code: 'free-base',
+    description: '基础版：基础收银与报表',
+    features: [],
+  },
+  {
+    name: 'Pro Base',
+    code: 'pro-base',
+    description: '专业版：含送餐、优惠、订单历史、VAT 导出等',
+    features: [
+      FeatureKeys.CashierDeliveryPage,
+      FeatureKeys.AdminOptionTemplatePage,
+      FeatureKeys.AdminOffersPage,
+      FeatureKeys.AdminCouponsPage,
+      FeatureKeys.AdminOrderHistoryPage,
+      FeatureKeys.AdminReportsVatExportAction,
+      FeatureKeys.AdminInventoryRestoreTimeAction,
+    ],
+  },
+  {
+    name: 'Enterprise Base',
+    code: 'enterprise-base',
+    description: '企业版：默认不启用广告能力',
+    features: [
+      FeatureKeys.CashierDeliveryPage,
+      FeatureKeys.AdminOptionTemplatePage,
+      FeatureKeys.AdminOffersPage,
+      FeatureKeys.AdminCouponsPage,
+      FeatureKeys.AdminOrderHistoryPage,
+      FeatureKeys.AdminReportsVatExportAction,
+      FeatureKeys.AdminInventoryRestoreTimeAction,
+    ],
+  },
+];
+
+const DEFAULT_ADDON_PRESETS: Array<{ name: string; code: string; description: string; features: string[] }> = [
+  {
+    name: 'VAT Export',
+    code: 'vat-export',
+    description: '开启 VAT 报表导出',
+    features: [FeatureKeys.AdminReportsVatExportAction],
+  },
+  {
+    name: 'Post-order Ads',
+    code: 'post-order-ads',
+    description: '开启下单后广告管理与顾客侧展示',
+    features: [FeatureKeys.PlatformPostOrderAdsManageAction, FeatureKeys.CustomerPostOrderAdsViewAction],
+  },
+];
+
+async function ensureDefaultFeatureProducts(): Promise<void> {
+  const { FeaturePlan, FeatureAddon } = models();
+  for (const p of DEFAULT_PLAN_PRESETS) {
+    await FeaturePlan.updateOne(
+      { code: p.code },
+      {
+        $setOnInsert: {
+          name: p.name,
+          code: p.code,
+          description: p.description,
+          features: p.features,
+          isActive: true,
+        },
+      },
+      { upsert: true },
+    );
+  }
+  for (const a of DEFAULT_ADDON_PRESETS) {
+    await FeatureAddon.updateOne(
+      { code: a.code },
+      {
+        $setOnInsert: {
+          name: a.name,
+          code: a.code,
+          description: a.description,
+          features: a.features,
+          isActive: true,
+        },
+      },
+      { upsert: true },
+    );
+  }
+}
+
 async function assertEnterpriseAdsPolicy(
   basePlanId: mongoose.Types.ObjectId | null,
   enabledAddOnIds: mongoose.Types.ObjectId[],
@@ -156,6 +243,7 @@ router.get('/stores', ...platformAuth, async (_req: Request, res: Response, next
 // ===== Feature plans / add-ons =====
 router.get('/feature-plans', ...platformAuth, async (_req: Request, res: Response, next: NextFunction) => {
   try {
+    await ensureDefaultFeatureProducts();
     const { FeaturePlan } = models();
     const rows = await FeaturePlan.find({}).sort({ createdAt: -1 }).lean();
     res.json(rows);
@@ -215,6 +303,7 @@ router.delete('/feature-plans/:id', ...platformAuth, async (req: Request, res: R
 
 router.get('/feature-addons', ...platformAuth, async (_req: Request, res: Response, next: NextFunction) => {
   try {
+    await ensureDefaultFeatureProducts();
     const { FeatureAddon } = models();
     const rows = await FeatureAddon.find({}).sort({ createdAt: -1 }).lean();
     res.json(rows);

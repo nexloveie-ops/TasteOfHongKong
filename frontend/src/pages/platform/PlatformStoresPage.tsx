@@ -45,6 +45,10 @@ const FEATURE_OPTIONS: { key: string; label: string }[] = [
   { key: 'platform.postOrderAds.manage.action', label: '平台-广告管理' },
 ];
 
+const FEATURE_OVERRIDE_TEMPLATE: Record<string, boolean> = Object.fromEntries(
+  FEATURE_OPTIONS.map((f) => [f.key, false]),
+) as Record<string, boolean>;
+
 export default function PlatformStoresPage() {
   const [stores, setStores] = useState<StoreRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -739,6 +743,24 @@ export default function PlatformStoresPage() {
                 顾客端下单后广告默认开启。若需关闭，可加入：
                 <code style={{ fontSize: 10 }}>{'{"customer.postOrderAds.view.action": false}'}</code>
                 。Enterprise 套餐始终不展示广告。
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  style={{ fontSize: 11, padding: '4px 8px' }}
+                  onClick={() => setPkgOverrides(JSON.stringify(FEATURE_OVERRIDE_TEMPLATE, null, 2))}
+                >
+                  填入功能键模板
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  style={{ fontSize: 11, padding: '4px 8px' }}
+                  onClick={() => setPkgOverrides('{}')}
+                >
+                  清空
+                </button>
               </div>
               <textarea
                 className="input"
