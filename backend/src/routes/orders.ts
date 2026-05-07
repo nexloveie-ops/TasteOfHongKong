@@ -287,18 +287,13 @@ export function createOrdersRouter(io: SocketIOServer): Router {
 
         let fee = 0;
         if (deliveryRules.length > 0) {
-          const src = String(deliverySource || '').trim();
-          if (src === 'phone') {
-            if (dist === undefined) {
-              throw createAppError(
-                'VALIDATION_ERROR',
-                '已配置距离阶梯送餐费：收银员下单需提供 deliveryDistanceKm（公里，可由邮编解析）',
-              );
-            }
-            fee = deliveryFeeForDistance(deliveryRules, dist);
-          } else {
-            fee = dist !== undefined ? deliveryFeeForDistance(deliveryRules, dist) : 0;
+          if (dist === undefined) {
+            throw createAppError(
+              'VALIDATION_ERROR',
+              '已配置距离阶梯送餐费：需提供 deliveryDistanceKm（公里，可由邮编解析）',
+            );
           }
+          fee = deliveryFeeForDistance(deliveryRules, dist);
         }
 
         if (dist !== undefined) orderData.deliveryDistanceKm = dist;

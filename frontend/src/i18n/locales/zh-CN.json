@@ -86,7 +86,11 @@
     "deliveryPolicyUnpaidNoKitchen": "未在线付款的订单不会制作，也不会送餐。请尽快完成线上支付，以便我们为您备餐与配送。",
     "deliveryPolicyCashCallUs": "若您需要现金付款或希望电话下单，请拨打门店电话：",
     "deliveryStorePhoneLabel": "门店电话",
-    "deliveryNoPhoneConfigured": "门店暂未填写联系电话，请通过其它方式联系商家。"
+    "deliveryNoPhoneConfigured": "门店暂未填写联系电话，请通过其它方式联系商家。",
+    "deliveryEircodePlaceholder": "爱尔兰 Eircode（7 位，如 D02 XY43）",
+    "deliveryAddressPlaceholder": "地址（填写邮编后可自动填充）",
+    "deliveryGeocoding": "正在解析邮编…",
+    "deliveryStraightLineKm": "距店铺直线约 {{km}} km（大圆距离，非行车路线）"
   },
   "cashier": {
     "title": "收银台",

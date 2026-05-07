@@ -24,7 +24,7 @@ import { createPaymentsRouter } from './routes/payments';
 import couponsRouter from './routes/coupons';
 import platformRouter from './routes/platform';
 import publicAdsRouter from './routes/publicAds';
-import geoRouter from './routes/geo';
+import geoRouter, { guestEircodeMiddleware } from './routes/geo';
 import { storeIoRoom } from './socketRooms';
 
 dotenv.config();
@@ -116,7 +116,9 @@ app.use('/api/payments', createPaymentsRouter(io));
 // Coupons routes
 app.use('/api/coupons', couponsRouter);
 
-// Geocoding (cashier / delivery helpers; requires auth + store)
+// Geocoding：顾客邮编距离接口在子 Router 外显式注册，确保 GET 一定命中（避免落入 SPA 404）
+app.get('/api/geo/public/eircode', ...guestEircodeMiddleware);
+app.get('/api/geo/customer-eircode', ...guestEircodeMiddleware);
 app.use('/api/geo', geoRouter);
 
 // Serve frontend static files in production（放在 /api 之后）

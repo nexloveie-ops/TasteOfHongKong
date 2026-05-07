@@ -86,7 +86,11 @@
     "deliveryPolicyUnpaidNoKitchen": "We do not prepare or deliver unpaid orders. Please complete online payment so we can cook and deliver your meal.",
     "deliveryPolicyCashCallUs": "To pay with cash or to order by phone, please call the restaurant:",
     "deliveryStorePhoneLabel": "Restaurant phone",
-    "deliveryNoPhoneConfigured": "No phone number is on file for this store. Please contact the merchant another way."
+    "deliveryNoPhoneConfigured": "No phone number is on file for this store. Please contact the merchant another way.",
+    "deliveryEircodePlaceholder": "Irish Eircode (7 characters, e.g. D02 XY43)",
+    "deliveryAddressPlaceholder": "Address (may auto-fill from postcode)",
+    "deliveryGeocoding": "Resolving postcode…",
+    "deliveryStraightLineKm": "Straight-line distance from store: {{km}} km (great circle, not driving route)"
   },
   "cashier": {
     "title": "Cashier",

@@ -1,8 +1,14 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useCart } from '../../context/CartContext';
 import { matchBundles, calcBundleTotal, type OfferData, type MatchedBundle } from '../../utils/bundleMatcher';
+import {
+  DELIVERY_FEE_RULES_CONFIG_KEY,
+  deliveryFeeForDistance,
+  parseDeliveryFeeRulesJson,
+  type DeliveryFeeTier,
+} from '../../utils/deliveryFeeRules';
 import { apiFetch } from '../../api/client';
 import { useRestaurantConfig } from '../../hooks/useRestaurantConfig';
 
@@ -25,6 +31,11 @@ export default function CartPage() {
   const [deliveryCustomerPhone, setDeliveryCustomerPhone] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [deliveryPostalCode, setDeliveryPostalCode] = useState('');
+  const [deliveryFeeRules, setDeliveryFeeRules] = useState<DeliveryFeeTier[]>([]);
+  const [deliveryGeoLoading, setDeliveryGeoLoading] = useState(false);
+  const [deliveryDistanceKm, setDeliveryDistanceKm] = useState<number | null>(null);
+  const [deliveryGeoError, setDeliveryGeoError] = useState('');
+  const eircodeReqRef = useRef(0);
 
   const table = searchParams.get('table');
   const seat = searchParams.get('seat');
@@ -43,6 +54,67 @@ export default function CartPage() {
       check();
     }).catch(() => check());
   }, []);
+
+  useEffect(() => {
+    if (orderType !== 'delivery') {
+      setDeliveryFeeRules([]);
+      return;
+    }
+    let cancelled = false;
+    void apiFetch('/api/admin/config')
+      .then(r => (r.ok ? r.json() : {}))
+      .then((d: Record<string, string>) => {
+        if (cancelled) return;
+        const raw = d[DELIVERY_FEE_RULES_CONFIG_KEY];
+        setDeliveryFeeRules(typeof raw === 'string' ? parseDeliveryFeeRulesJson(raw) : []);
+      })
+      .catch(() => {
+        if (!cancelled) setDeliveryFeeRules([]);
+      });
+    return () => { cancelled = true; };
+  }, [orderType]);
+
+  const lookupEircode = useCallback(async (raw: string) => {
+    const norm = raw.toUpperCase().replace(/[\s-]/g, '');
+    if (norm.length !== 7 || !/^[A-Z][0-9][0-9W][0-9A-Z]{4}$/.test(norm)) {
+      setDeliveryDistanceKm(null);
+      setDeliveryGeoError('');
+      setDeliveryGeoLoading(false);
+      return;
+    }
+    const id = ++eircodeReqRef.current;
+    setDeliveryGeoLoading(true);
+    setDeliveryGeoError('');
+    try {
+      const codeParam = `${norm.slice(0, 3)} ${norm.slice(3)}`;
+      const res = await apiFetch(`/api/geo/customer-eircode?code=${encodeURIComponent(codeParam)}`);
+      const data = (await res.json().catch(() => null)) as { formattedAddress?: string; distanceKm?: number; error?: { message?: string } } | null;
+      if (id !== eircodeReqRef.current) return;
+      if (!res.ok) {
+        const msg = data?.error?.message || `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+      setDeliveryAddress(data?.formattedAddress || '');
+      setDeliveryDistanceKm(typeof data?.distanceKm === 'number' ? data.distanceKm : null);
+    } catch (e) {
+      if (id !== eircodeReqRef.current) return;
+      setDeliveryDistanceKm(null);
+      setDeliveryGeoError(e instanceof Error ? e.message : '解析失败');
+    } finally {
+      if (id === eircodeReqRef.current) setDeliveryGeoLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (orderType !== 'delivery') {
+      setDeliveryDistanceKm(null);
+      setDeliveryGeoError('');
+      setDeliveryGeoLoading(false);
+      return;
+    }
+    const tmr = window.setTimeout(() => { void lookupEircode(deliveryPostalCode); }, 500);
+    return () => window.clearTimeout(tmr);
+  }, [deliveryPostalCode, orderType, lookupEircode]);
 
   // Bundle matching
   const matchedBundles: MatchedBundle[] = useMemo(() => {
@@ -78,6 +150,13 @@ export default function CartPage() {
 
   const finalTotal = bundleTotals.finalTotal;
 
+  const deliveryFeeAmount = useMemo(() => {
+    if (orderType !== 'delivery' || deliveryDistanceKm == null) return 0;
+    return deliveryFeeForDistance(deliveryFeeRules, deliveryDistanceKm);
+  }, [orderType, deliveryDistanceKm, deliveryFeeRules]);
+
+  const grandTotal = orderType === 'delivery' ? finalTotal + deliveryFeeAmount : finalTotal;
+
   const handleSubmit = async () => {
     if (items.length === 0) return;
     setSubmitting(true);
@@ -109,12 +188,19 @@ export default function CartPage() {
             setError('请填写送餐姓名、电话、地址与邮编');
             return;
           }
+          if (deliveryFeeRules.length > 0 && deliveryDistanceKm == null) {
+            setError(t('cashier.deliveryFeeRulesNeedDistance'));
+            return;
+          }
           body.type = 'delivery';
           body.deliverySource = 'qr';
           body.customerName = deliveryCustomerName.trim();
           body.customerPhone = deliveryCustomerPhone.trim();
           body.deliveryAddress = deliveryAddress.trim();
           body.postalCode = deliveryPostalCode.trim();
+          if (deliveryDistanceKm != null) {
+            body.deliveryDistanceKm = deliveryDistanceKm;
+          }
         } else {
           body.type = 'dine_in';
           body.tableNumber = Number(table);
@@ -257,10 +343,40 @@ export default function CartPage() {
       )}
       {orderType === 'delivery' && (
         <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
-          <input className="input" placeholder="收货姓名" value={deliveryCustomerName} onChange={e => setDeliveryCustomerName(e.target.value)} />
-          <input className="input" placeholder="联系电话" value={deliveryCustomerPhone} onChange={e => setDeliveryCustomerPhone(e.target.value)} />
-          <input className="input" placeholder="送餐地址" value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} />
-          <input className="input" placeholder="邮编" value={deliveryPostalCode} onChange={e => setDeliveryPostalCode(e.target.value)} />
+          <input className="input" placeholder={lang === 'zh-CN' ? '收货姓名' : 'Recipient name'} value={deliveryCustomerName} onChange={e => setDeliveryCustomerName(e.target.value)} />
+          <input className="input" placeholder={lang === 'zh-CN' ? '联系电话' : 'Phone'} value={deliveryCustomerPhone} onChange={e => setDeliveryCustomerPhone(e.target.value)} />
+          <input
+            className="input"
+            placeholder={t('customer.deliveryEircodePlaceholder')}
+            value={deliveryPostalCode}
+            onChange={e => setDeliveryPostalCode(e.target.value)}
+            autoCapitalize="characters"
+          />
+          <input
+            className="input"
+            placeholder={t('customer.deliveryAddressPlaceholder')}
+            value={deliveryAddress}
+            onChange={e => setDeliveryAddress(e.target.value)}
+          />
+          {deliveryGeoLoading ? (
+            <div style={{ fontSize: 12, color: 'var(--text-light)' }}>{t('customer.deliveryGeocoding')}</div>
+          ) : null}
+          {deliveryGeoError ? (
+            <div style={{ fontSize: 12, color: 'var(--red-primary)' }}>{deliveryGeoError}</div>
+          ) : null}
+          {deliveryDistanceKm != null && !deliveryGeoLoading ? (
+            <div style={{ fontSize: 12, color: '#1565c0' }}>
+              {t('customer.deliveryStraightLineKm', { km: deliveryDistanceKm })}
+            </div>
+          ) : null}
+          {deliveryFeeRules.length > 0 && deliveryDistanceKm != null ? (
+            <div style={{ fontSize: 12, color: '#1565c0' }}>
+              {t('cashier.deliveryFee')}: <strong>€{deliveryFeeAmount.toFixed(2)}</strong>
+            </div>
+          ) : null}
+          {deliveryFeeRules.length > 0 && !deliveryGeoLoading && deliveryPostalCode.trim().length >= 5 && deliveryDistanceKm == null && !deliveryGeoError ? (
+            <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{t('cashier.deliveryFeeRulesNeedDistance')}</div>
+          ) : null}
         </div>
       )}
 
@@ -289,7 +405,12 @@ export default function CartPage() {
           {bundleTotals.bundleDiscount > 0 && (
             <div style={{ fontSize: 12, color: 'var(--text-light)', textDecoration: 'line-through' }}>€{totalAmount.toFixed(2)}</div>
           )}
-          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--red-primary)', fontFamily: "'Noto Serif SC', serif" }}>€{finalTotal.toFixed(2)}</div>
+          {orderType === 'delivery' && deliveryFeeAmount > 0 ? (
+            <div style={{ fontSize: 11, color: 'var(--text-light)' }}>
+              {t('cashier.deliveryFee')} +€{deliveryFeeAmount.toFixed(2)}
+            </div>
+          ) : null}
+          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--red-primary)', fontFamily: "'Noto Serif SC', serif" }}>€{grandTotal.toFixed(2)}</div>
         </div>
         <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting || !offersLoaded}
           style={{ padding: '12px 28px', fontSize: 15, letterSpacing: 1 }}>

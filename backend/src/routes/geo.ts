@@ -1,4 +1,4 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router, Request, Response, NextFunction, type RequestHandler } from 'express';
 import mongoose from 'mongoose';
 import { getModels } from '../getModels';
 import { createAppError } from '../middleware/errorHandler';
@@ -69,44 +69,55 @@ async function getStoreLatLng(
 
 const router = Router();
 
-/** GET /api/geo/eircode?code=D02AF30 — Geocode Irish Eircode, fill-style address + straight-line km from store */
+async function handleEircodeGet(req: Request, res: Response, next: NextFunction) {
+  try {
+    const apiKey = process.env.GoogleGeo?.trim();
+    if (!apiKey) {
+      throw createAppError('SERVICE_UNAVAILABLE', '未配置 GoogleGeo 环境变量，无法解析邮编');
+    }
+
+    const raw = typeof req.query.code === 'string' ? req.query.code.trim() : '';
+    const eircode = normalizeIrishEircode(raw);
+    if (!eircode) {
+      throw createAppError(
+        'VALIDATION_ERROR',
+        '请输入完整爱尔兰邮编（Eircode，7 位字母与数字，可含空格）',
+      );
+    }
+
+    const dest = await googleGeocodeAddress(`${eircode}, Ireland`, apiKey);
+    if (!dest) {
+      throw createAppError('VALIDATION_ERROR', '无法识别该邮编，请核对后重试');
+    }
+
+    const storeLoc = await getStoreLatLng(req.storeId!, apiKey);
+    const distanceKm = haversineKm(storeLoc.lat, storeLoc.lng, dest.lat, dest.lng);
+
+    res.json({
+      eircode,
+      formattedAddress: dest.formattedAddress,
+      distanceKm: Math.round(distanceKm * 100) / 100,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** GET /api/geo/eircode?code=D02AF30 — 已登录店员：邮编解析 + 直线距离 */
 router.get(
   '/eircode',
   ...requireAuthSameStore,
   requireFeature(FeatureKeys.CashierDeliveryPage),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const apiKey = process.env.GoogleGeo?.trim();
-      if (!apiKey) {
-        throw createAppError('SERVICE_UNAVAILABLE', '未配置 GoogleGeo 环境变量，无法解析邮编');
-      }
-
-      const raw = typeof req.query.code === 'string' ? req.query.code.trim() : '';
-      const eircode = normalizeIrishEircode(raw);
-      if (!eircode) {
-        throw createAppError(
-          'VALIDATION_ERROR',
-          '请输入完整爱尔兰邮编（Eircode，7 位字母与数字，可含空格）',
-        );
-      }
-
-      const dest = await googleGeocodeAddress(`${eircode}, Ireland`, apiKey);
-      if (!dest) {
-        throw createAppError('VALIDATION_ERROR', '无法识别该邮编，请核对后重试');
-      }
-
-      const storeLoc = await getStoreLatLng(req.storeId!, apiKey);
-      const distanceKm = haversineKm(storeLoc.lat, storeLoc.lng, dest.lat, dest.lng);
-
-      res.json({
-        eircode,
-        formattedAddress: dest.formattedAddress,
-        distanceKm: Math.round(distanceKm * 100) / 100,
-      });
-    } catch (err) {
-      next(err);
-    }
-  },
+  handleEircodeGet,
 );
+
+/**
+ * 顾客扫码送餐（无需登录）：在 server.ts 上用 app.get 显式挂载，避免仅挂在子 Router 时部分环境下未命中。
+ * 完整路径：GET /api/geo/public/eircode 与 GET /api/geo/customer-eircode（别名）
+ */
+export const guestEircodeMiddleware: RequestHandler[] = [
+  requireFeature(FeatureKeys.CashierDeliveryPage),
+  handleEircodeGet,
+];
 
 export default router;
