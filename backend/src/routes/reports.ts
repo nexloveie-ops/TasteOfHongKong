@@ -18,22 +18,26 @@ function reportModels() {
 }
 
 const router = Router();
+const REPORT_VISIBLE_STATUSES = ['checked_out', 'completed', 'refunded'] as const;
 
 // GET /api/reports/orders — 报表钻取与订单历史列表共用（需 report:view；勿绑定 admin.orderHistory.page，否则营业报表点击明细会 403 且无数据）
 router.get('/orders', ...requireAuthSameStore, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { Order, Checkout } = reportModels();
     const { startDate, endDate, type, paymentMethod, source, status } = req.query;
+    const includeHidden = String(req.query.includeHidden || '').toLowerCase() === 'true';
+    const visibleStatuses = includeHidden
+      ? [...REPORT_VISIBLE_STATUSES, 'checked_out-hide', 'completed-hide']
+      : [...REPORT_VISIBLE_STATUSES];
 
     const filter: Record<string, unknown> = { storeId: req.storeId };
 
     if (status === 'refunded') {
       // Find orders that have ANY refunded items (partial or full)
-      filter.status = { $in: ['checked_out', 'completed', 'refunded', 'checked_out-hide', 'completed-hide'] };
+      filter.status = { $in: visibleStatuses };
       filter['items.refunded'] = true;
     } else {
-      // Include refunded orders too so totals match the card (which counts all checkouts)
-      filter.status = { $in: ['checked_out', 'completed', 'refunded', 'checked_out-hide', 'completed-hide'] };
+      filter.status = { $in: visibleStatuses };
     }
 
     if (startDate || endDate) {
@@ -144,13 +148,28 @@ router.get('/summary', ...requireAuthSameStore, requirePermission('report:view')
     }
 
     const checkouts = await Checkout.find(filter).lean();
+    const { Order } = reportModels();
+    const orderIdsInCheckouts = new Set<string>();
+    for (const c of checkouts) for (const oid of c.orderIds as mongoose.Types.ObjectId[]) orderIdsInCheckouts.add(String(oid));
+    const visibleOrders =
+      orderIdsInCheckouts.size === 0
+        ? []
+        : await Order.find({
+            storeId: req.storeId,
+            _id: { $in: [...orderIdsInCheckouts].map((id) => new mongoose.Types.ObjectId(id)) },
+            status: { $in: [...REPORT_VISIBLE_STATUSES] },
+          }).select('_id').lean();
+    const visibleOrderIdSet = new Set<string>(visibleOrders.map((o) => String((o as { _id: mongoose.Types.ObjectId })._id)));
+    const visibleCheckouts = checkouts.filter((c) =>
+      (c.orderIds as mongoose.Types.ObjectId[]).some((oid) => visibleOrderIdSet.has(String(oid))),
+    );
 
     let totalRevenue = 0;
     let cashTotal = 0;
     let cardTotal = 0;
     let mixedTotal = 0;
 
-    for (const c of checkouts) {
+    for (const c of visibleCheckouts) {
       totalRevenue += c.totalAmount;
       if (c.paymentMethod === 'cash') {
         cashTotal += c.totalAmount;
@@ -163,7 +182,7 @@ router.get('/summary', ...requireAuthSameStore, requirePermission('report:view')
 
     res.json({
       totalRevenue,
-      orderCount: checkouts.length,
+      orderCount: visibleCheckouts.length,
       cashTotal,
       cardTotal,
       mixedTotal,
@@ -207,9 +226,7 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
         : await Order.find({
             storeId: req.storeId,
             _id: { $in: [...orderIdStrs].map((id) => new mongoose.Types.ObjectId(id)) },
-            status: {
-              $in: ['checked_out', 'completed', 'refunded', 'checked_out-hide', 'completed-hide'],
-            },
+            status: { $in: [...REPORT_VISIBLE_STATUSES] },
           }).lean();
 
     const orderCheckoutMap = new Map<string, (typeof checkoutsInRange)[0]>();
@@ -234,7 +251,12 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
     let grossCashAmount = 0;
     let grossCardAmount = 0;
 
-    for (const checkout of checkoutsInRange) {
+    const visibleOrderIdSet = new Set<string>(allOrders.map((o) => String(o._id)));
+    const visibleCheckouts = checkoutsInRange.filter((c) =>
+      (c.orderIds as mongoose.Types.ObjectId[]).some((oid) => visibleOrderIdSet.has(String(oid))),
+    );
+
+    for (const checkout of visibleCheckouts) {
       grossRevenue += checkout.totalAmount;
       if (checkout.paymentMethod === 'cash') {
         cashTotal += checkout.totalAmount;

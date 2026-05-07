@@ -42,6 +42,7 @@ export default function OrderHistory() {
       const params = new URLSearchParams();
       params.set('startDate', startDate);
       params.set('endDate', endDate);
+      params.set('includeHidden', 'true');
       if (typeFilter) params.set('paymentMethod', typeFilter);
       const res = await apiFetch(`/api/reports/orders?${params}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
