@@ -376,6 +376,46 @@ export default function UnifiedOrderCenter() {
     printViaIframe(html, 1);
   }, [config, token]);
 
+  const completeTakeoutOnlinePaid = useCallback(async (order: OrderRow) => {
+    setBusyId(order._id);
+    try {
+      void printOrderTicket(order);
+      let res = await apiFetch(`/api/orders/takeout/${order._id}/complete-online-paid`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // Backward compatibility: if backend has not restarted/deployed this endpoint yet,
+      // finalize paid_online first, then complete takeout.
+      if (res.status === 404 || res.status === 405) {
+        const finalize = await apiFetch('/api/payments/finalize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ orderId: order._id }),
+        });
+        if (!finalize.ok) {
+          const errBody = await finalize.json().catch(() => ({})) as { error?: { message?: string } };
+          throw new Error(errBody?.error?.message || `Finalize failed (${finalize.status})`);
+        }
+        res = await apiFetch(`/api/orders/takeout/${order._id}/complete`, {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({})) as { error?: { message?: string }; message?: string };
+        throw new Error(errBody?.error?.message || errBody?.message || `HTTP ${res.status}`);
+      }
+      await fetchAll();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(`未能完成外卖自提在线单：${msg}`);
+    } finally {
+      setBusyId(null);
+    }
+  }, [fetchAll, printOrderTicket, token]);
+
   /** 堂食顾客已在线付款：打印出餐小票 → 后端记 completed + 在线 Checkout → 本单从订单中心移除（流程终结） */
   const completeDineInOnlinePaid = useCallback(async (order: OrderRow) => {
     setBusyId(order._id);
@@ -549,7 +589,14 @@ export default function UnifiedOrderCenter() {
             dineInByTable.length === 0 ? (
               <div style={{ color: 'var(--text-light)', fontSize: 13 }}>{L.empty}</div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 340px))',
+                  gap: 8,
+                  justifyContent: 'start',
+                }}
+              >
                 {dineInByTable.map((tableGroup) => {
                   /** 仅 pending 可「按桌结账」；金额展示本桌当前列表中全部单（含已在线付）避免全 paid_online 时显示 0 */
                   const tableAllTotal = tableGroup.orders.reduce((sum, o) => sum + calcTotal(o), 0);
@@ -572,14 +619,28 @@ export default function UnifiedOrderCenter() {
                         </div>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 6 }}>
-                        {tableGroup.orders.map((o) => (
+                        {tableGroup.orders.map((o) => {
+                          const seatOnlinePaid = String(o.status || '').toLowerCase().includes('paid');
+                          return (
                           <div
                             key={o._id}
                             onClick={() => setDetailModalOrder(o)}
                             title={L.clickToView}
-                            style={{ border: '1px solid #e8e8e8', borderRadius: 7, background: '#fff', padding: 7, cursor: 'pointer' }}
+                            style={{
+                              border: seatOnlinePaid ? '1px solid #43A047' : '1px solid #e8e8e8',
+                              borderRadius: 7,
+                              background: seatOnlinePaid ? 'linear-gradient(180deg, #ECF9F0 0%, #FFFFFF 100%)' : '#fff',
+                              padding: 7,
+                              paddingLeft: seatOnlinePaid ? 10 : 7,
+                              borderLeft: seatOnlinePaid ? '6px solid #2E7D32' : undefined,
+                              boxShadow: seatOnlinePaid ? '0 0 0 1px rgba(67, 160, 71, 0.18)' : 'none',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              minHeight: 134,
+                            }}
                           >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, minHeight: 22 }}>
                               <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
                                 <span>座 {o.seatNumber ?? '-'}</span>
                                 <button
@@ -594,12 +655,33 @@ export default function UnifiedOrderCenter() {
                                   🖨
                                 </button>
                               </div>
-                              <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 10, background: '#eee' }}>{o.status}</span>
+                              <span style={{
+                                fontSize: 10,
+                                padding: '1px 6px',
+                                borderRadius: 10,
+                                background: seatOnlinePaid ? '#DFF6E3' : '#eee',
+                                color: seatOnlinePaid ? '#1B5E20' : '#333',
+                                fontWeight: seatOnlinePaid ? 700 : 500,
+                              }}>{o.status}</span>
                             </div>
+                            {seatOnlinePaid ? (
+                              <div style={{
+                                marginBottom: 5,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                color: '#fff',
+                                background: '#2E7D32',
+                                borderRadius: 6,
+                                padding: '2px 6px',
+                                width: 'fit-content',
+                              }}>
+                                ONLINE PAID
+                              </div>
+                            ) : null}
                             <div style={{ fontSize: 11, color: '#666', marginBottom: 6 }}>
                               {o.items.length} items · €{calcTotal(o).toFixed(2)}
                             </div>
-                            <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                            <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 'auto' }}>
                               {o.status === 'pending' ? (
                                 <button className="btn btn-outline" style={{ fontSize: 11, padding: '4px 8px', lineHeight: 1.2 }} disabled={busyId === o._id} onClick={() => openCheckoutModal(o)}>
                                   {L.seatCheckout}
@@ -617,7 +699,7 @@ export default function UnifiedOrderCenter() {
                               ) : null}
                             </div>
                           </div>
-                        ))}
+                        )})}
                       </div>
                     </div>
                   );
@@ -628,14 +710,37 @@ export default function UnifiedOrderCenter() {
             <div style={{ color: 'var(--text-light)', fontSize: 13 }}>{L.empty}</div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 10 }}>
-              {grouped[type].map((o) => (
+              {grouped[type].map((o) => {
+                const statusLower = String(o.status || '').toLowerCase();
+                const isOnlinePaidFlow =
+                  statusLower.includes('paid') ||
+                  (o.type === 'delivery' &&
+                    (o.customerOnlinePaymentAt ||
+                      (o.deliverySource === 'qr' &&
+                        (statusLower.includes('paid') || o.status === 'checked_out'))));
+                const emphasizePaidOnline = !!isOnlinePaidFlow;
+                return (
                 <div
                   key={o._id}
                   onClick={() => setDetailModalOrder(o)}
-                  style={{ border: '1px solid #eee', borderRadius: 10, padding: 10, background: '#fafafa', cursor: 'pointer' }}
+                  style={{
+                    border: emphasizePaidOnline ? '1px solid #43A047' : '1px solid #eee',
+                    borderRadius: 10,
+                    padding: 10,
+                    paddingLeft: emphasizePaidOnline ? 14 : 10,
+                    background: emphasizePaidOnline
+                      ? 'linear-gradient(180deg, #EAF9EE 0%, #F7FFF9 100%)'
+                      : '#fafafa',
+                    boxShadow: emphasizePaidOnline ? '0 0 0 2px rgba(67, 160, 71, 0.22)' : 'none',
+                    borderLeft: emphasizePaidOnline ? '8px solid #2E7D32' : undefined,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    minHeight: 238,
+                  }}
                   title={L.clickToView}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, minHeight: 28 }}>
                     <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span>{o.type === 'dine_in' ? `桌 ${o.tableNumber ?? '-'} / 座 ${o.seatNumber ?? '-'}` : `#${o.dailyOrderNumber ?? '--'}`}</span>
                       <button
@@ -650,11 +755,19 @@ export default function UnifiedOrderCenter() {
                         🖨 {L.printReceipt}
                       </button>
                     </div>
-                    <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 12, background: '#eee' }}>{o.status}</span>
-                    {o.type === 'delivery' &&
-                    (o.customerOnlinePaymentAt ||
-                      (o.deliverySource === 'qr' &&
-                        (o.status === 'paid_online' || o.status === 'checked_out'))) ? (
+                    <span
+                      style={{
+                        fontSize: 12,
+                        padding: '2px 8px',
+                        borderRadius: 12,
+                        background: emphasizePaidOnline ? '#DFF6E3' : '#eee',
+                        color: emphasizePaidOnline ? '#1B5E20' : '#333',
+                        fontWeight: emphasizePaidOnline ? 700 : 500,
+                      }}
+                    >
+                      {o.status}
+                    </span>
+                    {isOnlinePaidFlow ? (
                       <span
                         style={{
                           fontSize: 10,
@@ -670,8 +783,25 @@ export default function UnifiedOrderCenter() {
                       </span>
                     ) : null}
                   </div>
+                  {isOnlinePaidFlow ? (
+                    <div
+                      style={{
+                        marginBottom: 6,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: '#fff',
+                        background: 'linear-gradient(90deg, #2E7D32 0%, #43A047 100%)',
+                        border: '1px solid #2E7D32',
+                        borderRadius: 8,
+                        padding: '5px 10px',
+                        letterSpacing: 0.2,
+                      }}
+                    >
+                      ONLINE PAID · PRIORITY ORDER
+                    </div>
+                  ) : null}
                   {o.type === 'delivery' ? (
-                    <div style={{ fontSize: 12, color: '#555', marginBottom: 6, lineHeight: 1.5 }}>
+                    <div style={{ fontSize: 12, color: '#555', marginBottom: 6, lineHeight: 1.5, minHeight: 38 }}>
                       <div>{o.customerName} · {o.customerPhone}</div>
                       <div>
                         {L.deliverySource}：{deliverySourceLabel(o.deliverySource)} · {L.stage}：{deliveryStageLabel(o.deliveryStage)}
@@ -679,17 +809,45 @@ export default function UnifiedOrderCenter() {
                     </div>
                   ) : null}
                   {o.type === 'phone' ? (
-                    <div style={{ fontSize: 12, color: '#555', marginBottom: 6, lineHeight: 1.5 }}>
+                    <div style={{ fontSize: 12, color: '#555', marginBottom: 6, lineHeight: 1.5, minHeight: 38 }}>
                       {o.customerName?.trim() ? <div style={{ marginBottom: 2 }}>{o.customerName.trim()}</div> : null}
                       <div>
                         {L.guestPhone}：{o.customerPhone?.trim() || '—'}
                       </div>
                     </div>
                   ) : null}
-                  <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>
-                    {o.items.length} items · €{calcTotal(o).toFixed(2)}
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} onClick={(e) => e.stopPropagation()}>
+                  {(o.type !== 'delivery' && o.type !== 'phone') ? (
+                    <div style={{ minHeight: 38 }} />
+                  ) : null}
+                  {o.type === 'takeout' ? (
+                    <div
+                      style={{
+                        marginBottom: 8,
+                        padding: '6px 8px',
+                        borderRadius: 8,
+                        background: '#fff',
+                        border: '1px solid #ececec',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 4,
+                        fontSize: 12,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <span style={{ color: '#666', width: 78, flexShrink: 0 }}>菜品数量</span>
+                        <span style={{ fontWeight: 700, color: '#333', marginLeft: 'auto', minWidth: 56, textAlign: 'right' }}>{o.items.length}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <span style={{ color: '#666', width: 78, flexShrink: 0 }}>订单金额</span>
+                        <span style={{ fontWeight: 800, color: 'var(--red-primary)', marginLeft: 'auto', minWidth: 56, textAlign: 'right' }}>€{calcTotal(o).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>
+                      {o.items.length} items · €{calcTotal(o).toFixed(2)}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 'auto' }} onClick={(e) => e.stopPropagation()}>
                     {o.type === 'delivery' ? (
                       <div style={{ padding: 8, border: '1px solid #e6e6e6', borderRadius: 8, background: '#fff' }}>
                         <div style={{ fontSize: 11, color: '#666', marginBottom: 6, fontWeight: 600 }}>{L.deliveryStage}</div>
@@ -724,17 +882,37 @@ export default function UnifiedOrderCenter() {
                     {o.type !== 'delivery' || (
                       (o.deliveryStage === 'picked_up_by_driver' && o.status === 'pending')
                     ) ? (
-                      <div style={{ padding: 8, border: '1px solid #e6e6e6', borderRadius: 8, background: '#fff' }}>
+                      <div
+                        style={{
+                          padding: 8,
+                          border: '1px solid #e6e6e6',
+                          borderRadius: 8,
+                          background: '#fff',
+                          minHeight: o.type === 'takeout' ? 84 : undefined,
+                        }}
+                      >
                         <div style={{ fontSize: 11, color: '#666', marginBottom: 6, fontWeight: 600 }}>{L.paymentAndPrint}</div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: 6,
+                            alignItems: 'stretch',
+                          }}
+                        >
                           {o.status === 'pending' ? (
                             <>
-                              <button className="btn btn-primary" style={{ fontSize: 12 }} disabled={busyId === o._id} onClick={() => openCheckoutModal(o)}>{L.checkout}</button>
-                              <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--red-primary)' }} disabled={busyId === o._id} onClick={() => void cancelPending(o._id)}>{L.cancel}</button>
+                              <button className="btn btn-primary" style={{ fontSize: 12, minWidth: o.type === 'takeout' ? 96 : undefined }} disabled={busyId === o._id} onClick={() => openCheckoutModal(o)}>{L.checkout}</button>
+                              <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--red-primary)', minWidth: o.type === 'takeout' ? 96 : undefined }} disabled={busyId === o._id} onClick={() => void cancelPending(o._id)}>{L.cancel}</button>
                             </>
                           ) : null}
                           {o.type === 'takeout' && o.status === 'checked_out' ? (
-                            <button className="btn btn-primary" style={{ fontSize: 12 }} disabled={busyId === o._id} onClick={() => void completeTakeout(o._id)}>{L.markComplete}</button>
+                            <button className="btn btn-primary" style={{ fontSize: 12, minWidth: 198 }} disabled={busyId === o._id} onClick={() => void completeTakeout(o._id)}>{L.markComplete}</button>
+                          ) : null}
+                          {o.type === 'takeout' && o.status === 'paid_online' ? (
+                            <button className="btn btn-primary" style={{ fontSize: 12, minWidth: 198 }} disabled={busyId === o._id} onClick={() => void completeTakeoutOnlinePaid(o)}>
+                              {busyId === o._id ? L.processing : L.printAndComplete}
+                            </button>
                           ) : null}
                         </div>
                         {o.type === 'delivery' ? (
@@ -744,7 +922,7 @@ export default function UnifiedOrderCenter() {
                     ) : null}
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           )}
         </section>

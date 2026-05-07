@@ -128,11 +128,6 @@ export default function CustomerLayout() {
         borderTop: '1px solid var(--border-light)',
         background: 'var(--bg-white)',
       }}>
-        {config.restaurant_phone?.trim() ? (
-          <div style={{ marginBottom: 4, fontSize: 11, color: 'var(--text-secondary)' }}>
-            {config.restaurant_phone}
-          </div>
-        ) : null}
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: '4px 6px' }}>
           <span style={{ opacity: 0.92, fontWeight: 600 }}>{t('customer.footerCompany')}</span>
           <span style={{ opacity: 0.35, userSelect: 'none' }} aria-hidden>·</span>

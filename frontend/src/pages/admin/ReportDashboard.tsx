@@ -278,11 +278,36 @@ export default function ReportDashboard() {
     o.dineInOrderNumber || (o.dailyOrderNumber ? `#${o.dailyOrderNumber}` : o._id.slice(-6).toUpperCase());
 
   return (
-    <div>
-      <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>{t('admin.reports')}</h2>
+    <div style={{ padding: '4px 2px 12px' }}>
+      <div
+        style={{
+          borderRadius: 14,
+          padding: '14px 16px',
+          marginBottom: 14,
+          background: 'linear-gradient(135deg, #fff7f3 0%, #fff 40%, #fff3f5 100%)',
+          border: '1px solid #ffe2d7',
+        }}
+      >
+        <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>{t('admin.reports')}</h2>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>
+          实时营业数据看板 · 支持按支付方式与订单类型快速钻取
+        </div>
+      </div>
 
       {/* Date picker */}
-      <div className="card" style={{ padding: 16, marginBottom: 16, display: 'flex', gap: 12, alignItems: 'end', flexWrap: 'wrap' }}>
+      <div
+        className="card"
+        style={{
+          padding: 16,
+          marginBottom: 16,
+          display: 'flex',
+          gap: 12,
+          alignItems: 'end',
+          flexWrap: 'wrap',
+          border: '1px solid #f0e4de',
+          boxShadow: '0 6px 20px rgba(93, 64, 55, 0.06)',
+        }}
+      >
         <div>
           <label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>开始日期</label>
           <input className="input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
@@ -310,7 +335,15 @@ export default function ReportDashboard() {
       {stats && (
         <>
           {/* Revenue Summary Cards */}
-          <div style={{ marginBottom: 20 }}>
+          <div
+            style={{
+              marginBottom: 20,
+              padding: 14,
+              borderRadius: 14,
+              background: 'linear-gradient(180deg, #fff 0%, #fff9f7 100%)',
+              border: '1px solid #f7e6df',
+            }}
+          >
             <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10, color: 'var(--text-secondary)' }}>💰 营业概览</h3>
             <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.55, maxWidth: 920 }}>
               统计按<strong>结账时间</strong>（与收款一致）。「现金」「刷卡」已包含混合支付中的拆分金额，请勿再与「混合支付」相加；净营业额 ≈ 现金(净) + 刷卡(净) + Online(净)。
@@ -358,7 +391,15 @@ export default function ReportDashboard() {
           </div>
 
           {/* Order Breakdown */}
-          <div style={{ marginBottom: 20 }}>
+          <div
+            style={{
+              marginBottom: 20,
+              padding: 14,
+              borderRadius: 14,
+              background: '#fff',
+              border: '1px solid #eee',
+            }}
+          >
             <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10, color: 'var(--text-secondary)' }}>📊 订单分类</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
               {/* Dine-in card */}
@@ -628,11 +669,29 @@ function StatCard({
 }) {
   const valueIsPlain = typeof value === 'string' || typeof value === 'number';
   return (
-    <div className="card" style={{ padding: 20, textAlign: 'center', cursor: onClick ? 'pointer' : 'default', transition: 'box-shadow 0.2s' }}
+    <div className="card" style={{
+      padding: 20,
+      textAlign: 'center',
+      cursor: onClick ? 'pointer' : 'default',
+      transition: 'transform 0.16s ease, box-shadow 0.2s ease, border-color 0.2s ease',
+      border: '1px solid #f1e3dc',
+      boxShadow: '0 4px 12px rgba(42, 27, 20, 0.05)',
+      background: 'linear-gradient(180deg, #ffffff 0%, #fffaf8 100%)',
+    }}
       onClick={onClick}
-      onMouseEnter={e => { if (onClick) e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'; }}
-      onMouseLeave={e => { e.currentTarget.style.boxShadow = ''; }}>
-      <div style={{ fontSize: 28, marginBottom: 8 }}>{icon}</div>
+      onMouseEnter={e => {
+        if (onClick) {
+          e.currentTarget.style.boxShadow = '0 10px 24px rgba(0,0,0,0.12)';
+          e.currentTarget.style.transform = 'translateY(-2px)';
+          e.currentTarget.style.borderColor = '#e8cfc4';
+        }
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.boxShadow = '0 4px 12px rgba(42, 27, 20, 0.05)';
+        e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.borderColor = '#f1e3dc';
+      }}>
+      <div style={{ fontSize: 28, marginBottom: 10 }}>{icon}</div>
       <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 4 }}>{label}</div>
       <div style={{
         fontSize: valueIsPlain ? 24 : undefined,

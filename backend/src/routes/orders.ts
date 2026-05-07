@@ -13,6 +13,7 @@ import {
   deliveryFeeForDistance,
   parseDeliveryFeeRulesJson,
 } from '../utils/deliveryFeeRules';
+import { computeOrderPayableTotalEuro } from '../utils/orderPayableTotal';
 
 function orderModels() {
   return getModels() as {
@@ -467,6 +468,53 @@ export function createOrdersRouter(io: SocketIOServer): Router {
         { $set: { status: 'completed', completedAt: new Date() } },
         { new: true },
       );
+      res.json(updated);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // PUT /api/orders/takeout/:id/complete-online-paid
+  // QR/self takeout already paid online: cashier prints and marks completed + creates online checkout for reports.
+  router.put('/takeout/:id/complete-online-paid', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const models = getModels() as {
+        Order: mongoose.Model<any>;
+        Checkout: mongoose.Model<any>;
+      };
+      const { Order, Checkout } = models;
+      const id = req.params.id as string;
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw createAppError('VALIDATION_ERROR', 'Invalid order ID');
+      }
+
+      const order = await Order.findOne({ _id: id, storeId: req.storeId });
+      if (!order) throw createAppError('NOT_FOUND', 'Order not found');
+      if (order.type !== 'takeout') {
+        throw createAppError('VALIDATION_ERROR', 'Only takeout orders can use this action');
+      }
+      if (order.status !== 'paid_online') {
+        throw createAppError('VALIDATION_ERROR', 'Only online-paid takeout orders can be finished here', {
+          currentStatus: order.status,
+        });
+      }
+
+      const totalAmount = computeOrderPayableTotalEuro(order);
+      await Checkout.create({
+        storeId: req.storeId,
+        type: 'seat',
+        totalAmount,
+        paymentMethod: 'online',
+        orderIds: [order._id],
+        tableNumber: order.tableNumber,
+      });
+
+      const updated = await Order.findOneAndUpdate(
+        { _id: id, storeId: req.storeId },
+        { $set: { status: 'completed', completedAt: new Date() } },
+        { new: true },
+      );
+      io.to(storeIoRoom(req.storeId!)).emit('order:updated', updated);
       res.json(updated);
     } catch (err) {
       next(err);
