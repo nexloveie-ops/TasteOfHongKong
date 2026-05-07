@@ -164,16 +164,35 @@ export default function MenuView() {
 
   const [heroHidden, setHeroHidden] = useState(false);
   const lastScrollY = useRef(0);
+  const heroHiddenRef = useRef(false);
+  useEffect(() => {
+    heroHiddenRef.current = heroHidden;
+  }, [heroHidden]);
 
   const handleScroll = useCallback(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
     const y = el.scrollTop;
-    if (y > 30 && y > lastScrollY.current) {
-      setHeroHidden(true);
-    } else if (y < lastScrollY.current - 5 || y <= 10) {
-      setHeroHidden(false);
+    const prevY = lastScrollY.current;
+    const dy = y - prevY;
+    const nearBottom = y + el.clientHeight >= el.scrollHeight - 2;
+
+    // At the very bottom, keep hero hidden to avoid bounce jitter toggling.
+    if (nearBottom) {
+      if (!heroHiddenRef.current) setHeroHidden(true);
+      lastScrollY.current = y;
+      return;
     }
+
+    // Hysteresis thresholds to avoid flicker from tiny scroll noise.
+    if (y <= 10) {
+      if (heroHiddenRef.current) setHeroHidden(false);
+    } else if (y > 36 && dy > 6) {
+      if (!heroHiddenRef.current) setHeroHidden(true);
+    } else if (dy < -10) {
+      if (heroHiddenRef.current) setHeroHidden(false);
+    }
+
     lastScrollY.current = y;
   }, []);
 

@@ -288,21 +288,6 @@ export default function OrderStatusPage() {
           background: statusColor + '20', color: statusColor, fontWeight: 600, fontSize: 12,
           flexShrink: 0,
         }}>{statusLabel}</span>
-        {(isPaidOnline || isDeliveryPaidCheckout) && (
-          <div style={{
-            flexBasis: '100%',
-            marginTop: 2,
-            padding: '8px 10px',
-            background: '#E8F5E9',
-            border: '1px solid #81C784',
-            borderRadius: 8,
-            textAlign: 'center',
-          }}>
-            <p style={{ fontSize: 13, fontWeight: 700, color: '#2E7D32', lineHeight: 1.4, margin: 0 }}>
-              {t('customer.paymentSuccess')}
-            </p>
-          </div>
-        )}
       </div>
 
       {isPending && order.type === 'delivery' && (

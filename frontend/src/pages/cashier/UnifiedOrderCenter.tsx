@@ -80,6 +80,8 @@ export default function UnifiedOrderCenter() {
   const [cashReceived, setCashReceived] = useState('');
   const [mixedCash, setMixedCash] = useState('');
   const [mixedCard, setMixedCard] = useState('');
+  /** takeout + paid_online: enforce "print first, then complete" sequence in cashier UI */
+  const [takeoutPrintedOnlineIds, setTakeoutPrintedOnlineIds] = useState<Record<string, true>>({});
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -123,6 +125,22 @@ export default function UnifiedOrderCenter() {
     socket.on('order:cancelled', fetchAll);
     return () => { socket.disconnect(); };
   }, [fetchAll, user?.storeId]);
+
+  useEffect(() => {
+    // Keep only currently visible takeout paid_online orders
+    const allowed = new Set(
+      orders
+        .filter((o) => o.type === 'takeout' && o.status === 'paid_online')
+        .map((o) => o._id),
+    );
+    setTakeoutPrintedOnlineIds((prev) => {
+      const next: Record<string, true> = {};
+      for (const id of Object.keys(prev)) {
+        if (allowed.has(id)) next[id] = true;
+      }
+      return next;
+    });
+  }, [orders]);
 
   const printCheckout = useCallback(async (checkoutId: string, opts?: { cashReceived?: number; changeAmount?: number }) => {
     const receiptRes = await apiFetch(`/api/checkout/receipt/${checkoutId}`);
@@ -379,7 +397,6 @@ export default function UnifiedOrderCenter() {
   const completeTakeoutOnlinePaid = useCallback(async (order: OrderRow) => {
     setBusyId(order._id);
     try {
-      void printOrderTicket(order);
       let res = await apiFetch(`/api/orders/takeout/${order._id}/complete-online-paid`, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}` },
@@ -910,9 +927,30 @@ export default function UnifiedOrderCenter() {
                             <button className="btn btn-primary" style={{ fontSize: 12, minWidth: 198 }} disabled={busyId === o._id} onClick={() => void completeTakeout(o._id)}>{L.markComplete}</button>
                           ) : null}
                           {o.type === 'takeout' && o.status === 'paid_online' ? (
-                            <button className="btn btn-primary" style={{ fontSize: 12, minWidth: 198 }} disabled={busyId === o._id} onClick={() => void completeTakeoutOnlinePaid(o)}>
-                              {busyId === o._id ? L.processing : L.printAndComplete}
-                            </button>
+                            <>
+                              {!takeoutPrintedOnlineIds[o._id] ? (
+                                <button
+                                  className="btn btn-outline"
+                                  style={{ fontSize: 12, minWidth: 198 }}
+                                  disabled={busyId === o._id}
+                                  onClick={() => {
+                                    void printOrderTicket(o);
+                                    setTakeoutPrintedOnlineIds((prev) => ({ ...prev, [o._id]: true }));
+                                  }}
+                                >
+                                  {L.printReceipt}
+                                </button>
+                              ) : (
+                                <button
+                                  className="btn btn-primary"
+                                  style={{ fontSize: 12, minWidth: 198 }}
+                                  disabled={busyId === o._id}
+                                  onClick={() => void completeTakeoutOnlinePaid(o)}
+                                >
+                                  {busyId === o._id ? L.processing : L.markComplete}
+                                </button>
+                              )}
+                            </>
                           ) : null}
                         </div>
                         {o.type === 'delivery' ? (
