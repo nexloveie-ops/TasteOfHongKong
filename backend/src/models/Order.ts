@@ -40,6 +40,9 @@ const OrderSchema = new mongoose.Schema({
   deliveryDistanceKm: { type: Number },
   deliveryFeeEuro: { type: Number, default: 0 },
   deliveryPaidByDriver: { type: Boolean, default: false },
+  /** 顾客端 Stripe 支付成功时间（送餐扫码付等）；完结后仍保留，便于区分线上已付 */
+  customerOnlinePaymentAt: { type: Date },
+  stripePaymentIntentId: { type: String },
   status: { type: String, enum: ['pending', 'paid_online', 'checked_out', 'completed', 'refunded', 'checked_out-hide', 'completed-hide'], default: 'pending' },
   items: [OrderItemSubdocSchema],
   appliedBundles: [AppliedBundleSchema],

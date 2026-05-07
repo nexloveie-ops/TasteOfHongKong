@@ -64,7 +64,18 @@ router.get('/orders', ...requireAuthSameStore, requirePermission('report:view'),
       if (endDate) {
         dateFilter.$lte = new Date((endDate as string) + 'T23:59:59.999');
       }
-      filter.createdAt = dateFilter;
+      const periodCheckouts = await Checkout.find({ storeId: req.storeId, checkedOutAt: dateFilter }).lean();
+      const inPeriod = new Set<string>();
+      for (const c of periodCheckouts) {
+        for (const oid of c.orderIds as mongoose.Types.ObjectId[]) {
+          inPeriod.add(oid.toString());
+        }
+      }
+      if (inPeriod.size === 0) {
+        res.json([]);
+        return;
+      }
+      filter._id = { $in: [...inPeriod].map((id) => new mongoose.Types.ObjectId(id)) };
     }
 
     if (type && ['dine_in', 'takeout', 'phone', 'delivery'].includes(type as string)) {
@@ -196,28 +207,39 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
       dateFilter.$lte = new Date((endDate as string) + 'T23:59:59.999');
     }
 
-    // Fetch ALL orders in date range (including refunded, excluding hidden)
-    const orderFilter: Record<string, unknown> = {
-      storeId: req.storeId,
-      status: { $in: ['checked_out', 'completed', 'refunded'] },
-    };
+    // 营业额按结账时间 checkedOutAt（与 /summary 一致），避免「下单日」与「收款日」跨日时卡片金额失真
+    const checkoutQuery: Record<string, unknown> = { storeId: req.storeId };
     if (startDate || endDate) {
-      orderFilter.createdAt = dateFilter;
+      checkoutQuery.checkedOutAt = dateFilter;
+    }
+    const checkoutsInRange = await Checkout.find(checkoutQuery).lean();
+
+    const orderIdStrs = new Set<string>();
+    for (const c of checkoutsInRange) {
+      for (const oid of c.orderIds as mongoose.Types.ObjectId[]) {
+        orderIdStrs.add(oid.toString());
+      }
     }
 
-    const allOrders = await Order.find(orderFilter).lean();
+    const allOrders =
+      orderIdStrs.size === 0
+        ? []
+        : await Order.find({
+            storeId: req.storeId,
+            _id: { $in: [...orderIdStrs].map((id) => new mongoose.Types.ObjectId(id)) },
+            status: {
+              $in: ['checked_out', 'completed', 'refunded', 'checked_out-hide', 'completed-hide'],
+            },
+          }).lean();
 
-    // Attach checkout info
-    const orderIds = allOrders.map(o => o._id);
-    const checkouts = await Checkout.find({ storeId: req.storeId, orderIds: { $in: orderIds } }).lean();
-    const orderCheckoutMap = new Map<string, typeof checkouts[0]>();
-    for (const c of checkouts) {
-      for (const oid of c.orderIds) {
+    const orderCheckoutMap = new Map<string, (typeof checkoutsInRange)[0]>();
+    for (const c of checkoutsInRange) {
+      for (const oid of c.orderIds as mongoose.Types.ObjectId[]) {
         orderCheckoutMap.set(oid.toString(), c);
       }
     }
 
-    // Calculate revenue from checkout amounts, then subtract refunded items
+    // Calculate revenue from each checkout in period (each checkout counted once)
     let grossRevenue = 0;
     let cashTotal = 0;
     let cardTotal = 0;
@@ -231,41 +253,34 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
     let couponTotalAmount = 0;
     let grossCashAmount = 0;
     let grossCardAmount = 0;
-    const countedCheckoutIds = new Set<string>();
 
-    for (const order of allOrders) {
-      const checkout = orderCheckoutMap.get(String(order._id));
-      if (checkout) {
-        const cid = (checkout as unknown as { _id: { toString(): string } })._id.toString();
-        if (!countedCheckoutIds.has(cid)) {
-          countedCheckoutIds.add(cid);
-          grossRevenue += checkout.totalAmount;
-          if (checkout.paymentMethod === 'cash') {
-            cashTotal += checkout.totalAmount;
-            cashCount++;
-            grossCashAmount += checkout.totalAmount;
-          } else if (checkout.paymentMethod === 'card') {
-            cardTotal += checkout.totalAmount;
-            cardCount++;
-            grossCardAmount += checkout.totalAmount;
-          } else if (checkout.paymentMethod === 'mixed') {
-            mixedTotal += checkout.totalAmount;
-            mixedCount++;
-            // Also add mixed cash/card parts into cashTotal/cardTotal
-            cashTotal += checkout.cashAmount || 0;
-            cardTotal += checkout.cardAmount || 0;
-            grossCashAmount += checkout.cashAmount || 0;
-            grossCardAmount += checkout.cardAmount || 0;
-          } else if (checkout.paymentMethod === 'online') {
-            onlineTotal += checkout.totalAmount;
-            onlineCount++;
-          }
-          // Count coupons
-          if ((checkout as unknown as { couponAmount?: number }).couponAmount && (checkout as unknown as { couponAmount: number }).couponAmount > 0) {
-            couponCount++;
-            couponTotalAmount += (checkout as unknown as { couponAmount: number }).couponAmount;
-          }
-        }
+    for (const checkout of checkoutsInRange) {
+      grossRevenue += checkout.totalAmount;
+      if (checkout.paymentMethod === 'cash') {
+        cashTotal += checkout.totalAmount;
+        cashCount++;
+        grossCashAmount += checkout.totalAmount;
+      } else if (checkout.paymentMethod === 'card') {
+        cardTotal += checkout.totalAmount;
+        cardCount++;
+        grossCardAmount += checkout.totalAmount;
+      } else if (checkout.paymentMethod === 'mixed') {
+        mixedTotal += checkout.totalAmount;
+        mixedCount++;
+        cashTotal += checkout.cashAmount || 0;
+        cardTotal += checkout.cardAmount || 0;
+        grossCashAmount += checkout.cashAmount || 0;
+        grossCardAmount += checkout.cardAmount || 0;
+      } else if (checkout.paymentMethod === 'online') {
+        onlineTotal += checkout.totalAmount;
+        onlineCount++;
+      }
+      if (
+        (checkout as unknown as { couponAmount?: number }).couponAmount &&
+        (checkout as unknown as { couponAmount: number }).couponAmount > 0
+      ) {
+        couponCount++;
+        couponTotalAmount += (checkout as unknown as { couponAmount: number }).couponAmount;
       }
     }
 

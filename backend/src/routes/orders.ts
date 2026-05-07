@@ -394,11 +394,11 @@ export function createOrdersRouter(io: SocketIOServer): Router {
             type: 'phone',
             status: 'pending',
           },
-          // Delivery orders created in cashier (phone source) can flow immediately from pending.
+          // 电话送餐：司机回店结账后应为 completed；队列中只保留待处理/待收款阶段（勿含 checked_out，否则旧数据会永远占位）
           {
             type: 'delivery',
             deliverySource: 'phone',
-            status: { $in: [...ACTIVE_ORDER_STATUSES] },
+            status: { $in: ['pending', 'paid_online'] },
           },
           // Delivery orders from QR appear in cashier only after payment.
           {
@@ -410,7 +410,7 @@ export function createOrdersRouter(io: SocketIOServer): Router {
           {
             type: 'delivery',
             deliverySource: { $exists: false },
-            status: { $in: [...ACTIVE_ORDER_STATUSES] },
+            status: { $in: ['pending', 'paid_online'] },
           },
         ],
       }).sort({

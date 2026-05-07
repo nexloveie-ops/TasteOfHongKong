@@ -31,6 +31,9 @@ interface DetailedStats {
   refundedAmount: number;
   onlineTotal: number;
   onlineCount: number;
+  cashCount?: number;
+  cardCount?: number;
+  mixedCount?: number;
   couponCount: number;
   couponTotalAmount: number;
   bundleOfferCount: number;
@@ -75,6 +78,14 @@ interface ModalConfig {
   filters: Record<string, string>;
 }
 
+/** 本地日历 YYYY-MM-DD（勿用 toISOString 取日期，否则在非 UTC 时区会把周日/当天错成前一天，报表结束日偏早、漏单） */
+function toLocalYmd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function getWeekRange(): { start: string; end: string } {
   const today = new Date();
   const day = today.getDay();
@@ -83,8 +94,7 @@ function getWeekRange(): { start: string; end: string } {
   monday.setDate(today.getDate() + diffToMonday);
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  return { start: fmt(monday), end: fmt(sunday) };
+  return { start: toLocalYmd(monday), end: toLocalYmd(sunday) };
 }
 
 export default function ReportDashboard() {
@@ -297,6 +307,9 @@ export default function ReportDashboard() {
           {/* Revenue Summary Cards */}
           <div style={{ marginBottom: 20 }}>
             <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10, color: 'var(--text-secondary)' }}>💰 营业概览</h3>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.55, maxWidth: 920 }}>
+              统计按<strong>结账时间</strong>（与收款一致）。「现金」「刷卡」已包含混合支付中的拆分金额，请勿再与「混合支付」相加；净营业额 ≈ 现金(净) + 刷卡(净) + Online(净)。
+            </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
               <StatCard label="净营业额" value={euro(stats.totalRevenue)} color="var(--red-primary)" icon="💰"
                 onClick={() => openDetail({ title: '💰 全部订单', icon: '💰', filters: {} })} />
@@ -306,8 +319,13 @@ export default function ReportDashboard() {
                 onClick={() => openDetail({ title: '💵 现金订单', icon: '💵', filters: { paymentMethod: 'cash' } })} />
               <StatCard label="刷卡收入" value={euro(stats.cardTotal)} color="var(--blue, #1976D2)" icon="💳"
                 onClick={() => openDetail({ title: '💳 刷卡订单', icon: '💳', filters: { paymentMethod: 'card' } })} />
-              <StatCard label="混合支付" value={euro(stats.mixedTotal)} color="var(--gold-dark, #F57F17)" icon="🔄"
-                onClick={() => openDetail({ title: '🔄 混合支付订单', icon: '🔄', filters: { paymentMethod: 'mixed' } })} />
+              <StatCard
+                label="混合支付"
+                value={`${stats.mixedCount ?? 0} 单 · ${euro(stats.mixedTotal)}`}
+                color="var(--gold-dark, #F57F17)"
+                icon="🔄"
+                onClick={() => openDetail({ title: '🔄 混合支付订单', icon: '🔄', filters: { paymentMethod: 'mixed' } })}
+              />
               <StatCard label="Online" value={`${stats.onlineCount} 单 · ${euro(stats.onlineTotal)}`} color="#7B1FA2" icon="💳"
                 onClick={() => openDetail({ title: '💳 Online Payment', icon: '💳', filters: { paymentMethod: 'online' } })} />
               <StatCard label="Coupon" value={`${stats.couponCount} 次 · ${euro(stats.couponTotalAmount)}`} color="#FF6F00" icon="🎟️"
@@ -400,6 +418,9 @@ export default function ReportDashboard() {
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#E65100', borderTop: '1px solid var(--border, #eee)', paddingTop: 10 }}>
                     运费 {euro(stats.deliveryFeeRevenue)}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.45 }}>
+                    顾客扫码 Stripe 等网付：整单金额计入上方「Online」与「净营业额」；此处仅为运费小计。
                   </div>
                 </div>
               ) : null}

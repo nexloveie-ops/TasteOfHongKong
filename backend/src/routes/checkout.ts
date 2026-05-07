@@ -4,6 +4,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { getModels } from '../getModels';
 import { createAppError } from '../middleware/errorHandler';
 import { storeIoRoom } from '../socketRooms';
+import { computeOrderPayableTotalEuro } from '../utils/orderPayableTotal';
 
 /** LZFoodModels uses Model<unknown>; narrow for route logic */
 function checkoutModels() {
@@ -133,18 +134,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
       }
 
       // Calculate total amount from items, apply bundle discounts, allow override
-      const itemTotal = order.items.reduce((sum: number, item: { unitPrice: number; quantity: number; selectedOptions?: { extraPrice?: number }[] }) => {
-        const optExtra = (item.selectedOptions || []).reduce((s: number, o: { extraPrice?: number }) => s + (o.extraPrice || 0), 0);
-        return sum + (item.unitPrice + optExtra) * item.quantity;
-      }, 0);
-      const bundleDiscount = ((order as unknown as { appliedBundles?: { discount: number }[] }).appliedBundles || [])
-        .reduce((s: number, b: { discount: number }) => s + b.discount, 0);
-      const hasDeliveryFeeLine = (order.items as { lineKind?: string }[]).some((i) => i.lineKind === 'delivery_fee');
-      const deliveryLegacy =
-        order.type === 'delivery' && !hasDeliveryFeeLine
-          ? Number((order as unknown as { deliveryFeeEuro?: number }).deliveryFeeEuro) || 0
-          : 0;
-      const autoTotal = itemTotal - bundleDiscount + deliveryLegacy;
+      const autoTotal = computeOrderPayableTotalEuro(order);
       const totalAmount = (totalAmountOverride != null && typeof totalAmountOverride === 'number' && totalAmountOverride >= 0)
         ? totalAmountOverride
         : autoTotal;
@@ -191,10 +181,15 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
 
       const checkout = await Checkout.create(checkoutData);
 
-      // Update order status
+      // 电话送餐：司机回店交款走 seat 结账即整单终结，与扫码网付「取餐即 completed」对齐，避免长期留在 checked_out 被 active-all 列出
+      const isDelivery = order.type === 'delivery';
       await Order.findOneAndUpdate(
         { _id: orderId, storeId: req.storeId },
-        { $set: { status: 'checked_out' } },
+        {
+          $set: isDelivery
+            ? { status: 'completed', completedAt: new Date() }
+            : { status: 'checked_out' },
+        },
       );
 
       io.to(storeIoRoom(req.storeId!)).emit('order:checked-out', { orderId: order._id.toString(), tableNumber: order.tableNumber });
@@ -264,54 +259,48 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
   });
 
   // GET /api/checkout/search?orderNumber=123456&date=2026-04-15
-  // If orderNumber is empty, return all checkouts for the given date
+  // 无单号：当日 = Checkout.checkedOutAt 落在窗口内的真实小票，外加「从未写入 Checkout」的订单在当日的占位小票
+  //（有 completedAt 则按完结日，否则按 createdAt；±14h 与单号搜索一致）。
+  // 有单号：按外卖号 dailyOrderNumber / 堂食号 dineInOrderNumber 查找，不按 createdAt 卡日期（避免已付款却搜不到）。
   router.get('/search', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { Order, Checkout } = checkoutModels();
       const { orderNumber, date } = req.query;
 
-      const dateStr = (date as string) || new Date().toISOString().slice(0, 10);
-      const startOfDay = new Date(dateStr + 'T00:00:00.000');
-      const endOfDay = new Date(dateStr + 'T23:59:59.999');
+      const rawDate = (date as string) || new Date().toISOString().slice(0, 10);
+      const dateStr = String(rawDate).slice(0, 10);
+      const parts = dateStr.split('-').map((x) => Number(x));
+      const y = parts[0];
+      const mo = parts[1];
+      const d = parts[2];
+      const padMs = 14 * 60 * 60 * 1000; // ±14h：缓和时区与「本地日历日」与 UTC 边界不一致导致的漏单
+      const startOfDay =
+        Number.isFinite(y) && Number.isFinite(mo) && Number.isFinite(d)
+          ? new Date(Date.UTC(y, mo - 1, d, 0, 0, 0, 0) - padMs)
+          : new Date(dateStr + 'T00:00:00.000Z');
+      const endOfDay =
+        Number.isFinite(y) && Number.isFinite(mo) && Number.isFinite(d)
+          ? new Date(Date.UTC(y, mo - 1, d, 23, 59, 59, 999) + padMs)
+          : new Date(dateStr + 'T23:59:59.999Z');
 
-      let orderFilter: Record<string, unknown>;
+      const searchableOrderStatuses = [
+        'checked_out',
+        'completed',
+        'refunded',
+        'paid_online',
+        'checked_out-hide',
+        'completed-hide',
+      ] as const;
 
-      if (orderNumber && String(orderNumber).trim()) {
-        // Search by order number
-        const num = Number(orderNumber);
-        orderFilter = {
-          storeId: req.storeId,
-          status: { $in: ['checked_out', 'completed', 'refunded'] },
-          createdAt: { $gte: startOfDay, $lte: endOfDay },
-          $or: [
-            { dineInOrderNumber: String(orderNumber).trim() },
-            ...(Number.isInteger(num) ? [{ dailyOrderNumber: num }] : []),
-          ],
-        };
-      } else {
-        // No order number: return all checked-out orders for the date
-        orderFilter = {
-          storeId: req.storeId,
-          status: { $in: ['checked_out', 'completed', 'refunded'] },
-          createdAt: { $gte: startOfDay, $lte: endOfDay },
-        };
-      }
-
-      const orders = await Order.find(orderFilter).sort({ createdAt: -1 }).lean();
-      if (orders.length === 0) {
-        res.json([]);
-        return;
-      }
-
-      const orderIds = orders.map(o => o._id);
-      const checkouts = await Checkout.find({ storeId: req.storeId, orderIds: { $in: orderIds } }).sort({ checkedOutAt: -1 }).lean();
-
-      const results = checkouts.map((c) => {
-        const checkoutOrders = orders
-          .filter((o) => c.orderIds.some((cid: mongoose.Types.ObjectId) => cid.toString() === String(o._id)));
-        const allItems = checkoutOrders.flatMap(o => o.items);
-        const allRefunded = allItems.length > 0 && allItems.every((i: { refunded?: boolean }) => i.refunded);
-        const hasRefund = allItems.some((i: { refunded?: boolean }) => i.refunded);
+      const mapCheckoutToResult = (c: Record<string, unknown>, orderDocs: Record<string, unknown>[]) => {
+        const checkoutOrders = orderDocs.filter((o) =>
+          (c.orderIds as mongoose.Types.ObjectId[]).some((cid) => cid.toString() === String(o._id)),
+        );
+        const allItems = checkoutOrders.flatMap((o) => (o.items as unknown[]) || []);
+        const allRefunded =
+          allItems.length > 0 &&
+          allItems.every((i) => !!(i as { refunded?: boolean }).refunded);
+        const hasRefund = allItems.some((i) => !!(i as { refunded?: boolean }).refunded);
         return {
           checkoutId: c._id,
           type: c.type,
@@ -323,27 +312,171 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
           checkedOutAt: c.checkedOutAt,
           refunded: allRefunded,
           partialRefund: hasRefund && !allRefunded,
-          orders: checkoutOrders.map(o => ({
+          orders: checkoutOrders.map((o) => ({
             _id: o._id,
             type: o.type,
             tableNumber: o.tableNumber,
             seatNumber: o.seatNumber,
             dailyOrderNumber: o.dailyOrderNumber,
-            dineInOrderNumber: (o as Record<string, unknown>).dineInOrderNumber,
+            dineInOrderNumber: o.dineInOrderNumber,
             status: o.status,
-            customerName: (o as { customerName?: string }).customerName,
-            customerPhone: (o as { customerPhone?: string }).customerPhone,
-            deliveryAddress: (o as { deliveryAddress?: string }).deliveryAddress,
-            postalCode: (o as { postalCode?: string }).postalCode,
-            deliveryFeeEuro: (o as { deliveryFeeEuro?: number }).deliveryFeeEuro,
-            deliveryDistanceKm: (o as { deliveryDistanceKm?: number }).deliveryDistanceKm,
-            appliedBundles: ((o as Record<string, unknown>).appliedBundles as unknown[]) ?? [],
+            customerName: o.customerName,
+            customerPhone: o.customerPhone,
+            deliveryAddress: o.deliveryAddress,
+            postalCode: o.postalCode,
+            deliveryFeeEuro: o.deliveryFeeEuro,
+            deliveryDistanceKm: o.deliveryDistanceKm,
+            appliedBundles: (o.appliedBundles as unknown[]) ?? [],
             items: o.items,
           })),
         };
-      });
+      };
 
-      res.json(results);
+      type PayableOrderInput = Parameters<typeof computeOrderPayableTotalEuro>[0];
+      const syntheticReceiptFromOrder = (o: Record<string, unknown>) => {
+        const oItems = (o.items as unknown[]) || [];
+        const allRefunded =
+          oItems.length > 0 && oItems.every((i) => !!(i as { refunded?: boolean }).refunded);
+        const hasRefund = oItems.some((i) => !!(i as { refunded?: boolean }).refunded);
+        const ts = (o.completedAt || o.updatedAt || o.createdAt) as Date | string | undefined;
+        const checkedOutAt = ts ? new Date(ts).toISOString() : new Date().toISOString();
+        const orderSlice = {
+          _id: o._id,
+          type: o.type,
+          tableNumber: o.tableNumber,
+          seatNumber: o.seatNumber,
+          dailyOrderNumber: o.dailyOrderNumber,
+          dineInOrderNumber: o.dineInOrderNumber,
+          status: o.status,
+          customerName: o.customerName,
+          customerPhone: o.customerPhone,
+          deliveryAddress: o.deliveryAddress,
+          postalCode: o.postalCode,
+          deliveryFeeEuro: o.deliveryFeeEuro,
+          deliveryDistanceKm: o.deliveryDistanceKm,
+          appliedBundles: (o.appliedBundles as unknown[]) ?? [],
+          items: o.items,
+        };
+        return {
+          checkoutId: `virtual:${String(o._id)}`,
+          type: 'seat',
+          tableNumber: o.tableNumber,
+          totalAmount: computeOrderPayableTotalEuro(o as PayableOrderInput),
+          paymentMethod: 'online',
+          cashAmount: undefined,
+          cardAmount: undefined,
+          checkedOutAt,
+          refunded: allRefunded,
+          partialRefund: hasRefund && !allRefunded,
+          orders: [orderSlice],
+        };
+      };
+
+      let checkouts: Record<string, unknown>[];
+      let orders: Record<string, unknown>[];
+
+      const trimmedNum =
+        orderNumber && String(orderNumber).trim()
+          ? String(orderNumber).trim().replace(/^\#+/, '').trim()
+          : '';
+
+      if (trimmedNum) {
+        const num = Number(trimmedNum);
+        const numberOr: Record<string, unknown>[] = [{ dineInOrderNumber: trimmedNum }];
+        if (Number.isFinite(num) && !Number.isNaN(num)) {
+          numberOr.push({ dailyOrderNumber: num });
+        }
+        // 少数库里 dailyOrderNumber 以字符串等形式存储时，补一条原始条件
+        numberOr.push({ dailyOrderNumber: trimmedNum });
+        const orderFilter: Record<string, unknown> = {
+          storeId: req.storeId,
+          status: { $in: [...searchableOrderStatuses] },
+          $or: numberOr,
+        };
+        orders = (await Order.find(orderFilter).sort({ createdAt: -1 }).lean()) as Record<string, unknown>[];
+        if (orders.length === 0) {
+          res.json([]);
+          return;
+        }
+        const orderIds = orders.map((o) => o._id);
+        checkouts = (await Checkout.find({ storeId: req.storeId, orderIds: { $in: orderIds } })
+          .sort({ checkedOutAt: -1 })
+          .lean()) as Record<string, unknown>[];
+        const covered = new Set<string>();
+        for (const c of checkouts) {
+          for (const cid of c.orderIds as mongoose.Types.ObjectId[]) {
+            covered.add(cid.toString());
+          }
+        }
+        const fromCheckouts = checkouts.map((c) => mapCheckoutToResult(c, orders));
+        const orphanOrders = orders.filter((o) => !covered.has(String(o._id)));
+        const merged = [...fromCheckouts, ...orphanOrders.map(syntheticReceiptFromOrder)];
+        merged.sort(
+          (a, b) =>
+            new Date(b.checkedOutAt as string | Date).getTime() -
+            new Date(a.checkedOutAt as string | Date).getTime(),
+        );
+        res.json(merged);
+        return;
+      }
+
+      checkouts = (await Checkout.find({
+        storeId: req.storeId,
+        checkedOutAt: { $gte: startOfDay, $lte: endOfDay },
+      })
+        .sort({ checkedOutAt: -1 })
+        .lean()) as Record<string, unknown>[];
+
+      const orderObjectIds: mongoose.Types.ObjectId[] = [];
+      for (const c of checkouts) {
+        for (const cid of c.orderIds as mongoose.Types.ObjectId[]) {
+          orderObjectIds.push(cid);
+        }
+      }
+      const ordersFromCheckouts =
+        orderObjectIds.length === 0
+          ? []
+          : ((await Order.find({
+              storeId: req.storeId,
+              _id: { $in: orderObjectIds },
+            }).lean()) as Record<string, unknown>[]);
+
+      const fromCheckouts = checkouts.map((c) => mapCheckoutToResult(c, ordersFromCheckouts));
+
+      /** 任意 Checkout 已关联的订单不再生成虚拟小票，避免与真实结账重复 */
+      const orderIdsInAnyCheckout = (await Checkout.distinct('orderIds', {
+        storeId: req.storeId,
+      })) as mongoose.Types.ObjectId[];
+
+      const orphanDateWindow: Record<string, unknown> = {
+        $or: [
+          { completedAt: { $gte: startOfDay, $lte: endOfDay } },
+          {
+            $and: [
+              { completedAt: null },
+              { createdAt: { $gte: startOfDay, $lte: endOfDay } },
+            ],
+          },
+        ],
+      };
+
+      const orphanOrders = (await Order.find({
+        storeId: req.storeId,
+        status: { $in: [...searchableOrderStatuses] },
+        _id: { $nin: orderIdsInAnyCheckout },
+        ...orphanDateWindow,
+      })
+        .sort({ createdAt: -1 })
+        .lean()) as Record<string, unknown>[];
+
+      const fromOrphansOnly = orphanOrders.map(syntheticReceiptFromOrder);
+      const mergedDay = [...fromCheckouts, ...fromOrphansOnly];
+      mergedDay.sort(
+        (a, b) =>
+          new Date(b.checkedOutAt as string | Date).getTime() -
+          new Date(a.checkedOutAt as string | Date).getTime(),
+      );
+      res.json(mergedDay);
     } catch (err) {
       next(err);
     }

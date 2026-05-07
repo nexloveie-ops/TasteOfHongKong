@@ -7,13 +7,24 @@ import PaymentModal from '../../components/customer/PaymentModal';
 import { apiFetch } from '../../api/client';
 import { resolveBackendAssetUrl } from '../../utils/backendPublicUrl';
 import { useRestaurantConfig } from '../../hooks/useRestaurantConfig';
+import { computeOrderPayableEuro } from '../../utils/orderPayableEuro';
 
-interface OrderItem { _id: string; menuItemId: string; quantity: number; unitPrice: number; itemName: string; itemNameEn?: string; selectedOptions?: { groupName: string; groupNameEn?: string; choiceName: string; choiceNameEn?: string; extraPrice: number }[]; }
+interface OrderItem {
+  _id: string;
+  menuItemId?: string;
+  lineKind?: string;
+  quantity: number;
+  unitPrice: number;
+  itemName: string;
+  itemNameEn?: string;
+  selectedOptions?: { groupName: string; groupNameEn?: string; choiceName: string; choiceNameEn?: string; extraPrice: number }[];
+}
 interface AppliedBundle { offerId?: string; name: string; nameEn?: string; discount: number; }
 interface Order {
   _id: string; type: string; tableNumber?: number; seatNumber?: number;
   dailyOrderNumber?: number; status: string; items: OrderItem[];
   appliedBundles?: AppliedBundle[];
+  deliveryFeeEuro?: number;
 }
 
 interface PostOrderSlide {
@@ -166,11 +177,6 @@ export default function OrderStatusPage() {
     });
   }, [order?.status, orderId, postOrderAds]);
 
-  const total = (items: OrderItem[]) => items.reduce((s, i) => {
-    const optExtra = (i.selectedOptions || []).reduce((a, o) => a + (o.extraPrice || 0), 0);
-    return s + (i.unitPrice + optExtra) * i.quantity;
-  }, 0);
-
   const handleModifyOrder = async () => {
     if (!order) return;
     try {
@@ -186,7 +192,12 @@ export default function OrderStatusPage() {
       }[] = menuRes.ok ? await menuRes.json() : [];
       const menuMap = new Map(menuItems.map(m => [m._id, m]));
 
-      const cartItems: CartItem[] = order.items.map(item => {
+      const cartItems: CartItem[] = order.items
+        .filter(
+          (item): item is OrderItem & { menuItemId: string } =>
+            Boolean(item.menuItemId) && item.lineKind !== 'delivery_fee',
+        )
+        .map(item => {
         const menuItem = menuMap.get(item.menuItemId);
         const options: CartItem['options'] = [];
 
@@ -241,11 +252,22 @@ export default function OrderStatusPage() {
 
   const isPending = order.status === 'pending';
   const isPaidOnline = order.status === 'paid_online';
-  const statusLabel = order.status === 'pending' ? t('customer.statusPending')
-    : order.status === 'paid_online' ? t('customer.statusPaidOnline')
-    : order.status === 'checked_out' ? t('customer.statusCheckedOut')
-    : t('customer.statusCompleted');
-  const statusColor = order.status === 'pending' ? 'var(--gold-primary)' : order.status === 'paid_online' ? '#2E7D32' : order.status === 'checked_out' ? 'var(--blue)' : 'var(--green)';
+  /** 扫码送餐：Stripe 成功后订单为 checked_out 且已写 Checkout，顾客仍显示「已支付」 */
+  const isDeliveryPaidCheckout = order.type === 'delivery' && order.status === 'checked_out';
+  const statusLabel = order.status === 'pending'
+    ? t('customer.statusPending')
+    : isPaidOnline || isDeliveryPaidCheckout
+      ? t('customer.statusPaidOnline')
+      : order.status === 'checked_out'
+        ? t('customer.statusCheckedOut')
+        : t('customer.statusCompleted');
+  const statusColor = order.status === 'pending'
+    ? 'var(--gold-primary)'
+    : isPaidOnline || isDeliveryPaidCheckout
+      ? '#2E7D32'
+      : order.status === 'checked_out'
+        ? 'var(--blue)'
+        : 'var(--green)';
 
   return (
     <div style={{ padding: '12px 16px', paddingBottom: 24 }}>
@@ -266,7 +288,7 @@ export default function OrderStatusPage() {
           background: statusColor + '20', color: statusColor, fontWeight: 600, fontSize: 12,
           flexShrink: 0,
         }}>{statusLabel}</span>
-        {isPaidOnline && (
+        {(isPaidOnline || isDeliveryPaidCheckout) && (
           <div style={{
             flexBasis: '100%',
             marginTop: 2,
@@ -334,28 +356,20 @@ export default function OrderStatusPage() {
             </span>
           </div>
         ))}
+        {order.appliedBundles && order.appliedBundles.length > 0 && (
+          <div style={{ padding: '0 16px 12px' }}>
+            {order.appliedBundles.map((b, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#2E7D32', padding: '2px 0' }}>
+                <span>🎁 {b.name}{b.nameEn ? ` ${b.nameEn}` : ''}</span>
+                <span style={{ fontWeight: 600 }}>-€{b.discount.toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+        )}
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 16px', fontWeight: 700, fontSize: 16 }}>
           <span>{t('customer.totalAmount')}</span>
-          <span style={{ color: 'var(--red-primary)', fontFamily: "'Noto Serif SC', serif" }}>€{total(order.items).toFixed(2)}</span>
+          <span style={{ color: 'var(--red-primary)', fontFamily: "'Noto Serif SC', serif" }}>€{computeOrderPayableEuro(order).toFixed(2)}</span>
         </div>
-        {order.appliedBundles && order.appliedBundles.length > 0 && (() => {
-          const bundleDiscount = order.appliedBundles.reduce((s, b) => s + b.discount, 0);
-          const netTotal = total(order.items) - bundleDiscount;
-          return (
-            <div style={{ padding: '0 16px 14px' }}>
-              {order.appliedBundles.map((b, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#2E7D32', padding: '2px 0' }}>
-                  <span>🎁 {b.name}{b.nameEn ? ` ${b.nameEn}` : ''}</span>
-                  <span style={{ fontWeight: 600 }}>-€{b.discount.toFixed(2)}</span>
-                </div>
-              ))}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 18, marginTop: 6, paddingTop: 6, borderTop: '1px solid #eee' }}>
-                <span>{t('customer.totalAmount')}</span>
-                <span style={{ color: 'var(--red-primary)', fontFamily: "'Noto Serif SC', serif" }}>€{netTotal.toFixed(2)}</span>
-              </div>
-            </div>
-          );
-        })()}
       </div>
 
       {/* Actions */}
@@ -369,11 +383,7 @@ export default function OrderStatusPage() {
                 background: '#000', color: '#fff', border: 'none', borderRadius: 12,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               }}>
-              <span style={{ fontSize: 20 }}>💳</span> {t('customer.payNow')} · €{(() => {
-                const itemsTotal = total(order.items);
-                const bundleDisc = (order.appliedBundles || []).reduce((s, b) => s + b.discount, 0);
-                return (itemsTotal - bundleDisc).toFixed(2);
-              })()}
+              <span style={{ fontSize: 20 }}>💳</span> {t('customer.payNow')} · €{computeOrderPayableEuro(order).toFixed(2)}
             </button>
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleModifyOrder}>
@@ -400,7 +410,7 @@ export default function OrderStatusPage() {
             </button>
           </>
         )}
-        {isPaidOnline && (
+        {(isPaidOnline || isDeliveryPaidCheckout) && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ padding: '8px 12px', background: '#E8F5E9', border: '1px solid #81C784', borderRadius: 8, textAlign: 'center', fontSize: 13, color: '#2E7D32', fontWeight: 600 }}>
               ✅ {t('customer.paymentSuccess')}
@@ -410,7 +420,7 @@ export default function OrderStatusPage() {
             </button>
           </div>
         )}
-        {!isPending && !isPaidOnline && (
+        {!isPending && !isPaidOnline && !isDeliveryPaidCheckout && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <p style={{ color: 'var(--text-light)', fontSize: 13, textAlign: 'center', width: '100%' }}>
               {t('customer.orderNotModifiable')}
@@ -472,11 +482,7 @@ export default function OrderStatusPage() {
       {showPayment && order && (
         <PaymentModal
           orderId={order._id}
-          amount={(() => {
-            const itemsTotal = total(order.items);
-            const bundleDisc = (order.appliedBundles || []).reduce((s, b) => s + b.discount, 0);
-            return itemsTotal - bundleDisc;
-          })()}
+          amount={computeOrderPayableEuro(order)}
           onSuccess={() => {
             setShowPayment(false);
             fetchOrder(); // Refresh to show checked_out status

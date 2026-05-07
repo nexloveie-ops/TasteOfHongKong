@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { buildReceiptHTML, printViaIframe } from '../../components/cashier/ReceiptPrint';
@@ -15,6 +16,18 @@ interface OrderItem {
   unitPrice: number;
   refunded?: boolean;
   selectedOptions?: { groupName: string; choiceName: string; extraPrice: number }[];
+}
+
+function isVirtualCheckoutId(checkoutId: string): boolean {
+  return typeof checkoutId === 'string' && checkoutId.startsWith('virtual:');
+}
+
+function todayLocalYmd(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 interface SearchResult {
@@ -48,12 +61,14 @@ interface SearchResult {
 
 export default function ReprintReceipt() {
   const { t } = useTranslation();
+  const { storeSlug = '' } = useParams<{ storeSlug: string }>();
   const { token } = useAuth();
   const [orderNumber, setOrderNumber] = useState('');
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayLocalYmd);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [noResults, setNoResults] = useState(false);
+  const [searchError, setSearchError] = useState('');
   const [printing, setPrinting] = useState<string | null>(null);
   const [config, setConfig] = useState<Record<string, string>>({});
 
@@ -67,9 +82,14 @@ export default function ReprintReceipt() {
   }, []);
 
   const handleSearch = useCallback(async (searchNum?: string) => {
+    if (!token) {
+      setSearchError('请先登录');
+      return;
+    }
     const num = searchNum ?? orderNumber;
     setSearching(true);
     setNoResults(false);
+    setSearchError('');
     setResults([]);
     setExpandedId(null);
     setSelectedItems(new Set());
@@ -79,16 +99,33 @@ export default function ReprintReceipt() {
       const res = await apiFetch(`/api/checkout/search?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) {
-        const data: SearchResult[] = await res.json();
-        setResults(data);
-        if (data.length === 0) setNoResults(true);
+      const data = (await res.json().catch(() => null)) as SearchResult[] | { error?: { message?: string } } | null;
+      if (!res.ok) {
+        const msg =
+          data && typeof data === 'object' && 'error' in data && data.error && typeof data.error === 'object'
+            ? (data.error as { message?: string }).message
+            : null;
+        setSearchError(msg || `加载失败（${res.status}）`);
+        setNoResults(false);
+        return;
       }
-    } catch { /* ignore */ }
-    finally { setSearching(false); }
+      const list = Array.isArray(data) ? data : [];
+      setResults(list);
+      setNoResults(list.length === 0);
+    } catch {
+      setSearchError('网络错误');
+      setNoResults(false);
+    } finally {
+      setSearching(false);
+    }
   }, [orderNumber, date, token]);
 
-  useEffect(() => { handleSearch(''); }, []);
+  useEffect(() => {
+    if (!token) return;
+    void handleSearch('');
+    // 仅登录后拉一次当日列表；改日期/单号请点搜索，避免 orderNumber 输入时反复请求
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
   const handlePrint = (r: SearchResult) => {
     setPrinting(r.checkoutId);
@@ -97,7 +134,7 @@ export default function ReprintReceipt() {
       type: r.type as 'table' | 'seat',
       tableNumber: r.tableNumber,
       totalAmount: r.totalAmount,
-      paymentMethod: r.paymentMethod as 'cash' | 'card' | 'mixed',
+      paymentMethod: r.paymentMethod as 'cash' | 'card' | 'mixed' | 'online',
       cashAmount: r.cashAmount,
       cardAmount: r.cardAmount,
       checkedOutAt: r.checkedOutAt,
@@ -200,11 +237,16 @@ export default function ReprintReceipt() {
       <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>重印小票</h2>
 
       <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+        {storeSlug ? (
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.5 }}>
+            当前网址店铺为 <strong>/{storeSlug}</strong>，查询的是该店订单。若 11 号单在别的分店下的，请从对应店铺的收银链接进入重印，或确认登录时选的店铺与网址一致。
+          </div>
+        ) : null}
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div>
             <label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>订单号码</label>
             <input className="input" value={orderNumber} onChange={e => setOrderNumber(e.target.value)}
-              placeholder="例: 143025 或 外卖号"
+              placeholder="例: 143025、10 或 #10（外卖号）"
               onKeyDown={e => e.key === 'Enter' && handleSearch()}
               style={{ width: 180, fontSize: 16, fontWeight: 600 }} />
           </div>
@@ -218,8 +260,16 @@ export default function ReprintReceipt() {
         </div>
       </div>
 
-      {noResults && (
-        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-light)' }}>未找到匹配的订单</div>
+      {searchError && (
+        <div style={{ textAlign: 'center', padding: 16, color: 'var(--red-primary)', fontSize: 14 }}>{searchError}</div>
+      )}
+      {noResults && !searchError && (
+        <>
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-light)' }}>未找到匹配的订单</div>
+          <div style={{ textAlign: 'center', padding: '0 24px 24px', color: 'var(--text-light)', fontSize: 12, lineHeight: 1.6 }}>
+            提示：输入外卖号后请点击「搜索」。无单号时：列表含当日结账（Checkout）及当日完结/下单、且无结账流水的订单。部分记录会标「无结账流水（仅重印）」。
+          </div>
+        </>
       )}
 
       {results.length > 0 && (
@@ -227,7 +277,9 @@ export default function ReprintReceipt() {
           {results.map(r => {
             const lineNets = buildLineNetByItemId(r);
             const isDineIn = r.orders[0]?.type === 'dine_in';
-            const typeLabel = isDineIn ? '堂食 Dine-in' : '外卖 Takeout';
+            const isDelivery = r.orders[0]?.type === 'delivery';
+            const typeLabel = isDineIn ? '堂食 Dine-in' : isDelivery ? '送餐 Delivery' : '外卖 Takeout';
+            const virtual = isVirtualCheckoutId(r.checkoutId);
             const orderNum = r.orders[0]?.dineInOrderNumber || (r.orders[0]?.dailyOrderNumber ? `#${r.orders[0].dailyOrderNumber}` : '');
             const time = new Date(r.checkedOutAt).toLocaleTimeString();
             const isExpanded = expandedId === r.checkoutId;
@@ -259,7 +311,7 @@ export default function ReprintReceipt() {
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-light)', marginTop: 2 }}>
                       {r.tableNumber != null && r.tableNumber > 0 && `Table ${r.tableNumber} · `}
-                      {r.paymentMethod} · {time} · {allItems.length} 项菜品
+                      {r.paymentMethod}{virtual ? ' · 无结账流水（仅重印）' : ''} · {time} · {allItems.length} 项菜品
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
@@ -276,7 +328,7 @@ export default function ReprintReceipt() {
                 {isExpanded && (
                   <div style={{ borderTop: '1px solid var(--border, #eee)', padding: '12px 16px', background: 'var(--bg, #f9f9f9)' }}>
                     {/* Select all / refund bar */}
-                    {hasRefundableItems && (
+                    {hasRefundableItems && !virtual && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                         <button className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 10px' }}
                           onClick={() => selectAllItems(r)}>

@@ -26,6 +26,8 @@ interface OrderRow {
   deliveryStage?: DeliveryStage;
   deliveryDistanceKm?: number;
   deliveryFeeEuro?: number;
+  /** 顾客 Stripe 支付成功时间（ISO）；完结后仍存在 */
+  customerOnlinePaymentAt?: string;
   items: { _id: string; quantity: number; unitPrice: number; itemName: string; lineKind?: string; selectedOptions?: { extraPrice?: number }[] }[];
   appliedBundles?: { discount: number }[];
   createdAt: string;
@@ -409,7 +411,8 @@ export default function UnifiedOrderCenter() {
     const byType: Record<OrderType, OrderRow[]> = { dine_in: [], takeout: [], phone: [], delivery: [] };
     for (const o of orders) {
       if (o.type === 'dine_in' && o.status === 'checked_out') continue;
-      if (o.type === 'delivery' && (!canDelivery || o.status === 'checked_out')) continue;
+      // 送餐扫码 Stripe 成功后为 checked_out（已线上结账，配送未完成），必须在队列中继续走制作/取餐，不能隐藏
+      if (o.type === 'delivery' && !canDelivery) continue;
       byType[o.type].push(o);
     }
     return byType;
@@ -454,6 +457,7 @@ export default function UnifiedOrderCenter() {
     cashAmount: isEn ? 'Cash amount' : '现金金额',
     cardAmount: isEn ? 'Card amount' : '刷卡金额',
     paidAmount: isEn ? 'Amount paid by customer' : '客人支付金额',
+    paidOnlineBadge: isEn ? 'Paid online' : '线上已付',
     change: isEn ? 'Change' : '找零',
     confirmCheckout: isEn ? 'Confirm Checkout' : '确认结账',
     deliverySource: isEn ? 'Source' : '来源',
@@ -647,6 +651,24 @@ export default function UnifiedOrderCenter() {
                       </button>
                     </div>
                     <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 12, background: '#eee' }}>{o.status}</span>
+                    {o.type === 'delivery' &&
+                    (o.customerOnlinePaymentAt ||
+                      (o.deliverySource === 'qr' &&
+                        (o.status === 'paid_online' || o.status === 'checked_out'))) ? (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: '2px 6px',
+                          borderRadius: 8,
+                          background: '#E8F5E9',
+                          color: '#2E7D32',
+                        }}
+                        title={o.customerOnlinePaymentAt || ''}
+                      >
+                        {L.paidOnlineBadge}
+                      </span>
+                    ) : null}
                   </div>
                   {o.type === 'delivery' ? (
                     <div style={{ fontSize: 12, color: '#555', marginBottom: 6, lineHeight: 1.5 }}>
@@ -838,6 +860,12 @@ export default function UnifiedOrderCenter() {
                 {(detailModalOrder.deliveryFeeEuro ?? 0) > 0 ? (
                   <div style={{ fontSize: 13, marginTop: 6, fontWeight: 600 }}>
                     {isEn ? 'Delivery fee' : '送餐费'}: €{Number(detailModalOrder.deliveryFeeEuro).toFixed(2)}
+                  </div>
+                ) : null}
+                {detailModalOrder.customerOnlinePaymentAt ? (
+                  <div style={{ fontSize: 12, marginTop: 8, color: '#2E7D32', fontWeight: 600 }}>
+                    {isEn ? 'Paid online (customer)' : '顾客线上支付'}:{' '}
+                    {new Date(detailModalOrder.customerOnlinePaymentAt).toLocaleString()}
                   </div>
                 ) : null}
               </div>

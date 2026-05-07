@@ -5,6 +5,7 @@ import { getModels } from '../getModels';
 import { createAppError } from '../middleware/errorHandler';
 import { createStripeClient, getStripePublishableResolved } from '../utils/stripeConfig';
 import { storeIoRoom } from '../socketRooms';
+import { computeOrderPayableTotalEuro } from '../utils/orderPayableTotal';
 
 function paymentModels() {
   return getModels() as {
@@ -32,13 +33,8 @@ router.post('/create-intent', async (req: Request, res: Response, next: NextFunc
     if (!order) throw createAppError('NOT_FOUND', 'Order not found');
     if (order.status !== 'pending') throw createAppError('VALIDATION_ERROR', 'Order is already checked out');
 
-    const itemTotal = order.items.reduce((sum: number, item: { unitPrice: number; quantity: number; selectedOptions?: { extraPrice?: number }[] }) => {
-      const optExtra = (item.selectedOptions || []).reduce((s: number, o: { extraPrice?: number }) => s + (o.extraPrice || 0), 0);
-      return sum + (item.unitPrice + optExtra) * item.quantity;
-    }, 0);
-    const bundleDiscount = ((order as unknown as { appliedBundles?: { discount: number }[] }).appliedBundles || [])
-      .reduce((s: number, b: { discount: number }) => s + b.discount, 0);
-    const totalAmount = Math.round((itemTotal - bundleDiscount) * 100);
+    const totalEuro = computeOrderPayableTotalEuro(order);
+    const totalAmount = Math.round(totalEuro * 100);
 
     if (totalAmount <= 0) throw createAppError('VALIDATION_ERROR', 'Order total must be greater than 0');
 
@@ -82,15 +78,38 @@ router.post('/confirm', async (req: Request, res: Response, next: NextFunction) 
       throw createAppError('VALIDATION_ERROR', 'Payment not completed');
     }
 
-    // Set to paid_online — staff will print receipt and finalize
-    order.status = 'paid_online';
+    const totalChargedEuro = paymentIntent.amount / 100;
+    order.customerOnlinePaymentAt = new Date();
+    order.stripePaymentIntentId = String(paymentIntentId);
+
+    if (order.type === 'delivery') {
+      const { Checkout } = paymentModels();
+      const expectedTotal = computeOrderPayableTotalEuro(order);
+      if (Math.abs(expectedTotal - totalChargedEuro) > 0.02) {
+        throw createAppError('VALIDATION_ERROR', '实付金额与订单合计不一致，请核对后重试', {
+          expectedTotal,
+          charged: totalChargedEuro,
+        });
+      }
+      await Checkout.create({
+        storeId: req.storeId,
+        type: 'seat',
+        totalAmount: totalChargedEuro,
+        paymentMethod: 'online',
+        orderIds: [order._id],
+        tableNumber: order.tableNumber,
+      });
+      order.status = 'checked_out';
+    } else {
+      // 堂食 / 外卖：保持 paid_online，由收银 finalize 生成 Checkout
+      order.status = 'paid_online';
+    }
+
     await order.save();
 
     io.to(storeIoRoom(req.storeId!)).emit('order:updated', order);
 
-    const totalAmount = paymentIntent.amount / 100;
-
-    res.json({ message: 'Payment confirmed', orderId: order._id, totalAmount });
+    res.json({ message: 'Payment confirmed', orderId: order._id, totalAmount: totalChargedEuro });
   } catch (err: unknown) {
     next(err);
   }
