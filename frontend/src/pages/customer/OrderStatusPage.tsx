@@ -47,12 +47,38 @@ const POST_ORDER_AD_STATUSES = new Set(['pending', 'paid_online', 'checked_out',
 function PostOrderAdCarousel({ slides, lang }: { slides: PostOrderSlide[]; lang: string }) {
   const [idx, setIdx] = useState(0);
   const scRef = useRef<HTMLDivElement>(null);
-  const onScroll = () => {
+
+  const onScroll = useCallback(() => {
     const el = scRef.current;
     if (!el) return;
     const w = el.clientWidth || 1;
     setIdx(Math.min(slides.length - 1, Math.max(0, Math.round(el.scrollLeft / w))));
-  };
+  }, [slides.length]);
+
+  useEffect(() => {
+    setIdx(0);
+    const el = scRef.current;
+    if (el && slides.length > 0) el.scrollTo({ left: 0, behavior: 'auto' });
+  }, [slides.length]);
+
+  useEffect(() => {
+    if (slides.length <= 1) return;
+    const tick = () => {
+      const el = scRef.current;
+      if (!el) return;
+      const w = el.clientWidth;
+      if (!w) return;
+      const n = slides.length;
+      const cur = Math.min(n - 1, Math.max(0, Math.round(el.scrollLeft / w)));
+      const next = (cur + 1) % n;
+      // `auto` snaps reliably; `smooth` often misses final scrollLeft / snap on some browsers
+      el.scrollTo({ left: next * w, behavior: 'auto' });
+      setIdx(next);
+    };
+    const id = window.setInterval(tick, 5000);
+    return () => window.clearInterval(id);
+  }, [slides.length]);
+
   return (
     <>
       <div
