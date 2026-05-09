@@ -21,6 +21,7 @@ import {
 } from '../utils/postOrderAdSchedule';
 import { getSlidesFromDoc, parseSlidesFromBody, requireNonEmptySlides } from '../utils/postOrderAdSlides';
 import { FeatureKeys } from '../utils/featureCatalog';
+import { buildIntegrationsOverview } from '../utils/integrationsOverview';
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -235,6 +236,16 @@ function cleanupPostOrderAdTemp(file: Express.Multer.File | undefined): void {
 }
 
 const router = Router();
+
+// GET /api/platform/integrations-overview — third-party balances & usage (platform admin)
+router.get('/integrations-overview', ...platformAuth, async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const overview = await buildIntegrationsOverview();
+    res.json(overview);
+  } catch (err) {
+    next(err);
+  }
+});
 
 // GET /api/platform/stores
 router.get('/stores', ...platformAuth, async (_req: Request, res: Response, next: NextFunction) => {

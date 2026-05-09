@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
 import { createAppError } from '../middleware/errorHandler';
+import { sendMemberWalletSpendSms } from './twilioSms';
 
 export const PIN_MIN_LEN = 4;
 export const PIN_MAX_LEN = 12;
@@ -211,6 +212,15 @@ export async function debitMemberWallet(params: {
     orderId: params.orderId,
     checkoutId: params.checkoutId,
     note: params.note || '',
+  });
+
+  void sendMemberWalletSpendSms({
+    storeId: params.storeId,
+    memberPhoneLocal: doc.phone,
+    spentEuro: amt,
+    balanceEuro: balanceAfter,
+  }).catch((e) => {
+    console.error('[twilio] member spend SMS failed:', e instanceof Error ? e.message : e);
   });
 
   return { balanceAfter, txnId: txn._id as mongoose.Types.ObjectId };

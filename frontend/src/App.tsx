@@ -7,6 +7,7 @@ import PortalHome from './pages/PortalHome';
 import PlatformLoginPage from './pages/platform/PlatformLoginPage';
 import PlatformStoresPage from './pages/platform/PlatformStoresPage';
 import PlatformPostOrderAdsPage from './pages/platform/PlatformPostOrderAdsPage';
+import PlatformIntegrationsPage from './pages/platform/PlatformIntegrationsPage';
 import LoginPage from './pages/LoginPage';
 import CustomerLayout from './layouts/CustomerLayout';
 import CashierLayout from './layouts/CashierLayout';
@@ -95,6 +96,7 @@ export default function App() {
             <Route index element={<Navigate to="stores" replace />} />
             <Route path="stores" element={<PlatformStoresPage />} />
             <Route path="ads" element={<PlatformPostOrderAdsPage />} />
+            <Route path="integrations" element={<PlatformIntegrationsPage />} />
           </Route>
 
           <Route path="/:storeSlug" element={<StoreRouteShell />}>

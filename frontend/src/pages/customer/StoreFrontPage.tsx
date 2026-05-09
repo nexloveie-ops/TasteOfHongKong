@@ -45,6 +45,7 @@ export default function StoreFrontPage() {
 
   const phone = (config.restaurant_phone || '').trim();
   const address = (config.restaurant_address || '').trim();
+  const email = (config.restaurant_email || '').trim();
   const storeTitle = displayName || storeSlug;
   const slots = useMemo(() => parseHoursSlots(config.business_hours_slots), [config.business_hours_slots]);
 
@@ -191,7 +192,7 @@ export default function StoreFrontPage() {
             </div>
 
             {/* Info grid */}
-            {(slots.length > 0 || phone || address) && (
+            {(slots.length > 0 || phone || address || email) && (
               <div style={{ marginTop: 14 }}>
                 <div style={{
                   fontSize: 11,
@@ -228,6 +229,24 @@ export default function StoreFrontPage() {
                           {lang.startsWith('zh') ? '电话' : 'Phone'}
                         </span>
                         <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--red-primary)' }}>{phone}</span>
+                      </div>
+                    </a>
+                  ) : null}
+                  {email ? (
+                    <a href={`mailto:${email}`} style={{ ...infoCardStyle, textDecoration: 'none', color: 'inherit' }}>
+                      <span style={{ fontSize: 18, lineHeight: 1 }} aria-hidden>✉️</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>
+                          {lang.startsWith('zh') ? '邮箱' : 'Email'}
+                        </span>
+                        <span style={{
+                          fontWeight: 600,
+                          fontSize: 14,
+                          color: 'var(--blue, #1565c0)',
+                          wordBreak: 'break-all' as const,
+                        }}>
+                          {email}
+                        </span>
                       </div>
                     </a>
                   ) : null}
@@ -335,16 +354,30 @@ export default function StoreFrontPage() {
                     fontWeight: 700,
                     borderRadius: 14,
                     borderWidth: canDelivery ? 2 : undefined,
+                    borderColor: canDelivery ? 'rgba(74, 55, 40, 0.35)' : undefined,
                     textAlign: 'left',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'stretch',
                     gap: 4,
                     background: canDelivery ? 'var(--bg-white)' : undefined,
+                    color: canDelivery ? 'var(--text-dark)' : undefined,
+                    boxShadow: canDelivery ? '0 2px 10px rgba(44, 24, 16, 0.08)' : undefined,
                   }}
                 >
-                  <span>🥡 {lang.startsWith('zh') ? '到店自取' : 'Pickup'}</span>
-                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>{t('customer.storePortalPickupHint')}</span>
+                  <span style={{ color: canDelivery ? 'var(--text-dark)' : '#fff' }}>
+                    🥡 {lang.startsWith('zh') ? '到店自取' : 'Pickup'}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      lineHeight: 1.4,
+                      color: canDelivery ? 'var(--text-body)' : 'rgba(255,255,255,0.95)',
+                    }}
+                  >
+                    {t('customer.storePortalPickupHint')}
+                  </span>
                 </button>
               </div>
               {!isOpen && !hoursLoading ? (

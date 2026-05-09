@@ -4,6 +4,7 @@ import {
   expandOrderPhoneQueryVariants,
   normalizeMemberPhone,
 } from './memberWalletOps';
+import { memberPhoneToSmsE164 } from './twilioSms';
 
 describe('normalizeMemberPhone', () => {
   it('strips spaces, parentheses, plus and hyphens', () => {
@@ -48,6 +49,13 @@ describe('customerPhoneMatchCandidates', () => {
 
   it('returns empty when too short', () => {
     expect(customerPhoneMatchCandidates('123')).toEqual([]);
+  });
+});
+
+describe('memberPhoneToSmsE164', () => {
+  it('maps Irish 08 mobile to +353', () => {
+    expect(memberPhoneToSmsE164('0871234567')).toBe('+353871234567');
+    expect(memberPhoneToSmsE164('+353 87 123 4567')).toBe('+353871234567');
   });
 });
 

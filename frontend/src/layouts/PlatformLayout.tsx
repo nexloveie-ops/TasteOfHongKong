@@ -63,6 +63,20 @@ export default function PlatformLayout() {
           店铺管理
         </NavLink>
         <NavLink
+          to="/platform/integrations"
+          style={({ isActive }) => ({
+            padding: '12px 18px',
+            color: isActive ? '#fff' : 'rgba(232,234,246,0.85)',
+            textDecoration: 'none',
+            fontSize: 14,
+            fontWeight: isActive ? 600 : 500,
+            borderBottom: isActive ? '3px solid #fff' : '3px solid transparent',
+            marginBottom: -1,
+          })}
+        >
+          API 与余额
+        </NavLink>
+        <NavLink
           to="/platform/ads"
           style={({ isActive }) => ({
             padding: '12px 18px',
