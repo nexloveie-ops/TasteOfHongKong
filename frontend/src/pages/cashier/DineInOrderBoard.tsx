@@ -104,7 +104,7 @@ export default function DineInOrderBoard() {
             type: 'seat' as const,
             tableNumber: order.tableNumber,
             totalAmount: data.totalAmount,
-            paymentMethod: (memberPrepaid ? 'member' : 'online') as const,
+            paymentMethod: memberPrepaid ? ('member' as const) : ('online' as const),
             ...(memberPrepaid
               ? {
                   memberCreditUsed: memberUsed,

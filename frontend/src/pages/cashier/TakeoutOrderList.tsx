@@ -110,7 +110,7 @@ export default function TakeoutOrderList() {
           checkoutId: data.checkoutId,
           type: 'seat' as const,
           totalAmount: data.totalAmount,
-          paymentMethod: (memberPrepaid ? 'member' : 'online') as const,
+          paymentMethod: memberPrepaid ? ('member' as const) : ('online' as const),
           ...(memberPrepaid
             ? { memberCreditUsed: memberUsed, memberPhoneSnapshot: String(order.memberPhoneSnapshot || '') }
             : {}),
