@@ -103,6 +103,7 @@ export default function RestaurantInfo() {
       if (res.ok) {
         const data = await res.json();
         setLogoUrl(data.logoUrl);
+        await refreshRestaurantConfig(storeSlug);
       }
     } catch { /* ignore */ }
     finally { setUploadingLogo(false); }

@@ -61,7 +61,11 @@ if (USE_GCS) {
         return;
       }
       res.setHeader('Content-Type', result.contentType);
-      res.setHeader('Cache-Control', 'public, max-age=31536000');
+      const isLogo = req.params.folder === 'logo';
+      res.setHeader(
+        'Cache-Control',
+        isLogo ? 'public, max-age=3600, must-revalidate' : 'public, max-age=31536000',
+      );
       result.stream.pipe(res);
     } catch {
       res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch file' } });

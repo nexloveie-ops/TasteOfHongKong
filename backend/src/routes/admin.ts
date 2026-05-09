@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import multer from 'multer';
 import os from 'os';
+import { randomBytes } from 'crypto';
 import path from 'path';
 import fs from 'fs';
 import mongoose from 'mongoose';
@@ -200,7 +201,9 @@ router.post('/logo',
         fs.unlink(req.file.path, () => {});
         throw createAppError('VALIDATION_ERROR', 'Invalid image format');
       }
-      const filename = `logo${ext}`;
+      // 多店共用同一 GCS 路径（如 logo/logo.jpg）会互相覆盖；固定 URL 还会被长期缓存。
+      const storeTag = String(req.storeId);
+      const filename = `logo-${storeTag}-${Date.now()}-${randomBytes(4).toString('hex')}${ext}`;
       const localDest = path.join(LOGO_DIR, filename);
       fs.copyFileSync(req.file.path, localDest);
       const logoUrl = await uploadFile(localDest, 'logo', filename);

@@ -27,15 +27,21 @@ export async function uploadFile(
   localFilePath: string,
   folder: UploadFolder,
   filename: string,
+  opts?: { cacheControl?: string },
 ): Promise<string> {
   const destination = `${folder}/${filename}`;
+  const cacheControl =
+    opts?.cacheControl ??
+    (folder === 'logo'
+      ? 'public, max-age=3600, must-revalidate'
+      : 'public, max-age=31536000');
 
   if (USE_GCS && storage) {
     const bucket = storage.bucket(GCS_BUCKET);
     await bucket.upload(localFilePath, {
       destination,
       metadata: {
-        cacheControl: 'public, max-age=31536000',
+        cacheControl,
       },
     });
     // Clean up local temp file
