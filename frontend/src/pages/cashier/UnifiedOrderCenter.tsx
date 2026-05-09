@@ -28,6 +28,8 @@ interface OrderRow {
   deliveryFeeEuro?: number;
   /** 顾客 Stripe 支付成功时间（ISO）；完结后仍存在 */
   customerOnlinePaymentAt?: string;
+  pickupSlotLabel?: string;
+  pickupSlotStart?: string;
   items: { _id: string; quantity: number; unitPrice: number; itemName: string; lineKind?: string; selectedOptions?: { extraPrice?: number }[] }[];
   appliedBundles?: { discount: number }[];
   createdAt: string;
@@ -858,6 +860,12 @@ export default function UnifiedOrderCenter() {
                         <span style={{ color: '#666', width: 78, flexShrink: 0 }}>订单金额</span>
                         <span style={{ fontWeight: 800, color: 'var(--red-primary)', marginLeft: 'auto', minWidth: 56, textAlign: 'right' }}>€{calcTotal(o).toFixed(2)}</span>
                       </div>
+                      {o.pickupSlotLabel?.trim() ? (
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, paddingTop: 4, borderTop: '1px dashed #eee' }}>
+                          <span style={{ color: '#666', width: 78, flexShrink: 0 }}>取餐</span>
+                          <span style={{ fontWeight: 600, color: '#1565c0', flex: 1, textAlign: 'right' }}>{o.pickupSlotLabel.trim()}</span>
+                        </div>
+                      ) : null}
                     </div>
                   ) : (
                     <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>

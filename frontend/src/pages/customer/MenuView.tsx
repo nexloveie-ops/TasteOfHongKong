@@ -8,6 +8,7 @@ import type { OfferData } from '../../utils/bundleMatcher';
 import { useRestaurantConfig } from '../../hooks/useRestaurantConfig';
 import { useBusinessStatus } from '../../hooks/useBusinessStatus';
 import { apiFetch } from '../../api/client';
+import BannerPlatformCredit from '../../components/customer/BannerPlatformCredit';
 
 interface Category { _id: string; sortOrder: number; translations: { locale: string; name: string }[]; }
 interface AllergenData { _id: string; icon: string; }
@@ -23,15 +24,15 @@ interface MenuItemData {
   }[];
 }
 
-export default function MenuView() {
+export default function MenuView({ storeFrontEmbed = false }: { storeFrontEmbed?: boolean }) {
   const { i18n, t } = useTranslation();
   const { addItem, items: cartItems, decreaseQuantity, getItemKey, editOrderId } = useCart();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { storeSlug } = useParams<{ storeSlug: string }>();
-  const { displayName, displayNameEn } = useRestaurantConfig();
+  const { displayName, displayNameOther } = useRestaurantConfig();
   const heroTitle = displayName || storeSlug;
-  const heroSub = displayNameEn || displayName || storeSlug;
+  const heroSub = displayNameOther;
   const { isOpen, reason, loading: statusLoading } = useBusinessStatus();
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItemData[]>([]);
@@ -110,6 +111,10 @@ export default function MenuView() {
       .catch(() => {});
   }, [lang]);
 
+  useEffect(() => {
+    if (storeFrontEmbed && activeOffers.length > 0) setHeroHidden(false);
+  }, [storeFrontEmbed, activeOffers.length]);
+
   const getName = (translations: { locale: string; name: string }[]) => {
     const found = translations.find(t2 => t2.locale === lang) || translations[0];
     return found?.name || '';
@@ -162,7 +167,7 @@ export default function MenuView() {
     }
   }, []);
 
-  const [heroHidden, setHeroHidden] = useState(false);
+  const [heroHidden, setHeroHidden] = useState(() => !!storeFrontEmbed);
   const lastScrollY = useRef(0);
   const heroHiddenRef = useRef(false);
   useEffect(() => {
@@ -231,33 +236,37 @@ export default function MenuView() {
     );
   }
 
+  const hideEntireHero = storeFrontEmbed && activeOffers.length === 0;
+  const showTitleBlock = !storeFrontEmbed;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Hero — hides on scroll down, shows on scroll up */}
+      {/* Hero — hides on scroll down, shows on scroll up; storefront embed skips branded title when parent already showed it */}
       <div style={{
-        position: 'relative', height: heroHidden ? 0 : (activeOffers.length > 0 ? 'auto' : 140), minHeight: heroHidden ? 0 : 140, flexShrink: 0,
+        position: 'relative',
+        height: heroHidden ? 0 : (hideEntireHero ? 0 : (activeOffers.length > 0 ? 'auto' : 140)),
+        minHeight: heroHidden ? 0 : (hideEntireHero ? 0 : 140),
+        flexShrink: 0,
         background: 'linear-gradient(135deg, #8B1A1A 0%, #C41E24 50%, #D4342A 100%)',
-        display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: heroHidden ? 0 : 20, overflow: 'hidden',
+        display: hideEntireHero ? 'none' : 'flex',
+        flexDirection: 'column', justifyContent: 'flex-end', padding: heroHidden ? 0 : (showTitleBlock ? 20 : 12), overflow: 'hidden',
         transition: 'min-height 0.3s ease, padding 0.3s ease',
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-          <div style={{ position: 'relative', zIndex: 1, color: '#fff' }}>
-            <h1 style={{ fontFamily: "'Noto Serif SC', serif", fontSize: 24, fontWeight: 700, letterSpacing: 3, marginBottom: 2 }}>{heroTitle}</h1>
-            <div style={{ fontSize: 11, fontWeight: 300, letterSpacing: 5, color: '#F0D68A' }}>{heroSub}</div>
-          </div>
-          <div style={{ position: 'absolute', top: 8, right: 12, zIndex: 1, textAlign: 'right', color: 'rgba(255,255,255,0.75)', fontSize: 9, lineHeight: 1.45, maxWidth: 'min(220px, 48vw)' }}>
-            <div style={{ fontWeight: 700, color: '#F0D68A', marginBottom: 2 }}>{t('customer.footerCompany')}</div>
-            <div>
-              <a href="mailto:info@lztechserve.com" style={{ color: '#F0D68A', fontWeight: 600, textDecoration: 'none' }}>
-                info@lztechserve.com
-              </a>
+        {!hideEntireHero && !heroHidden ? <BannerPlatformCredit variant="onGradient" /> : null}
+        {showTitleBlock ? (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+            <div style={{ position: 'relative', zIndex: 1, color: '#fff', paddingRight: 'min(200px, 42vw)' }}>
+              <h1 style={{ fontFamily: "'Noto Serif SC', serif", fontSize: 24, fontWeight: 700, letterSpacing: 3, marginBottom: 2 }}>{heroTitle}</h1>
+              {heroSub ? (
+                <div style={{ fontSize: 11, fontWeight: 300, letterSpacing: 5, color: '#F0D68A' }}>{heroSub}</div>
+              ) : null}
             </div>
           </div>
-        </div>
-        {/* Active offers — carousel */}
+        ) : null}
+        {/* Active offers — compact; stays below platform credit (z-index) */}
         {activeOffers.length > 0 && !heroHidden && (
           <div
-            style={{ marginTop: 12, position: 'relative' }}
+            style={{ marginTop: showTitleBlock ? 10 : 6, position: 'relative', zIndex: 1 }}
             onTouchStart={(e) => {
               const touch = e.touches[0];
               (e.currentTarget as HTMLDivElement).dataset.touchStartX = String(touch.clientX);
@@ -282,7 +291,7 @@ export default function MenuView() {
             {activeOffers.map((offer, idx) => (
               <div key={offer._id} onClick={() => setSelectedOffer(offer)} style={{
                 background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(4px)',
-                borderRadius: 10, padding: '10px 14px',
+                borderRadius: 8, padding: '6px 10px',
                 border: '1px solid rgba(240,214,138,0.3)',
                 cursor: 'pointer',
                 opacity: idx === bannerIndex ? 1 : 0,
@@ -292,25 +301,45 @@ export default function MenuView() {
                 right: idx === 0 ? undefined : 0,
                 transition: 'opacity 0.6s ease',
                 pointerEvents: idx === bannerIndex ? 'auto' : 'none',
+                marginLeft: 'max(0px, env(safe-area-inset-left))',
+                marginRight: 'max(0px, env(safe-area-inset-right))',
               }}>
-                {/* Circular countdown — top-left of each banner */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ color: '#F0D68A', fontSize: 13, fontWeight: 700 }}>
-                      🎁 {lang === 'zh-CN' ? offer.name : (offer.nameEn || offer.name)}
-                    </div>
-                    {(offer.description || offer.descriptionEn) && (
-                      <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: 11, marginTop: 2 }}>
-                        {lang === 'zh-CN' ? offer.description : (offer.descriptionEn || offer.description)}
-                      </div>
-                    )}
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  textAlign: 'center',
+                  gap: 3,
+                  paddingLeft: 4,
+                  paddingRight: 4,
+                  maxWidth: '100%',
+                  boxSizing: 'border-box',
+                }}>
+                  <div style={{ color: '#F0D68A', fontSize: 11, fontWeight: 700, lineHeight: 1.3 }}>
+                    🎁 {lang === 'zh-CN' ? offer.name : (offer.nameEn || offer.name)}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, marginLeft: 12, gap: 8 }}>
-                    <div style={{ color: '#fff', fontSize: 18, fontWeight: 700, fontFamily: "'Noto Serif SC', serif" }}>
+                  {(offer.description || offer.descriptionEn) && (
+                    <div style={{
+                      color: 'rgba(255,255,255,0.88)',
+                      fontSize: 10,
+                      lineHeight: 1.35,
+                      maxWidth: 'min(280px, 86vw)',
+                      maxHeight: 32,
+                      overflow: 'hidden',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                    }}>
+                      {lang === 'zh-CN' ? offer.description : (offer.descriptionEn || offer.description)}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <div style={{ color: '#fff', fontSize: 15, fontWeight: 700, fontFamily: "'Noto Serif SC', serif" }}>
                       €{offer.bundlePrice.toFixed(2)}
                     </div>
                     {activeOffers.length > 1 && idx === bannerIndex && (
-                      <svg width="20" height="20" viewBox="0 0 20 20" style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
+                      <svg width="16" height="16" viewBox="0 0 20 20" style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
                         <circle cx="10" cy="10" r="8" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2" />
                         <circle
                           key={countdownKey}
@@ -329,7 +358,7 @@ export default function MenuView() {
             ))}
             {/* Dots indicator */}
             {activeOffers.length > 1 && (
-              <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 6 }}>
                 {activeOffers.map((_, idx) => (
                   <div key={idx} onClick={(e) => { e.stopPropagation(); setBannerIndex(idx); }} style={{
                     width: idx === bannerIndex ? 16 : 6, height: 6, borderRadius: 3,

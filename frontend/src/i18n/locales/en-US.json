@@ -90,7 +90,16 @@
     "deliveryEircodePlaceholder": "Irish Eircode (7 characters, e.g. D02 XY43)",
     "deliveryAddressPlaceholder": "Address (may auto-fill from postcode)",
     "deliveryGeocoding": "Resolving postcode…",
-    "deliveryStraightLineKm": "Straight-line distance from store: {{km}} km (great circle, not driving route)"
+    "deliveryStraightLineKm": "Straight-line distance from store: {{km}} km (great circle, not driving route)",
+    "storePortalTagline": "Order online · Delivery & in-store pickup",
+    "storePortalAbout": "About this store",
+    "storePortalChooseTitle": "How would you like to order?",
+    "storePortalDeliveryHint": "We deliver to your address.",
+    "storePortalPickupHint": "Prepare ahead — pick up at the restaurant.",
+    "storePortalOpenNow": "Open now",
+    "storePortalClosedNow": "Closed",
+    "storePortalCheckingHours": "Checking hours…",
+    "storePortalMapEmbedTitle": "Store location map"
   },
   "cashier": {
     "title": "Cashier",

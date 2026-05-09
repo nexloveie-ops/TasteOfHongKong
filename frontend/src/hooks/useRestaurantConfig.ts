@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
 import { apiFetch } from '../api/client';
 import { useStoreSlug } from '../context/StoreContext';
@@ -13,6 +14,8 @@ export interface RestaurantConfig {
   restaurant_email?: string;
   receipt_terms?: string;
   receipt_print_copies?: string;
+  /** JSON array of { start, end } time strings — same as admin Business Hours */
+  business_hours_slots?: string;
 }
 
 const configBySlug = new Map<string, RestaurantConfig>();
@@ -66,6 +69,7 @@ export async function refreshRestaurantConfig(slug: string): Promise<RestaurantC
 }
 
 export function useRestaurantConfig() {
+  const { i18n } = useTranslation();
   const slug = useStoreSlug();
   const [config, setConfig] = useState<RestaurantConfig>(() => configBySlug.get(slug) || {});
 
@@ -82,10 +86,13 @@ export function useRestaurantConfig() {
     };
   }, [config, slug]);
 
-  const nameZh = config.restaurant_name_zh || '';
-  const nameEn = config.restaurant_name_en || '';
-  const displayName = nameZh || nameEn || '';
-  const displayNameEn = nameEn || nameZh || '';
+  const nameZh = (config.restaurant_name_zh || '').trim();
+  const nameEn = (config.restaurant_name_en || '').trim();
+  const wantsZh = (i18n.language || 'en-US').startsWith('zh');
+  const displayName = (wantsZh ? (nameZh || nameEn) : (nameEn || nameZh)) || '';
+  /** 另一语言店名（仅当中英文都有且不同时展示，避免重复） */
+  const displayNameOther =
+    nameZh && nameEn && nameZh !== nameEn ? (wantsZh ? nameEn : nameZh) : '';
 
-  return { config, displayName, displayNameEn, nameZh, nameEn };
+  return { config, displayName, displayNameOther, nameZh, nameEn };
 }

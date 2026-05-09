@@ -149,6 +149,8 @@ export function createOrdersRouter(io: SocketIOServer): Router {
         postalCode,
         deliverySource,
         deliveryDistanceKm: rawDeliveryDistanceKm,
+        pickupSlotLabel: rawPickupSlotLabel,
+        pickupSlotStart: rawPickupSlotStart,
       } = req.body;
 
       // Customer self-order channels follow business hour restrictions.
@@ -300,6 +302,19 @@ export function createOrdersRouter(io: SocketIOServer): Router {
         if (dist !== undefined) orderData.deliveryDistanceKm = dist;
         orderData.deliveryFeeEuro = fee;
         appendDeliveryFeeLineToOrderItems(orderItems as Record<string, unknown>[], type, fee);
+      }
+
+      if (type === 'takeout') {
+        const label = typeof rawPickupSlotLabel === 'string' ? rawPickupSlotLabel.trim() : '';
+        if (label) {
+          orderData.pickupSlotLabel = label.slice(0, 80);
+        }
+        if (rawPickupSlotStart != null && rawPickupSlotStart !== '') {
+          const d = new Date(rawPickupSlotStart as string);
+          if (!Number.isNaN(d.getTime())) {
+            orderData.pickupSlotStart = d;
+          }
+        }
       }
 
       if (type === 'phone') {

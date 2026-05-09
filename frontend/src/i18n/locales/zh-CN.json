@@ -90,7 +90,16 @@
     "deliveryEircodePlaceholder": "爱尔兰 Eircode（7 位，如 D02 XY43）",
     "deliveryAddressPlaceholder": "地址（填写邮编后可自动填充）",
     "deliveryGeocoding": "正在解析邮编…",
-    "deliveryStraightLineKm": "距店铺直线约 {{km}} km（大圆距离，非行车路线）"
+    "deliveryStraightLineKm": "距店铺直线约 {{km}} km（大圆距离，非行车路线）",
+    "storePortalTagline": "在线点餐 · 外卖送餐与到店自取",
+    "storePortalAbout": "门店信息",
+    "storePortalChooseTitle": "选择下单方式",
+    "storePortalDeliveryHint": "填写地址后配送到家",
+    "storePortalPickupHint": "下单备餐后到店取餐",
+    "storePortalOpenNow": "营业中",
+    "storePortalClosedNow": "休息中",
+    "storePortalCheckingHours": "查询营业时间…",
+    "storePortalMapEmbedTitle": "店铺位置地图"
   },
   "cashier": {
     "title": "收银台",

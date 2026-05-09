@@ -10,13 +10,12 @@ export default function LoginPage() {
   const storeSlug = useStoreSlug();
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { displayName, displayNameEn, config } = useRestaurantConfig();
+  const { displayName, displayNameOther, config } = useRestaurantConfig();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const titleMain = displayName || storeSlug;
-  const titleSub = displayNameEn || displayName || storeSlug;
   const logoUrl = config.restaurant_logo?.trim();
 
   useEffect(() => {
@@ -62,11 +61,13 @@ export default function LoginPage() {
         </div>
         <h1 style={{
           fontFamily: "'Noto Serif SC', serif", fontSize: 28, fontWeight: 700,
-          color: '#D32F2F', letterSpacing: 3, marginBottom: 4,
+          color: '#D32F2F', letterSpacing: 3, marginBottom: displayNameOther ? 4 : 24,
         }}>{titleMain}</h1>
-        <div style={{
-          fontSize: 11, letterSpacing: 4, color: '#999', marginBottom: 24, textTransform: 'uppercase',
-        }}>{titleSub}</div>
+        {displayNameOther ? (
+          <div style={{
+            fontSize: 11, letterSpacing: 4, color: '#999', marginBottom: 24, textTransform: 'uppercase',
+          }}>{displayNameOther}</div>
+        ) : null}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <input

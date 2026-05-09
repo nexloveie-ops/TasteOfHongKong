@@ -5,15 +5,15 @@ import { parseQRParams } from '../../utils/qrCode';
 import { useRestaurantConfig } from '../../hooks/useRestaurantConfig';
 import { useStoreSlug } from '../../context/StoreContext';
 import { useBusinessStatus } from '../../hooks/useBusinessStatus';
+import BannerPlatformCredit from '../../components/customer/BannerPlatformCredit';
 
 export default function ScanLanding() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { t } = useTranslation();
   const storeSlug = useStoreSlug();
-  const { displayName, displayNameEn } = useRestaurantConfig();
-  const titleZh = displayName || storeSlug;
-  const titleEn = displayNameEn || displayName || storeSlug;
+  const { displayName, displayNameOther } = useRestaurantConfig();
+  const storeTitle = displayName || storeSlug;
   const { isOpen, reason, loading } = useBusinessStatus();
   const params = parseQRParams(searchParams);
 
@@ -53,13 +53,16 @@ export default function ScanLanding() {
           borderRadius: 16, padding: '40px 32px', marginBottom: 24, width: '100%', maxWidth: 340,
           color: '#fff', position: 'relative', overflow: 'hidden',
         }}>
-          <div style={{ position: 'relative', zIndex: 1 }}>
+          <BannerPlatformCredit variant="onGradient" />
+          <div style={{ position: 'relative', zIndex: 1, paddingRight: 'min(200px, 46vw)' }}>
             <h1 style={{ fontFamily: "'Noto Serif SC', serif", fontSize: 26, fontWeight: 700, letterSpacing: 3, marginBottom: 4 }}>
-              {titleZh}
+              {storeTitle}
             </h1>
-            <div style={{ fontSize: 12, fontWeight: 300, letterSpacing: 6, color: '#F0D68A', textTransform: 'uppercase' }}>
-              {titleEn}
-            </div>
+            {displayNameOther ? (
+              <div style={{ fontSize: 12, fontWeight: 300, letterSpacing: 6, color: '#F0D68A', textTransform: 'uppercase' }}>
+                {displayNameOther}
+              </div>
+            ) : null}
             <div style={{
               display: 'inline-block', marginTop: 10, padding: '4px 14px',
               border: '1px solid #D4A853', color: '#F0D68A', fontSize: 11,

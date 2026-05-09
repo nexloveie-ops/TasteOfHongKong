@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { StoreRouteShell } from './context/StoreContext';
 import { CartProvider } from './context/CartContext';
@@ -12,6 +12,7 @@ import CustomerLayout from './layouts/CustomerLayout';
 import CashierLayout from './layouts/CashierLayout';
 import AdminLayout from './layouts/AdminLayout';
 import ScanLanding from './pages/customer/ScanLanding';
+import StoreFrontPage from './pages/customer/StoreFrontPage';
 import MenuView from './pages/customer/MenuView';
 import CartPage from './pages/customer/CartPage';
 import OrderStatusPage from './pages/customer/OrderStatusPage';
@@ -44,7 +45,7 @@ const DEFAULT_STORE_SLUG = import.meta.env.VITE_DEFAULT_STORE_SLUG || 'demo';
 
 function StoreUnknownRoute() {
   const { storeSlug } = useParams<{ storeSlug: string }>();
-  return <Navigate to={`/${storeSlug}/login`} replace />;
+  return <Navigate to={`/${storeSlug}`} replace />;
 }
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -95,14 +96,16 @@ export default function App() {
           </Route>
 
           <Route path="/:storeSlug" element={<StoreRouteShell />}>
-            <Route index element={<Navigate to="login" replace />} />
             <Route path="login" element={<LoginPage />} />
 
-            <Route path="customer" element={<CartProvider><CustomerLayout /></CartProvider>}>
-              <Route index element={<ScanLanding />} />
-              <Route path="menu" element={<MenuView />} />
-              <Route path="cart" element={<CartPage />} />
-              <Route path="order/:orderId" element={<OrderStatusPage />} />
+            <Route element={<CartProvider><CustomerLayout /></CartProvider>}>
+              <Route index element={<StoreFrontPage />} />
+              <Route path="customer" element={<Outlet />}>
+                <Route index element={<ScanLanding />} />
+                <Route path="menu" element={<MenuView />} />
+                <Route path="cart" element={<CartPage />} />
+                <Route path="order/:orderId" element={<OrderStatusPage />} />
+              </Route>
             </Route>
 
             <Route path="cashier" element={<RequireAuth><CashierLayout /></RequireAuth>}>
@@ -143,7 +146,7 @@ export default function App() {
             <Route path="*" element={<StoreUnknownRoute />} />
           </Route>
 
-          <Route path="*" element={<Navigate to={`/${DEFAULT_STORE_SLUG}/login`} replace />} />
+          <Route path="*" element={<Navigate to={`/${DEFAULT_STORE_SLUG}`} replace />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

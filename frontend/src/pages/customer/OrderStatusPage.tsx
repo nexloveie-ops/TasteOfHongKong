@@ -25,6 +25,7 @@ interface Order {
   dailyOrderNumber?: number; status: string; items: OrderItem[];
   appliedBundles?: AppliedBundle[];
   deliveryFeeEuro?: number;
+  pickupSlotLabel?: string;
 }
 
 interface PostOrderSlide {
@@ -315,6 +316,20 @@ export default function OrderStatusPage() {
           flexShrink: 0,
         }}>{statusLabel}</span>
       </div>
+
+      {order.type === 'takeout' && order.pickupSlotLabel?.trim() ? (
+        <div style={{
+          marginBottom: 12,
+          padding: '8px 12px',
+          borderRadius: 8,
+          background: '#E3F2FD',
+          border: '1px solid #90CAF9',
+          fontSize: 13,
+          color: '#1565c0',
+        }}>
+          {lang === 'en-US' ? 'Pickup (approx.)' : '预约取餐'}：<strong>{order.pickupSlotLabel.trim()}</strong>
+        </div>
+      ) : null}
 
       {isPending && order.type === 'delivery' && (
         <div style={{

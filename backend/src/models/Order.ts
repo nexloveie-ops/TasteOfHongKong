@@ -43,6 +43,10 @@ const OrderSchema = new mongoose.Schema({
   /** 顾客端 Stripe 支付成功时间（送餐扫码付等）；完结后仍保留，便于区分线上已付 */
   customerOnlinePaymentAt: { type: Date },
   stripePaymentIntentId: { type: String },
+  /** 顾客自取「大致时段」展示文案（不做容量校验） */
+  pickupSlotLabel: { type: String, default: '' },
+  /** 该时段起始时间，便于收银排序；可选 */
+  pickupSlotStart: { type: Date },
   status: { type: String, enum: ['pending', 'paid_online', 'checked_out', 'completed', 'refunded', 'checked_out-hide', 'completed-hide'], default: 'pending' },
   items: [OrderItemSubdocSchema],
   appliedBundles: [AppliedBundleSchema],

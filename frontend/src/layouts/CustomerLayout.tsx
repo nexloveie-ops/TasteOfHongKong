@@ -60,8 +60,20 @@ export default function CustomerLayout() {
 
   const hasDiscount = finalTotal < totalAmount;
 
+  const onStorePortal = (() => {
+    const p = location.pathname.replace(/\/$/, '');
+    return p === `/${storeSlug}`;
+  })();
+
   const goToCart = () => {
-    navigate(`cart${qs ? '?' + qs : ''}`);
+    const p = new URLSearchParams(qs);
+    if (onStorePortal) p.set('return', 'store');
+    const tail = p.toString() ? `?${p.toString()}` : '';
+    navigate(`/${storeSlug}/customer/cart${tail}`);
+  };
+
+  const goToStorePortal = () => {
+    navigate(`/${storeSlug}`);
   };
 
   return (
@@ -72,17 +84,89 @@ export default function CustomerLayout() {
         padding: '10px 16px', background: 'var(--bg-white)',
         borderBottom: '1px solid var(--border-light)', flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {logoUrl ? (
-            <img src={logoUrl} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
-          ) : null}
-          <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 16, color: 'var(--red-primary)' }}>
-            {displayName || storeSlug}
-          </span>
-          {table && seat && (
-            <span style={{ fontSize: 12, color: 'var(--text-light)' }}>
-              🪑 Table {table} · Seat {seat}
-            </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          {onStorePortal ? (
+            <>
+              {logoUrl ? (
+                <button
+                  type="button"
+                  onClick={goToStorePortal}
+                  title={t('customer.backToStoreHome', { defaultValue: '返回店铺主页' })}
+                  style={{
+                    padding: 0, margin: 0, border: 'none', background: 'none', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', flexShrink: 0,
+                  }}
+                >
+                  <img src={logoUrl} alt="" style={{ width: 36, height: 36, borderRadius: 10, objectFit: 'cover', display: 'block', boxShadow: '0 2px 8px rgba(196,30,36,0.12)' }} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={goToStorePortal}
+                  title={t('customer.backToStoreHome', { defaultValue: '返回店铺主页' })}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    flexShrink: 0,
+                    padding: 0,
+                    margin: 0,
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: 'linear-gradient(135deg, var(--red-primary) 0%, #b71c1c 100%)',
+                    color: '#fff',
+                    fontWeight: 800,
+                    fontSize: 16,
+                    fontFamily: "'Noto Serif SC', serif",
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 2px 8px rgba(196,30,36,0.25)',
+                  }}
+                >
+                  {(displayName || storeSlug).slice(0, 1)}
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              {logoUrl ? (
+                <button
+                  type="button"
+                  onClick={goToStorePortal}
+                  title={t('customer.backToStoreHome', { defaultValue: '返回店铺主页' })}
+                  style={{
+                    padding: 0, margin: 0, border: 'none', background: 'none', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', flexShrink: 0,
+                  }}
+                >
+                  <img src={logoUrl} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={goToStorePortal}
+                  title={t('customer.backToStoreHome', { defaultValue: '返回店铺主页' })}
+                  style={{
+                    padding: 0, margin: 0, border: 'none', background: 'none', cursor: 'pointer',
+                    fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 16, color: 'var(--red-primary)',
+                    textAlign: 'left',
+                  }}
+                >
+                  {displayName || storeSlug}
+                </button>
+              )}
+              {logoUrl ? (
+                <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 16, color: 'var(--red-primary)' }}>
+                  {displayName || storeSlug}
+                </span>
+              ) : null}
+              {table && seat && (
+                <span style={{ fontSize: 12, color: 'var(--text-light)' }}>
+                  🪑 Table {table} · Seat {seat}
+                </span>
+              )}
+            </>
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

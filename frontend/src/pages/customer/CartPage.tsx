@@ -11,6 +11,23 @@ import {
 } from '../../utils/deliveryFeeRules';
 import { apiFetch } from '../../api/client';
 import { useRestaurantConfig } from '../../hooks/useRestaurantConfig';
+import BannerPlatformCredit from '../../components/customer/BannerPlatformCredit';
+
+/** 自取大致时段（仅展示与排序，不做容量） */
+const TAKEOUT_PICKUP_SLOTS = [
+  { labelZh: '11:30–12:00', labelEn: '11:30–12:00', h: 11, m: 30 },
+  { labelZh: '12:00–12:30', labelEn: '12:00–12:30', h: 12, m: 0 },
+  { labelZh: '12:30–13:00', labelEn: '12:30–1:00 PM', h: 12, m: 30 },
+  { labelZh: '17:30–18:00', labelEn: '5:30–6:00 PM', h: 17, m: 30 },
+  { labelZh: '18:00–18:30', labelEn: '6:00–6:30 PM', h: 18, m: 0 },
+  { labelZh: '18:30–19:00', labelEn: '6:30–7:00 PM', h: 18, m: 30 },
+] as const;
+
+function pickupSlotStartIso(h: number, m: number): string {
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d.toISOString();
+}
 
 export default function CartPage() {
   const { items, increaseQuantity, decreaseQuantity, removeItem, clearCart, totalAmount, totalItems, getItemKey, editOrderId, setEditOrderId } = useCart();
@@ -36,11 +53,20 @@ export default function CartPage() {
   const [deliveryDistanceKm, setDeliveryDistanceKm] = useState<number | null>(null);
   const [deliveryGeoError, setDeliveryGeoError] = useState('');
   const eircodeReqRef = useRef(0);
+  const [pickupSlotChoice, setPickupSlotChoice] = useState('');
 
   const table = searchParams.get('table');
   const seat = searchParams.get('seat');
   const orderType = searchParams.get('type');
-  const qs = searchParams.toString();
+
+  const menuBasePath = useMemo(() => {
+    const p = new URLSearchParams(searchParams);
+    p.delete('return');
+    const tail = p.toString() ? `?${p.toString()}` : '';
+    return searchParams.get('return') === 'store'
+      ? `/${storeSlug ?? ''}${tail}`
+      : `/${storeSlug ?? ''}/customer/menu${tail}`;
+  }, [storeSlug, searchParams]);
 
   // Fetch offers and menu item category mapping
   useEffect(() => {
@@ -183,6 +209,14 @@ export default function CartPage() {
         const body: Record<string, unknown> = { items: itemsPayload };
         if (orderType === 'takeout') {
           body.type = 'takeout';
+          if (pickupSlotChoice !== '') {
+            const idx = Number.parseInt(pickupSlotChoice, 10);
+            const slot = TAKEOUT_PICKUP_SLOTS[idx];
+            if (slot) {
+              body.pickupSlotLabel = lang.startsWith('zh') ? slot.labelZh : slot.labelEn;
+              body.pickupSlotStart = pickupSlotStartIso(slot.h, slot.m);
+            }
+          }
         } else if (orderType === 'delivery') {
           if (!deliveryCustomerName.trim() || !deliveryCustomerPhone.trim() || !deliveryAddress.trim() || !deliveryPostalCode.trim()) {
             setError('请填写送餐姓名、电话、地址与邮编');
@@ -235,7 +269,9 @@ export default function CartPage() {
         setError(t('customer.updateFailed'));
         return;
       }
-      const search = qs ? `?${qs}` : '';
+      const navParams = new URLSearchParams(searchParams);
+      navParams.delete('return');
+      const search = navParams.toString() ? `?${navParams.toString()}` : '';
       navigate(`/${storeSlug}/customer/order/${navId}${search}`);
     } catch {
       setError(t('customer.updateFailed'));
@@ -246,20 +282,24 @@ export default function CartPage() {
 
   if (items.length === 0) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 16 }}>
-        <span style={{ fontSize: 48, opacity: 0.3 }}>🛒</span>
-        <p style={{ color: 'var(--text-light)' }}>{t('customer.emptyCart')}</p>
-        <button className="btn btn-primary" onClick={() => navigate(`/${storeSlug}/customer/menu${qs ? `?${qs}` : ''}`)}>
-          {t('customer.backToMenu')}
-        </button>
+      <div style={{ position: 'relative', width: '100%', minHeight: '60vh', paddingTop: 36 }}>
+        <BannerPlatformCredit variant="onLight" />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', gap: 16 }}>
+          <span style={{ fontSize: 48, opacity: 0.3 }}>🛒</span>
+          <p style={{ color: 'var(--text-light)' }}>{t('customer.emptyCart')}</p>
+          <button className="btn btn-primary" onClick={() => navigate(menuBasePath)}>
+            {t('customer.backToMenu')}
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: 16, paddingBottom: 120 }}>
+    <div style={{ padding: 16, paddingBottom: 120, paddingTop: 40, position: 'relative' }}>
+      <BannerPlatformCredit variant="onLight" />
       <h2 style={{ fontFamily: "'Noto Serif SC', serif", fontSize: 20, marginBottom: 16, color: 'var(--text-dark)', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button onClick={() => navigate(`/${storeSlug}/customer/menu${qs ? `?${qs}` : ''}`)} style={{
+        <button onClick={() => navigate(menuBasePath)} style={{
           background: 'none', border: 'none', cursor: 'pointer', fontSize: 18,
           color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', padding: 0,
         }}>←</button>
@@ -339,6 +379,26 @@ export default function CartPage() {
           ) : (
             <span style={{ fontSize: 12, color: '#6D4C41' }}>{t('customer.deliveryNoPhoneConfigured')}</span>
           )}
+        </div>
+      )}
+      {orderType === 'takeout' && (
+        <div style={{ marginTop: 12 }}>
+          <label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 6 }}>
+            {lang.startsWith('zh') ? '取餐时段（大致）' : 'Pickup time (approx.)'}
+          </label>
+          <select
+            className="input"
+            value={pickupSlotChoice}
+            onChange={(e) => setPickupSlotChoice(e.target.value)}
+            style={{ width: '100%', fontSize: 14 }}
+          >
+            <option value="">{lang.startsWith('zh') ? '不指定 / 尽快' : 'No preference / ASAP'}</option>
+            {TAKEOUT_PICKUP_SLOTS.map((s, i) => (
+              <option key={i} value={String(i)}>
+                {lang.startsWith('zh') ? s.labelZh : s.labelEn}
+              </option>
+            ))}
+          </select>
         </div>
       )}
       {orderType === 'delivery' && (
