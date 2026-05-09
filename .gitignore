@@ -8,3 +8,6 @@ backend/uploads/
 .DS_Store
 demo/
 backend/seed-admin.ts
+
+# Local snapshots (git bundle / tar); do not commit
+backups/

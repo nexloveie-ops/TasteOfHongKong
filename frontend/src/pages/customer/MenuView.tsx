@@ -252,7 +252,13 @@ export default function MenuView({ storeFrontEmbed = false }: { storeFrontEmbed?
         flexDirection: 'column', justifyContent: 'flex-end', padding: heroHidden ? 0 : (showTitleBlock ? 20 : 12), overflow: 'hidden',
         transition: 'min-height 0.3s ease, padding 0.3s ease',
       }}>
-        {!hideEntireHero && !heroHidden ? <BannerPlatformCredit variant="onGradient" /> : null}
+        {!hideEntireHero && !heroHidden ? (
+          <BannerPlatformCredit
+            variant="onGradient"
+            storeTitle={storeFrontEmbed ? heroTitle : undefined}
+            storeSubtitle={storeFrontEmbed && heroSub ? heroSub : undefined}
+          />
+        ) : null}
         {showTitleBlock ? (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
             <div style={{ position: 'relative', zIndex: 1, color: '#fff', paddingRight: 'min(200px, 42vw)' }}>
