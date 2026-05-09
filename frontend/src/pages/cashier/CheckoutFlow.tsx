@@ -5,6 +5,11 @@ import { useAuth } from '../../context/AuthContext';
 import { type Order, type OrderItem } from '../../components/cashier/OrderDetail';
 import ReceiptPrint from '../../components/cashier/ReceiptPrint';
 import { apiFetch } from '../../api/client';
+import CashierMemberCheckoutBlock, {
+  buildMemberFullWalletCheckoutBody,
+  canMemberFullWalletPay,
+  type CashierMemberPreview,
+} from '../../components/cashier/CashierMemberCheckoutBlock';
 
 interface EditableItem extends OrderItem {
   editPrice: number; // editable unit price (for discount)
@@ -55,12 +60,14 @@ function groupBySeat(orders: Order[]): SeatGroup[] {
 export default function CheckoutFlow() {
   const { tableNumber, orderId } = useParams();
   const { t } = useTranslation();
-  const { token } = useAuth();
+  const { token, hasFeature } = useAuth();
+  const canMemberWallet = hasFeature('cashier.member.wallet');
   const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
   const [mode, setMode] = useState<'table' | 'seat'>('table');
   const [selectedSeat, setSelectedSeat] = useState<number | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'mixed'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'mixed' | 'member'>('cash');
+  const [memberTabPreview, setMemberTabPreview] = useState<CashierMemberPreview | null>(null);
   const [cashAmount, setCashAmount] = useState('');
   const [cardAmount, setCardAmount] = useState('');
   const [cashReceived, setCashReceived] = useState('');
@@ -69,9 +76,22 @@ export default function CheckoutFlow() {
   const [checkoutMeta, setCheckoutMeta] = useState<{ total: number; cashReceived: number; change: number } | null>(null);
   const [checkoutBundles, setCheckoutBundles] = useState<{ name: string; nameEn: string; discount: number }[]>([]);
   const [error, setError] = useState('');
+  const [memberPhone, setMemberPhone] = useState('');
+  const [useMemberCredit, setUseMemberCredit] = useState(false);
+  const [memberVerified, setMemberVerified] = useState<{ creditBalance: number } | null>(null);
+  const [memberLookupLoading, setMemberLookupLoading] = useState(false);
 
   // Editable items (for price discount)
   const [editableItems, setEditableItems] = useState<EditableItem[]>([]);
+
+  useEffect(() => {
+    if (!canMemberWallet) {
+      setPaymentMethod((pm) => (pm === 'member' ? 'cash' : pm));
+      setMemberTabPreview(null);
+      setUseMemberCredit(false);
+      setMemberVerified(null);
+    }
+  }, [canMemberWallet]);
 
   // Reset cashReceived when items change
   useEffect(() => {
@@ -126,23 +146,83 @@ export default function CheckoutFlow() {
     setEditableItems(prev => prev.map(i => i.menuItemId === menuItemId ? { ...i, editPrice: Math.max(0, newPrice) } : i));
   };
 
-  // Cash change calculation
+  const memberCreditUse = useMemo(() => {
+    if (!useMemberCredit || !memberVerified) return 0;
+    return Math.min(memberVerified.creditBalance, displayTotal);
+  }, [useMemberCredit, memberVerified, displayTotal]);
+
+  const remainderToPay = Math.max(0, Math.round((displayTotal - memberCreditUse) * 100) / 100);
+
+  const loadMemberForPartialCredit = async () => {
+    setError('');
+    setMemberVerified(null);
+    const q = encodeURIComponent(memberPhone.trim());
+    if (!q) return;
+    setMemberLookupLoading(true);
+    try {
+      const r = await apiFetch(`/api/members/cashier-lookup?phone=${q}`);
+      const d = await r.json().catch(() => null);
+      if (r.ok && d && typeof d.phone === 'string') {
+        setMemberVerified({ creditBalance: Number(d.creditBalance) || 0 });
+      } else {
+        setError(t('cashier.memberLookupFailed'));
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Load failed');
+    } finally {
+      setMemberLookupLoading(false);
+    }
+  };
+
+  // Cash change calculation（实收相对「待付现金部分」）
   const cashReceivedNum = parseFloat(cashReceived) || 0;
-  const changeAmount = paymentMethod === 'cash' ? Math.max(0, cashReceivedNum - displayTotal) : 0;
-  const cashValid = paymentMethod !== 'cash' || cashReceivedNum >= displayTotal;
+  const changeAmount = paymentMethod === 'cash' ? Math.max(0, cashReceivedNum - remainderToPay) : 0;
+  const cashValid = paymentMethod !== 'cash' || cashReceivedNum >= remainderToPay - 0.001;
+  const mixedValid =
+    paymentMethod !== 'mixed' ||
+    Math.abs(Number(cashAmount) + Number(cardAmount) - remainderToPay) <= 0.001;
 
   const handleCheckout = async () => {
-    if (paymentMethod === 'cash' && cashReceivedNum < displayTotal) {
+    if (paymentMethod === 'member') {
+      if (!canMemberFullWalletPay(memberTabPreview, displayTotal)) {
+        setError(t('member.verifyFirst', '请先载入会员并确认余额'));
+        return;
+      }
+    } else if (useMemberCredit && (!memberVerified || !memberPhone.trim())) {
+      setError(t('member.verifyFirst', '请先载入会员'));
+      return;
+    }
+    if (paymentMethod === 'cash' && cashReceivedNum < remainderToPay - 0.001) {
       setError(t('cashier.insufficientCash', '实收金额不足'));
+      return;
+    }
+    if (paymentMethod === 'mixed' && !mixedValid) {
+      setError(t('cashier.mixedMismatch', '现金+刷卡须等于待付金额'));
       return;
     }
     setLoading(true);
     setError('');
     try {
-      const body: Record<string, unknown> = { paymentMethod };
-      if (paymentMethod === 'cash') body.cashAmount = displayTotal;
-      else if (paymentMethod === 'card') body.cardAmount = displayTotal;
-      else { body.cashAmount = Number(cashAmount); body.cardAmount = Number(cardAmount); }
+      let body: Record<string, unknown>;
+      if (paymentMethod === 'member' && memberTabPreview) {
+        body = buildMemberFullWalletCheckoutBody(displayTotal, memberTabPreview.phone);
+      } else {
+        body = { paymentMethod };
+        if (useMemberCredit && memberVerified) {
+          body.memberPhone = memberPhone.trim();
+          body.memberCreditAmount = memberCreditUse;
+        }
+        if (remainderToPay > 0.001) {
+          if (paymentMethod === 'cash') body.cashAmount = remainderToPay;
+          else if (paymentMethod === 'card') body.cardAmount = remainderToPay;
+          else if (paymentMethod === 'mixed') {
+            body.cashAmount = Number(cashAmount);
+            body.cardAmount = Number(cardAmount);
+          }
+        } else {
+          body.paymentMethod = 'cash';
+        }
+      }
 
       const meta = { total: displayTotal, cashReceived: cashReceivedNum, change: changeAmount };
 
@@ -334,15 +414,80 @@ export default function CheckoutFlow() {
           <span style={{ color: 'var(--red-primary)', fontFamily: "'Noto Serif SC', serif" }}>€{displayTotal.toFixed(2)}</span>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          {(['cash', 'card', 'mixed'] as const).map(m => (
-            <button key={m} onClick={() => { setPaymentMethod(m); setCashReceived(''); }} className="btn" style={{
-              flex: 1, background: paymentMethod === m ? 'var(--red-primary)' : 'var(--bg)',
-              color: paymentMethod === m ? '#fff' : 'var(--text-secondary)',
-              border: '1px solid var(--border)',
-            }}>{t(`cashier.${m}`)}</button>
+        {paymentMethod !== 'member' ? (
+          <div style={{ marginBottom: 14, padding: 12, background: 'var(--bg)', borderRadius: 8, border: '1px solid var(--border-light)' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+              <input
+                type="checkbox"
+                checked={useMemberCredit}
+                onChange={(e) => {
+                  setUseMemberCredit(e.target.checked);
+                  if (!e.target.checked) setMemberVerified(null);
+                }}
+              />
+              {t('member.useCredit', '使用会员储值')}
+            </label>
+            {useMemberCredit ? (
+              <>
+                <input className="input" placeholder={t('member.phone', '手机号')} value={memberPhone} onChange={(e) => { setMemberPhone(e.target.value); setMemberVerified(null); }} style={{ width: '100%', marginBottom: 8 }} />
+                <button type="button" className="btn btn-outline" style={{ width: '100%', marginBottom: 8 }} disabled={memberLookupLoading || !memberPhone.trim()} onClick={() => void loadMemberForPartialCredit()}>
+                  {memberLookupLoading ? t('common.loading') : t('cashier.memberLoadInfo')}
+                </button>
+                {memberVerified ? (
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                    {t('member.creditUseLine', '储值抵扣 €{{c}}，待付 €{{r}}', {
+                      c: memberCreditUse.toFixed(2),
+                      r: remainderToPay.toFixed(2),
+                    })}
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+          {(canMemberWallet ? (['cash', 'card', 'mixed', 'member'] as const) : (['cash', 'card', 'mixed'] as const)).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => {
+                setPaymentMethod(m);
+                setCashReceived('');
+                if (m === 'member') {
+                  setUseMemberCredit(false);
+                  setMemberVerified(null);
+                  setMemberTabPreview(null);
+                } else {
+                  setMemberTabPreview(null);
+                }
+              }}
+              className="btn"
+              style={{
+                flex: '1 1 40%',
+                minWidth: 72,
+                background: paymentMethod === m ? 'var(--red-primary)' : 'var(--bg)',
+                color: paymentMethod === m ? '#fff' : 'var(--text-secondary)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              {t(`cashier.${m}`)}
+            </button>
           ))}
         </div>
+
+        {paymentMethod === 'member' ? (
+          <CashierMemberCheckoutBlock
+            payAmount={displayTotal}
+            phone={memberPhone}
+            setPhone={(v) => {
+              setMemberPhone(v);
+              setMemberTabPreview(null);
+            }}
+            preview={memberTabPreview}
+            setPreview={setMemberTabPreview}
+          />
+        ) : null}
 
         {/* Cash: input received amount + show change */}
         {paymentMethod === 'cash' && (
@@ -352,18 +497,18 @@ export default function CheckoutFlow() {
             </label>
             <input className="input" type="number" step="0.01" min="0" value={cashReceived}
               onChange={e => setCashReceived(e.target.value)}
-              placeholder={`≥ €${displayTotal.toFixed(2)}`}
+              placeholder={`≥ €${remainderToPay.toFixed(2)}`}
               style={{ width: '100%', fontSize: 18, fontWeight: 700, padding: '10px 12px', textAlign: 'right' }} />
             {cashReceivedNum > 0 && (
               <div style={{
                 marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 padding: '8px 12px', borderRadius: 6,
-                background: cashReceivedNum >= displayTotal ? '#E8F5E9' : '#FFEBEE',
+                background: cashReceivedNum >= remainderToPay - 0.001 ? '#E8F5E9' : '#FFEBEE',
               }}>
                 <span style={{ fontSize: 14, fontWeight: 600 }}>{t('cashier.change', '找零')}</span>
                 <span style={{
                   fontSize: 22, fontWeight: 700,
-                  color: cashReceivedNum >= displayTotal ? 'var(--green)' : 'var(--red-primary)',
+                  color: cashReceivedNum >= remainderToPay - 0.001 ? 'var(--green)' : 'var(--red-primary)',
                 }}>
                   €{changeAmount.toFixed(2)}
                 </span>
@@ -381,7 +526,14 @@ export default function CheckoutFlow() {
 
         <button className="btn btn-primary" style={{ width: '100%', fontSize: 16, padding: '14px 0' }}
           onClick={handleCheckout}
-          disabled={loading || (mode === 'seat' && !activeSeatGroup) || (paymentMethod === 'cash' && !cashValid)}>
+          disabled={
+            loading ||
+            (mode === 'seat' && !activeSeatGroup) ||
+            (paymentMethod === 'cash' && !cashValid) ||
+            (paymentMethod === 'mixed' && !mixedValid) ||
+            (paymentMethod === 'member' && !canMemberFullWalletPay(memberTabPreview, displayTotal)) ||
+            (paymentMethod !== 'member' && useMemberCredit && !memberVerified)
+          }>
           {loading ? t('common.loading') : t('cashier.submitCheckout')}
         </button>
       </div>

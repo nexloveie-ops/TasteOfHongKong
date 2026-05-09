@@ -17,6 +17,7 @@ const sidebarItems = [
   { path: 'qr-codes', icon: '📱', key: 'admin.qrCodes' },
   { path: 'offers', icon: '🎁', key: 'admin.offers', featureKey: 'admin.offers.page' },
   { path: 'coupons', icon: '🎟️', key: 'admin.coupons', featureKey: 'admin.coupons.page' },
+  { path: 'members', icon: '👤', key: 'admin.membersNav', featureKey: 'cashier.member.wallet' },
   { path: 'orders', icon: '📋', key: 'admin.orderHistory', featureKey: 'admin.orderHistory.page' },
   { path: 'reports', icon: '📊', key: 'admin.reports' },
   { path: 'business-hours', icon: '🕒', key: 'admin.businessHours' },

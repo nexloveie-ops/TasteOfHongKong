@@ -4,6 +4,11 @@ import { io } from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
 import ReceiptPrint from '../../components/cashier/ReceiptPrint';
 import { apiFetch } from '../../api/client';
+import CashierMemberCheckoutBlock, {
+  buildMemberFullWalletCheckoutBody,
+  canMemberFullWalletPay,
+  type CashierMemberPreview,
+} from '../../components/cashier/CashierMemberCheckoutBlock';
 
 interface OrderItem {
   _id: string; menuItemId: string; quantity: number; unitPrice: number;
@@ -21,16 +26,19 @@ interface PhoneOrder {
 
 export default function PhoneOrderList() {
   const { t } = useTranslation();
-  const { token, user } = useAuth();
+  const { token, user, hasFeature } = useAuth();
+  const canMemberWallet = hasFeature('cashier.member.wallet');
   const [orders, setOrders] = useState<PhoneOrder[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
 
   // Payment state
   const [showPayment, setShowPayment] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'mixed'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'mixed' | 'member'>('cash');
   const [cashReceived, setCashReceived] = useState('');
   const [mixedCash, setMixedCash] = useState('');
   const [mixedCard, setMixedCard] = useState('');
+  const [memberPhone, setMemberPhone] = useState('');
+  const [memberPreview, setMemberPreview] = useState<CashierMemberPreview | null>(null);
   const [paying, setPaying] = useState(false);
 
   // Receipt state
@@ -57,6 +65,13 @@ export default function PhoneOrderList() {
     return () => { socket.disconnect(); };
   }, [fetchOrders, user?.storeId]);
 
+  useEffect(() => {
+    if (!canMemberWallet && paymentMethod === 'member') {
+      setPaymentMethod('cash');
+      setMemberPreview(null);
+    }
+  }, [canMemberWallet, paymentMethod]);
+
   const orderTotal = (o: PhoneOrder) => {
     const itemsSum = o.items.reduce((s, i) => {
       const optExtra = (i.selectedOptions || []).reduce((a, opt) => a + (opt.extraPrice || 0), 0);
@@ -76,6 +91,8 @@ export default function PhoneOrderList() {
     setSelected(orderId);
     setCashReceived('');
     setPaymentMethod('cash');
+    setMemberPhone('');
+    setMemberPreview(null);
     setShowPayment(true);
   };
 
@@ -83,10 +100,19 @@ export default function PhoneOrderList() {
     if (!selected) return;
     setPaying(true);
     try {
-      const checkoutBody: Record<string, unknown> = { paymentMethod };
-      if (paymentMethod === 'cash') checkoutBody.cashAmount = selectedTotal;
-      else if (paymentMethod === 'card') checkoutBody.cardAmount = selectedTotal;
-      else { checkoutBody.cashAmount = Number(mixedCash); checkoutBody.cardAmount = Number(mixedCard); }
+      const checkoutBody: Record<string, unknown> =
+        paymentMethod === 'member' && memberPreview
+          ? buildMemberFullWalletCheckoutBody(selectedTotal, memberPreview.phone)
+          : (() => {
+              const b: Record<string, unknown> = { paymentMethod };
+              if (paymentMethod === 'cash') b.cashAmount = selectedTotal;
+              else if (paymentMethod === 'card') b.cardAmount = selectedTotal;
+              else {
+                b.cashAmount = Number(mixedCash);
+                b.cardAmount = Number(mixedCard);
+              }
+              return b;
+            })();
 
       const res = await apiFetch(`/api/checkout/seat/${selected}`, {
         method: 'POST',
@@ -197,13 +223,41 @@ export default function PhoneOrderList() {
               <span style={{ color: 'var(--red-primary)' }}>€{selectedTotal.toFixed(2)}</span>
             </div>
 
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-              {(['cash', 'card', 'mixed'] as const).map(m => (
-                <button key={m} onClick={() => { setPaymentMethod(m); setCashReceived(''); }} className="btn" style={{ flex: 1, background: paymentMethod === m ? 'var(--red-primary)' : 'var(--bg)', color: paymentMethod === m ? '#fff' : 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+              {(canMemberWallet ? (['cash', 'card', 'mixed', 'member'] as const) : (['cash', 'card', 'mixed'] as const)).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    setPaymentMethod(m);
+                    setCashReceived('');
+                    if (m !== 'member') {
+                      setMemberPreview(null);
+                    }
+                  }}
+                  className="btn"
+                  style={{
+                    flex: '1 1 40%',
+                    minWidth: 72,
+                    background: paymentMethod === m ? 'var(--red-primary)' : 'var(--bg)',
+                    color: paymentMethod === m ? '#fff' : 'var(--text-secondary)',
+                    border: '1px solid var(--border)',
+                  }}
+                >
                   {t(`cashier.${m}`)}
                 </button>
               ))}
             </div>
+
+            {paymentMethod === 'member' ? (
+              <CashierMemberCheckoutBlock
+                payAmount={selectedTotal}
+                phone={memberPhone}
+                setPhone={setMemberPhone}
+                preview={memberPreview}
+                setPreview={setMemberPreview}
+              />
+            ) : null}
 
             {paymentMethod === 'cash' && (
               <div style={{ padding: 10, background: 'var(--bg)', borderRadius: 8, marginBottom: 12 }}>
@@ -229,7 +283,11 @@ export default function PhoneOrderList() {
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setShowPayment(false)}>{t('common.cancel')}</button>
               <button className="btn btn-primary" style={{ flex: 1 }} onClick={handlePay}
-                disabled={paying || (paymentMethod === 'cash' && cashReceivedNum < selectedTotal)}>
+                disabled={
+                  paying ||
+                  (paymentMethod === 'cash' && cashReceivedNum < selectedTotal) ||
+                  (paymentMethod === 'member' && !canMemberFullWalletPay(memberPreview, selectedTotal))
+                }>
                 {paying ? t('common.loading') : t('cashier.submitCheckout')}
               </button>
             </div>

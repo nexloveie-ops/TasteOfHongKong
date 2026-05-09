@@ -33,7 +33,8 @@ export default function MenuView({ storeFrontEmbed = false }: { storeFrontEmbed?
   const { displayName, displayNameOther } = useRestaurantConfig();
   const heroTitle = displayName || storeSlug;
   const heroSub = displayNameOther;
-  const { isOpen, reason, loading: statusLoading } = useBusinessStatus();
+  const { isOpen, reason, loading: statusLoading, deliveryEnabled } = useBusinessStatus();
+  const canDelivery = deliveryEnabled !== false;
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItemData[]>([]);
   const [allergens, setAllergens] = useState<AllergenData[]>([]);
@@ -43,6 +44,15 @@ export default function MenuView({ storeFrontEmbed = false }: { storeFrontEmbed?
   const table = searchParams.get('table');
   const seat = searchParams.get('seat');
   const qs = searchParams.toString();
+
+  useEffect(() => {
+    if (statusLoading) return;
+    if (searchParams.get('type') === 'delivery' && !canDelivery) {
+      const p = new URLSearchParams(searchParams);
+      p.set('type', 'takeout');
+      navigate({ search: p.toString() }, { replace: true });
+    }
+  }, [statusLoading, canDelivery, searchParams, navigate]);
 
   // On mount: check if there's an active order for this table/seat
   // Skip if we're in edit mode (user came back from modifying an order)

@@ -5,21 +5,32 @@ import { useAuth } from '../../context/AuthContext';
 import ReceiptPrint from '../../components/cashier/ReceiptPrint';
 import { buildReceiptHTML, printViaIframe } from '../../components/cashier/ReceiptPrint';
 import { apiFetch } from '../../api/client';
+import CashierMemberCheckoutBlock, {
+  buildMemberFullWalletCheckoutBody,
+  canMemberFullWalletPay,
+  type CashierMemberPreview,
+} from '../../components/cashier/CashierMemberCheckoutBlock';
 
 interface OrderItem { _id: string; menuItemId: string; quantity: number; unitPrice: number; itemName: string; selectedOptions?: { groupName: string; choiceName: string; extraPrice: number }[]; }
 interface TakeoutOrder {
   _id: string; type: string; dailyOrderNumber?: number; status: string;
   items: OrderItem[]; createdAt: string;
   appliedBundles?: { name: string; nameEn?: string; discount: number }[];
+  stripePaymentIntentId?: string;
+  memberCreditUsed?: number;
+  memberPhoneSnapshot?: string;
 }
 
 export default function TakeoutOrderList() {
   const { t } = useTranslation();
-  const { token, user } = useAuth();
+  const { token, user, hasFeature } = useAuth();
+  const canMemberWallet = hasFeature('cashier.member.wallet');
   const [orders, setOrders] = useState<TakeoutOrder[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [checkingOut, setCheckingOut] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'mixed'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'mixed' | 'member'>('cash');
+  const [memberPhone, setMemberPhone] = useState('');
+  const [memberPreview, setMemberPreview] = useState<CashierMemberPreview | null>(null);
   const [cashAmount, setCashAmount] = useState('');
   const [cardAmount, setCardAmount] = useState('');
   const [cashReceived, setCashReceived] = useState('');
@@ -52,6 +63,13 @@ export default function TakeoutOrderList() {
     return () => { socket.disconnect(); };
   }, [fetchOrders, user?.storeId]);
 
+  useEffect(() => {
+    if (!canMemberWallet && paymentMethod === 'member') {
+      setPaymentMethod('cash');
+      setMemberPreview(null);
+    }
+  }, [canMemberWallet, paymentMethod]);
+
   const selectedOrder = orders.find(o => o._id === selected);
   const orderTotal = (o: TakeoutOrder) => {
     const itemsSum = o.items.reduce((s, i) => {
@@ -65,6 +83,9 @@ export default function TakeoutOrderList() {
   // Reset cashReceived when selecting a new order
   useEffect(() => {
     setCashReceived('');
+    setPaymentMethod('cash');
+    setMemberPhone('');
+    setMemberPreview(null);
   }, [selected]);
 
   const cashReceivedNum = parseFloat(cashReceived) || 0;
@@ -82,11 +103,17 @@ export default function TakeoutOrderList() {
       });
       if (res.ok) {
         const data = await res.json();
+        const stripePi = String(order.stripePaymentIntentId || '').trim();
+        const memberUsed = Number(order.memberCreditUsed) || 0;
+        const memberPrepaid = !stripePi && memberUsed > 0.001;
         const receiptData = {
           checkoutId: data.checkoutId,
           type: 'seat' as const,
           totalAmount: data.totalAmount,
-          paymentMethod: 'online' as const,
+          paymentMethod: (memberPrepaid ? 'member' : 'online') as const,
+          ...(memberPrepaid
+            ? { memberCreditUsed: memberUsed, memberPhoneSnapshot: String(order.memberPhoneSnapshot || '') }
+            : {}),
           checkedOutAt: new Date().toISOString(),
           orders: [{
             _id: order._id,
@@ -109,13 +136,23 @@ export default function TakeoutOrderList() {
   const handleCheckout = async () => {
     if (!selectedOrder) return;
     if (paymentMethod === 'cash' && cashReceivedNum < currentTotal) return;
+    if (paymentMethod === 'member' && !canMemberFullWalletPay(memberPreview, currentTotal)) return;
     setCheckingOut(true);
     try {
       const total = orderTotal(selectedOrder);
-      const body: Record<string, unknown> = { paymentMethod };
-      if (paymentMethod === 'cash') body.cashAmount = total;
-      else if (paymentMethod === 'card') body.cardAmount = total;
-      else { body.cashAmount = Number(cashAmount); body.cardAmount = Number(cardAmount); }
+      const body: Record<string, unknown> =
+        paymentMethod === 'member' && memberPreview
+          ? buildMemberFullWalletCheckoutBody(total, memberPreview.phone)
+          : (() => {
+              const b: Record<string, unknown> = { paymentMethod };
+              if (paymentMethod === 'cash') b.cashAmount = total;
+              else if (paymentMethod === 'card') b.cardAmount = total;
+              else {
+                b.cashAmount = Number(cashAmount);
+                b.cardAmount = Number(cardAmount);
+              }
+              return b;
+            })();
 
       const res = await apiFetch(`/api/checkout/seat/${selectedOrder._id}`, {
         method: 'POST',
@@ -262,16 +299,44 @@ export default function TakeoutOrderList() {
               </>
             ) : (
             <>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {(['cash', 'card', 'mixed'] as const).map(m => (
-                <button key={m} onClick={() => { setPaymentMethod(m); setCashReceived(''); }} className="btn" style={{
-                  flex: 1, fontSize: 12, padding: '8px 0',
-                  background: paymentMethod === m ? 'var(--red-primary)' : 'var(--bg)',
-                  color: paymentMethod === m ? '#fff' : 'var(--text-secondary)',
-                  border: '1px solid var(--border)',
-                }}>{t(`cashier.${m}`)}</button>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {(canMemberWallet ? (['cash', 'card', 'mixed', 'member'] as const) : (['cash', 'card', 'mixed'] as const)).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    setPaymentMethod(m);
+                    setCashReceived('');
+                    if (m !== 'member') {
+                      setMemberPreview(null);
+                    }
+                  }}
+                  className="btn"
+                  style={{
+                    flex: '1 1 40%',
+                    minWidth: 72,
+                    fontSize: 12,
+                    padding: '8px 0',
+                    background: paymentMethod === m ? 'var(--red-primary)' : 'var(--bg)',
+                    color: paymentMethod === m ? '#fff' : 'var(--text-secondary)',
+                    border: '1px solid var(--border)',
+                  }}
+                >
+                  {t(`cashier.${m}`)}
+                </button>
               ))}
             </div>
+
+            {paymentMethod === 'member' ? (
+              <CashierMemberCheckoutBlock
+                payAmount={currentTotal}
+                phone={memberPhone}
+                setPhone={setMemberPhone}
+                preview={memberPreview}
+                setPreview={setMemberPreview}
+                compact
+              />
+            ) : null}
 
             {/* Cash: input received amount + change */}
             {paymentMethod === 'cash' && (
@@ -306,7 +371,11 @@ export default function TakeoutOrderList() {
             )}
 
             <button className="btn btn-primary" style={{ width: '100%' }} onClick={handleCheckout}
-              disabled={checkingOut || (paymentMethod === 'cash' && !cashValid)}>
+              disabled={
+                checkingOut ||
+                (paymentMethod === 'cash' && !cashValid) ||
+                (paymentMethod === 'member' && !canMemberFullWalletPay(memberPreview, currentTotal))
+              }>
               {checkingOut ? t('common.loading') : t('cashier.submitCheckout')}
             </button>
             <button className="btn btn-ghost" style={{ width: '100%', marginTop: 8, color: 'var(--red-primary)', border: '1px dashed var(--red-primary)', fontSize: 13 }}

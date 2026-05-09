@@ -11,6 +11,7 @@ import {
 } from '../../utils/deliveryFeeRules';
 import { apiFetch } from '../../api/client';
 import { useRestaurantConfig } from '../../hooks/useRestaurantConfig';
+import { useBusinessStatus } from '../../hooks/useBusinessStatus';
 import BannerPlatformCredit from '../../components/customer/BannerPlatformCredit';
 
 /** 自取大致时段（仅展示与排序，不做容量） */
@@ -37,6 +38,8 @@ export default function CartPage() {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
   const { config } = useRestaurantConfig();
+  const { loading: statusLoading, deliveryEnabled } = useBusinessStatus();
+  const canDelivery = deliveryEnabled !== false;
   const storePhone = (config.restaurant_phone || '').trim();
   const getItemName = (names: Record<string, string>) => names[lang] || Object.values(names)[0] || '';
   const [submitting, setSubmitting] = useState(false);
@@ -58,6 +61,15 @@ export default function CartPage() {
   const table = searchParams.get('table');
   const seat = searchParams.get('seat');
   const orderType = searchParams.get('type');
+
+  useEffect(() => {
+    if (statusLoading) return;
+    if (orderType === 'delivery' && !canDelivery) {
+      const p = new URLSearchParams(searchParams);
+      p.set('type', 'takeout');
+      navigate({ pathname: `/${storeSlug ?? ''}/customer/cart`, search: p.toString() }, { replace: true });
+    }
+  }, [statusLoading, orderType, canDelivery, searchParams, navigate, storeSlug]);
 
   const menuBasePath = useMemo(() => {
     const p = new URLSearchParams(searchParams);

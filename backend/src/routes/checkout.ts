@@ -3,14 +3,43 @@ import mongoose from 'mongoose';
 import { Server as SocketIOServer } from 'socket.io';
 import { getModels } from '../getModels';
 import { createAppError } from '../middleware/errorHandler';
+import { optionalAuthMiddleware } from '../middleware/auth';
+import { hasPermission } from '../middleware/permissions';
 import { storeIoRoom } from '../socketRooms';
 import { computeOrderPayableTotalEuro } from '../utils/orderPayableTotal';
+import { resolveMemberPaymentForCheckout } from '../utils/checkoutMemberResolve';
+import { creditMemberWallet, debitMemberWallet } from '../utils/memberWalletOps';
+import { computeRefundChannelBreakdown } from '../utils/memberRefundAlign';
+import { FeatureKeys, resolveStoreEffectiveFeatures } from '../utils/featureCatalog';
+
+function staffMayDebitMemberWithoutPin(req: Request): boolean {
+  const u = req.user;
+  if (!u) return false;
+  return hasPermission(u.role, 'checkout:process');
+}
+
+function round2Euro(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+async function assertMemberWalletFeatureIfNeeded(req: Request): Promise<void> {
+  const body = req.body as Record<string, unknown>;
+  const pm = String(body.paymentMethod || '');
+  const hasMemberPhone = body.memberPhone != null && String(body.memberPhone).trim() !== '';
+  if (!hasMemberPhone && pm !== 'member') return;
+  const features = await resolveStoreEffectiveFeatures(req.storeId!);
+  if (!features.has(FeatureKeys.CashierMemberWallet)) {
+    throw createAppError('FORBIDDEN', `当前套餐未开通能力：${FeatureKeys.CashierMemberWallet}`);
+  }
+}
 
 /** LZFoodModels uses Model<unknown>; narrow for route logic */
 function checkoutModels() {
   return getModels() as {
     Order: mongoose.Model<any>;
     Checkout: mongoose.Model<any>;
+    Member: mongoose.Model<any>;
+    MemberWalletTxn: mongoose.Model<any>;
   };
 }
 
@@ -18,19 +47,15 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
   const router = Router();
 
   // POST /api/checkout/table/:tableNumber — Whole table checkout
-  router.post('/table/:tableNumber', async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/table/:tableNumber', optionalAuthMiddleware, async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { Order, Checkout } = checkoutModels();
+      const { Order, Checkout, Member, MemberWalletTxn } = checkoutModels();
       const tableNumber = parseInt(req.params.tableNumber as string, 10);
       if (isNaN(tableNumber)) {
         throw createAppError('VALIDATION_ERROR', 'Invalid table number');
       }
 
-      const { paymentMethod, cashAmount, cardAmount, couponName, couponAmount } = req.body;
-
-      if (!paymentMethod || !['cash', 'card', 'mixed', 'online'].includes(paymentMethod)) {
-        throw createAppError('VALIDATION_ERROR', 'paymentMethod must be "cash", "card", "mixed", or "online"');
-      }
+      const { couponName, couponAmount } = req.body;
 
       // Find all pending dine-in orders for this table
       const orders = await Order.find({ storeId: req.storeId, type: 'dine_in', tableNumber, status: 'pending' });
@@ -52,50 +77,90 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
       }, 0);
       const totalAmount = itemsTotal - tableBundleDiscount;
 
-      // Validate mixed payment
-      if (paymentMethod === 'mixed') {
-        if (cashAmount == null || cardAmount == null) {
-          throw createAppError('VALIDATION_ERROR', 'cashAmount and cardAmount are required for mixed payment');
-        }
-        const total = Number(cashAmount) + Number(cardAmount);
-        if (Math.abs(total - totalAmount) > 0.001) {
-          throw createAppError('PAYMENT_AMOUNT_MISMATCH', 'cashAmount + cardAmount must equal totalAmount', {
-            expectedTotal: totalAmount,
-            actualTotal: total,
-          });
-        }
-      }
-
       // Apply coupon discount
       let finalAmount = totalAmount;
       if (couponAmount && couponAmount > 0) {
         finalAmount = Math.max(0, totalAmount - couponAmount);
       }
 
-      // Create checkout record
+      await assertMemberWalletFeatureIfNeeded(req);
+      const mp = await resolveMemberPaymentForCheckout({
+        storeId: req.storeId!,
+        Member,
+        finalAmount,
+        body: req.body as Record<string, unknown>,
+        skipMemberPin: staffMayDebitMemberWithoutPin(req),
+      });
+
       const checkoutData: Record<string, unknown> = {
         storeId: req.storeId,
         type: 'table',
         tableNumber,
         totalAmount: finalAmount,
-        paymentMethod,
+        paymentMethod: mp.paymentMethod,
         orderIds: orders.map(o => o._id),
+        memberCreditUsed: mp.memberCreditUsed,
       };
-
-      if (paymentMethod === 'mixed') {
-        checkoutData.cashAmount = Number(cashAmount);
-        checkoutData.cardAmount = Number(cardAmount);
+      if (mp.memberId) {
+        checkoutData.memberId = mp.memberId;
+        checkoutData.memberPhoneSnapshot = mp.memberPhoneSnapshot;
+      }
+      if (mp.paymentMethod === 'mixed') {
+        checkoutData.cashAmount = mp.cashAmount;
+        checkoutData.cardAmount = mp.cardAmount;
+      } else if (mp.paymentMethod === 'cash') {
+        checkoutData.cashAmount = mp.cashAmount;
+      } else if (mp.paymentMethod === 'card' || mp.paymentMethod === 'online') {
+        checkoutData.cardAmount = mp.cardAmount;
       }
       if (couponName) checkoutData.couponName = couponName;
       if (couponAmount && couponAmount > 0) checkoutData.couponAmount = couponAmount;
 
       const checkout = await Checkout.create(checkoutData);
+      try {
+        if (mp.memberCreditUsed > 0 && mp.memberId) {
+          await debitMemberWallet({
+            Member,
+            MemberWalletTxn,
+            storeId: req.storeId!,
+            memberId: mp.memberId,
+            amountEuro: mp.memberCreditUsed,
+            checkoutId: checkout._id,
+            note: '整桌结账储值抵扣',
+          });
+        }
+      } catch (e) {
+        await Checkout.deleteOne({ _id: checkout._id });
+        throw e;
+      }
 
-      // Update all orders to checked_out
-      await Order.updateMany(
-        { storeId: req.storeId, _id: { $in: orders.map(o => o._id) } },
-        { status: 'checked_out' }
-      );
+      try {
+        const orderSet: Record<string, unknown> = { status: 'checked_out' };
+        if (mp.memberId) {
+          orderSet.memberId = mp.memberId;
+          orderSet.memberPhoneSnapshot = mp.memberPhoneSnapshot;
+          orderSet.memberCreditUsed = 0;
+        }
+        await Order.updateMany(
+          { storeId: req.storeId, _id: { $in: orders.map(o => o._id) } },
+          { $set: orderSet },
+        );
+      } catch (e) {
+        if (mp.memberCreditUsed > 0 && mp.memberId) {
+          await creditMemberWallet({
+            Member,
+            MemberWalletTxn,
+            storeId: req.storeId!,
+            memberId: mp.memberId,
+            amountEuro: mp.memberCreditUsed,
+            type: 'reversal',
+            checkoutId: checkout._id,
+            note: '结账后更新订单失败，冲回储值',
+          });
+        }
+        await Checkout.deleteOne({ _id: checkout._id });
+        throw e;
+      }
 
       for (const order of orders) {
         io.to(storeIoRoom(req.storeId!)).emit('order:checked-out', { orderId: order._id.toString(), tableNumber });
@@ -108,19 +173,15 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
   });
 
   // POST /api/checkout/seat/:orderId — Per-seat checkout
-  router.post('/seat/:orderId', async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/seat/:orderId', optionalAuthMiddleware, async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { Order, Checkout } = checkoutModels();
+      const { Order, Checkout, Member, MemberWalletTxn } = checkoutModels();
       const orderId = req.params.orderId as string;
       if (!mongoose.Types.ObjectId.isValid(orderId)) {
         throw createAppError('VALIDATION_ERROR', 'Invalid order ID');
       }
 
-      const { paymentMethod, cashAmount, cardAmount, totalAmountOverride, couponName, couponAmount } = req.body;
-
-      if (!paymentMethod || !['cash', 'card', 'mixed', 'online'].includes(paymentMethod)) {
-        throw createAppError('VALIDATION_ERROR', 'paymentMethod must be "cash", "card", "mixed", or "online"');
-      }
+      const { totalAmountOverride, couponName, couponAmount } = req.body;
 
       const order = await Order.findOne({ _id: orderId, storeId: req.storeId });
       if (!order) {
@@ -139,58 +200,154 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
         ? totalAmountOverride
         : autoTotal;
 
-      // Apply coupon discount before validation
+      // Apply coupon discount
       let finalAmount = totalAmount;
       if (couponAmount && couponAmount > 0) {
         finalAmount = Math.max(0, totalAmount - couponAmount);
       }
 
-      // Validate mixed payment
-      if (paymentMethod === 'mixed') {
-        if (cashAmount == null || cardAmount == null) {
-          throw createAppError('VALIDATION_ERROR', 'cashAmount and cardAmount are required for mixed payment');
-        }
-        const total = Number(cashAmount) + Number(cardAmount);
-        if (Math.abs(total - finalAmount) > 0.001) {
-          throw createAppError('PAYMENT_AMOUNT_MISMATCH', 'cashAmount + cardAmount must equal totalAmount', {
-            expectedTotal: finalAmount,
-            actualTotal: total,
+      await assertMemberWalletFeatureIfNeeded(req);
+      const mp = await resolveMemberPaymentForCheckout({
+        storeId: req.storeId!,
+        Member,
+        finalAmount,
+        body: req.body as Record<string, unknown>,
+        skipMemberPin: staffMayDebitMemberWithoutPin(req),
+      });
+
+      /**
+       * 顾客扫码自取 + 会员全额：与 Stripe 自取一致 — 先 paid_online、扣储值，不写 Checkout；
+       * 由收银 finalize / complete-online-paid 再生成 Checkout 并 checked_out 或 completed。
+       * 送餐顾客会员全额仍走下方（与 Stripe 送餐一致：当场 Checkout + checked_out）。
+       */
+      const isCustomerQrTakeoutFullMember =
+        order.type === 'takeout' &&
+        !staffMayDebitMemberWithoutPin(req) &&
+        mp.paymentMethod === 'member' &&
+        mp.memberCreditUsed > 0.001;
+
+      if (isCustomerQrTakeoutFullMember) {
+        try {
+          await debitMemberWallet({
+            Member,
+            MemberWalletTxn,
+            storeId: req.storeId!,
+            memberId: mp.memberId!,
+            amountEuro: mp.memberCreditUsed,
+            orderId: new mongoose.Types.ObjectId(orderId),
+            note: '外卖自提扫码储值支付（待收银收尾）',
           });
+        } catch (e) {
+          throw e;
         }
+        const prePaySet: Record<string, unknown> = {
+          status: 'paid_online',
+          memberId: mp.memberId,
+          memberPhoneSnapshot: mp.memberPhoneSnapshot,
+          memberCreditUsed: mp.memberCreditUsed,
+        };
+        try {
+          await Order.findOneAndUpdate({ _id: orderId, storeId: req.storeId }, { $set: prePaySet });
+        } catch (e) {
+          await creditMemberWallet({
+            Member,
+            MemberWalletTxn,
+            storeId: req.storeId!,
+            memberId: mp.memberId!,
+            amountEuro: mp.memberCreditUsed,
+            type: 'reversal',
+            orderId: new mongoose.Types.ObjectId(orderId),
+            note: '更新订单失败，冲回储值',
+          });
+          throw e;
+        }
+        const updatedLean = await Order.findOne({ _id: orderId, storeId: req.storeId }).lean();
+        io.to(storeIoRoom(req.storeId!)).emit('order:updated', updatedLean);
+        res.status(201).json({
+          ok: true,
+          status: 'paid_online',
+          orderId,
+          memberPrepaidTakeout: true,
+        });
+        return;
       }
 
-      // Create checkout record
       const checkoutData: Record<string, unknown> = {
         storeId: req.storeId,
         type: 'seat',
         totalAmount: finalAmount,
-        paymentMethod,
+        paymentMethod: mp.paymentMethod,
         orderIds: [order._id],
+        memberCreditUsed: mp.memberCreditUsed,
       };
 
       if (order.tableNumber != null) {
         checkoutData.tableNumber = order.tableNumber;
       }
 
-      if (paymentMethod === 'mixed') {
-        checkoutData.cashAmount = Number(cashAmount);
-        checkoutData.cardAmount = Number(cardAmount);
+      if (mp.memberId) {
+        checkoutData.memberId = mp.memberId;
+        checkoutData.memberPhoneSnapshot = mp.memberPhoneSnapshot;
+      }
+      if (mp.paymentMethod === 'mixed') {
+        checkoutData.cashAmount = mp.cashAmount;
+        checkoutData.cardAmount = mp.cardAmount;
+      } else if (mp.paymentMethod === 'cash') {
+        checkoutData.cashAmount = mp.cashAmount;
+      } else if (mp.paymentMethod === 'card' || mp.paymentMethod === 'online') {
+        checkoutData.cardAmount = mp.cardAmount;
       }
       if (couponName) checkoutData.couponName = couponName;
       if (couponAmount && couponAmount > 0) checkoutData.couponAmount = couponAmount;
 
       const checkout = await Checkout.create(checkoutData);
+      try {
+        if (mp.memberCreditUsed > 0 && mp.memberId) {
+          await debitMemberWallet({
+            Member,
+            MemberWalletTxn,
+            storeId: req.storeId!,
+            memberId: mp.memberId,
+            amountEuro: mp.memberCreditUsed,
+            orderId: new mongoose.Types.ObjectId(orderId),
+            checkoutId: checkout._id,
+            note: '单笔结账储值抵扣',
+          });
+        }
+      } catch (e) {
+        await Checkout.deleteOne({ _id: checkout._id });
+        throw e;
+      }
 
-      // 电话送餐：司机回店交款走 seat 结账即整单终结，与扫码网付「取餐即 completed」对齐，避免长期留在 checked_out 被 active-all 列出
-      const isDelivery = order.type === 'delivery';
-      await Order.findOneAndUpdate(
-        { _id: orderId, storeId: req.storeId },
-        {
-          $set: isDelivery
-            ? { status: 'completed', completedAt: new Date() }
-            : { status: 'checked_out' },
-        },
-      );
+      /** 与 Stripe 在线支付一致：QR 送餐预付款记为 checked_out，便于顾客端显示「已支付」与配送流程 */
+      const orderSet: Record<string, unknown> = { status: 'checked_out' };
+      if (mp.memberId) {
+        orderSet.memberId = mp.memberId;
+        orderSet.memberPhoneSnapshot = mp.memberPhoneSnapshot;
+        orderSet.memberCreditUsed = mp.memberCreditUsed;
+      }
+      try {
+        await Order.findOneAndUpdate(
+          { _id: orderId, storeId: req.storeId },
+          { $set: orderSet },
+        );
+      } catch (e) {
+        if (mp.memberCreditUsed > 0 && mp.memberId) {
+          await creditMemberWallet({
+            Member,
+            MemberWalletTxn,
+            storeId: req.storeId!,
+            memberId: mp.memberId,
+            amountEuro: mp.memberCreditUsed,
+            type: 'reversal',
+            orderId: new mongoose.Types.ObjectId(orderId),
+            checkoutId: checkout._id,
+            note: '更新订单失败，冲回储值',
+          });
+        }
+        await Checkout.deleteOne({ _id: checkout._id });
+        throw e;
+      }
 
       io.to(storeIoRoom(req.storeId!)).emit('order:checked-out', { orderId: order._id.toString(), tableNumber: order.tableNumber });
 
@@ -235,6 +392,8 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
         paymentMethod: checkout.paymentMethod,
         cashAmount: checkout.cashAmount,
         cardAmount: checkout.cardAmount,
+        memberCreditUsed: (checkout as { memberCreditUsed?: number }).memberCreditUsed,
+        memberPhoneSnapshot: (checkout as { memberPhoneSnapshot?: string }).memberPhoneSnapshot,
         checkedOutAt: checkout.checkedOutAt,
         orders: orders.map(o => ({
           _id: o._id,
@@ -357,12 +516,20 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
           appliedBundles: (o.appliedBundles as unknown[]) ?? [],
           items: o.items,
         };
+        const stripePiVirt = String((o as { stripePaymentIntentId?: string }).stripePaymentIntentId || '').trim();
+        const memberUsedVirt = Number((o as { memberCreditUsed?: number }).memberCreditUsed) || 0;
+        const virtPm =
+          !stripePiVirt && memberUsedVirt > 0.001 ? 'member' : 'online';
+        const phoneVirt = String((o as { memberPhoneSnapshot?: string }).memberPhoneSnapshot || '').trim();
         return {
           checkoutId: `virtual:${String(o._id)}`,
           type: 'seat',
           tableNumber: o.tableNumber,
           totalAmount: computeOrderPayableTotalEuro(o as PayableOrderInput),
-          paymentMethod: 'online',
+          paymentMethod: virtPm,
+          ...(virtPm === 'member'
+            ? { memberCreditUsed: memberUsedVirt, memberPhoneSnapshot: phoneVirt }
+            : {}),
           cashAmount: undefined,
           cardAmount: undefined,
           checkedOutAt,
@@ -487,7 +654,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
   // If itemIds is empty or not provided, refund ALL items (full refund)
   router.post('/:checkoutId/refund', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { Order, Checkout } = checkoutModels();
+      const { Order, Checkout, Member, MemberWalletTxn } = checkoutModels();
       const { checkoutId } = req.params;
       if (!mongoose.Types.ObjectId.isValid(checkoutId as string)) {
         throw createAppError('VALIDATION_ERROR', 'Invalid checkout ID');
@@ -559,17 +726,73 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
         throw createAppError('VALIDATION_ERROR', 'No items to refund (already refunded or invalid item IDs)');
       }
 
+      const refundedEuro = round2Euro(refundAmount);
+      let memberWalletRefundEuro = 0;
+      let memberWalletRefundError: string | null = null;
+
+      const ch = checkout as mongoose.Document & {
+        memberId?: mongoose.Types.ObjectId;
+        memberCreditUsed?: number;
+        memberCreditRefundedEuro?: number;
+        totalAmount?: number;
+      };
+      const totalCharged = round2Euro(Number(ch.totalAmount) || 0);
+      const memberUsed = round2Euro(Number(ch.memberCreditUsed) || 0);
+      const alreadyBack = round2Euro(Number(ch.memberCreditRefundedEuro) || 0);
+      const memberRemaining = Math.max(0, round2Euro(memberUsed - alreadyBack));
+
+      if (ch.memberId && memberRemaining > 0.001 && totalCharged > 0.001 && refundedEuro > 0) {
+        const rawReturn = round2Euro((refundedEuro / totalCharged) * memberUsed);
+        memberWalletRefundEuro = Math.min(rawReturn, memberRemaining, refundedEuro);
+        memberWalletRefundEuro = round2Euro(memberWalletRefundEuro);
+        if (memberWalletRefundEuro > 0.001) {
+          try {
+            await creditMemberWallet({
+              Member,
+              MemberWalletTxn,
+              storeId: req.storeId!,
+              memberId: ch.memberId,
+              amountEuro: memberWalletRefundEuro,
+              type: 'refund_credit',
+              checkoutId: new mongoose.Types.ObjectId(checkoutId as string),
+              note: `订单退款退回储值（退款额 €${refundedEuro}）`,
+            });
+            ch.memberCreditRefundedEuro = round2Euro(alreadyBack + memberWalletRefundEuro);
+            await ch.save();
+          } catch (e) {
+            memberWalletRefundError = e instanceof Error ? e.message : 'member wallet refund failed';
+          }
+        }
+      }
+
       io.to(storeIoRoom(req.storeId!)).emit('order:refunded', {
         checkoutId,
         refundedItems: refundedItemDetails,
-        refundAmount: Math.round(refundAmount * 100) / 100,
+        refundAmount: refundedEuro,
+        memberWalletRefundEuro,
+      });
+
+      const co = checkout as mongoose.Document & {
+        paymentMethod?: string;
+        cashAmount?: number;
+        cardAmount?: number;
+      };
+      const refundChannelBreakdown = computeRefundChannelBreakdown({
+        refundedAmount: refundedEuro,
+        memberWalletRefundEuro,
+        paymentMethod: String(co.paymentMethod || 'cash'),
+        cashAmount: Number(co.cashAmount) || 0,
+        cardAmount: Number(co.cardAmount) || 0,
       });
 
       res.json({
         message: 'Refund successful',
         checkoutId,
-        refundedAmount: Math.round(refundAmount * 100) / 100,
+        refundedAmount: refundedEuro,
         refundedItems: refundedItemDetails,
+        memberWalletRefundEuro,
+        refundChannelBreakdown,
+        ...(memberWalletRefundError ? { memberWalletRefundError } : {}),
       });
     } catch (err) {
       next(err);

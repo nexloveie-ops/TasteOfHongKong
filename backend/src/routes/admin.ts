@@ -19,7 +19,14 @@ import {
   STRIPE_PUBLISHABLE_CONFIG_KEY,
   STRIPE_SECRET_CONFIG_KEY,
 } from '../utils/stripeConfig';
-import { resolveStoreEffectiveFeatures } from '../utils/featureCatalog';
+import { FeatureKeys, resolveStoreEffectiveFeatures } from '../utils/featureCatalog';
+import { requireFeature } from '../middleware/featureAccess';
+import { creditMemberWallet } from '../utils/memberWalletOps';
+import {
+  computeMemberCreditRefundGapEuro,
+  round2Euro,
+  sumRefundedItemsGrossEuroFromOrders,
+} from '../utils/memberRefundAlign';
 
 function adminModels() {
   return getModels() as {
@@ -28,6 +35,8 @@ function adminModels() {
     Store: mongoose.Model<any>;
     FeaturePlan: mongoose.Model<any>;
     FeatureAddon: mongoose.Model<any>;
+    Member: mongoose.Model<any>;
+    MemberWalletTxn: mongoose.Model<any>;
   };
 }
 
@@ -63,7 +72,12 @@ router.get('/config', async (req: Request, res: Response, next: NextFunction) =>
 router.get('/business-status', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const status = await getBusinessStatus(req.storeId!);
-    res.json(status);
+    const features = await resolveStoreEffectiveFeatures(req.storeId!);
+    res.json({
+      ...status,
+      deliveryEnabled: features.has(FeatureKeys.CashierDeliveryPage),
+      memberWalletEnabled: features.has(FeatureKeys.CashierMemberWallet),
+    });
   } catch (err) {
     next(err);
   }
@@ -284,6 +298,227 @@ router.put('/users/:id', ...requireAuthSameStore, requirePermission('admin:users
     next(err);
   }
 });
+
+// GET /api/admin/members — 会员列表/搜索（config；与送餐能力包同一开关）
+router.get(
+  '/members',
+  ...requireAuthSameStore,
+  requirePermission('config:*'),
+  requireFeature(FeatureKeys.CashierMemberWallet),
+  async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { Member } = adminModels();
+    const q = String(req.query.q || '').trim();
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+    const filter: Record<string, unknown> = { storeId: req.storeId, status: 'active' };
+    if (q) {
+      const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const or: Record<string, unknown>[] = [
+        { phone: new RegExp(esc, 'i') },
+        { displayName: new RegExp(esc, 'i') },
+      ];
+      const n = parseInt(q, 10);
+      if (!Number.isNaN(n) && String(n) === q) or.push({ memberNo: n });
+      if (mongoose.Types.ObjectId.isValid(q)) or.push({ _id: new mongoose.Types.ObjectId(q) });
+      filter.$or = or;
+    }
+    const list = await Member.find(filter).sort({ createdAt: -1 }).limit(limit).lean();
+    res.json(
+      list.map((m: Record<string, unknown>) => ({
+        _id: m._id,
+        memberNo: m.memberNo,
+        phone: m.phone,
+        displayName: m.displayName,
+        creditBalance: m.creditBalance,
+        createdAt: m.createdAt,
+      })),
+    );
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/admin/members/:memberId/transactions — 会员储值流水（config）
+router.get(
+  '/members/:memberId/transactions',
+  ...requireAuthSameStore,
+  requirePermission('config:*'),
+  requireFeature(FeatureKeys.CashierMemberWallet),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { Member, MemberWalletTxn } = adminModels();
+      const rawMid = req.params.memberId;
+      const memberIdStr = typeof rawMid === 'string' ? rawMid : rawMid[0];
+      if (!mongoose.Types.ObjectId.isValid(memberIdStr)) {
+        throw createAppError('VALIDATION_ERROR', 'Invalid member ID');
+      }
+      const memberId = new mongoose.Types.ObjectId(memberIdStr);
+      const member = await Member.findOne({
+        _id: memberId,
+        storeId: req.storeId,
+        status: 'active',
+      }).lean();
+      if (!member) throw createAppError('NOT_FOUND', '会员不存在');
+
+      const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 100));
+      const list = await MemberWalletTxn.find({ storeId: req.storeId, memberId })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean();
+
+      res.json(
+        list.map((doc: Record<string, unknown>) => ({
+          _id: doc._id,
+          type: doc.type,
+          amountEuro: doc.amountEuro,
+          balanceBefore: doc.balanceBefore,
+          balanceAfter: doc.balanceAfter,
+          note: doc.note,
+          orderId: doc.orderId,
+          checkoutId: doc.checkoutId,
+          stripePaymentIntentId: doc.stripePaymentIntentId,
+          operatorAdminId: doc.operatorAdminId,
+          createdAt: doc.createdAt,
+        })),
+      );
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// POST /api/admin/checkouts/:checkoutId/retry-member-credit-refund — 补录因异常未入账的储值退款
+router.post(
+  '/checkouts/:checkoutId/retry-member-credit-refund',
+  ...requireAuthSameStore,
+  requirePermission('config:*'),
+  requireFeature(FeatureKeys.CashierMemberWallet),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { Checkout, Order, Member, MemberWalletTxn } = getModels() as {
+        Checkout: mongoose.Model<any>;
+        Order: mongoose.Model<any>;
+        Member: mongoose.Model<any>;
+        MemberWalletTxn: mongoose.Model<any>;
+      };
+      const rawCid = req.params.checkoutId;
+      const checkoutId = typeof rawCid === 'string' ? rawCid : rawCid[0];
+      if (!mongoose.Types.ObjectId.isValid(checkoutId)) {
+        throw createAppError('VALIDATION_ERROR', 'Invalid checkout ID');
+      }
+      const checkout = await Checkout.findOne({ _id: checkoutId, storeId: req.storeId });
+      if (!checkout) throw createAppError('NOT_FOUND', 'Checkout not found');
+
+      const ch = checkout as mongoose.Document & {
+        memberId?: mongoose.Types.ObjectId;
+        memberCreditUsed?: number;
+        memberCreditRefundedEuro?: number;
+        totalAmount?: number;
+        orderIds?: mongoose.Types.ObjectId[];
+      };
+      if (!ch.memberId || !(Number(ch.memberCreditUsed) > 0.001)) {
+        throw createAppError('VALIDATION_ERROR', '该结账单未使用会员储值，无需补录');
+      }
+
+      const orders = await Order.find({ storeId: req.storeId, _id: { $in: ch.orderIds || [] } });
+      if (orders.length === 0) throw createAppError('NOT_FOUND', 'No orders for checkout');
+
+      const totalRefunded = sumRefundedItemsGrossEuroFromOrders(orders.map((o) => ({ items: o.items })));
+      const { gapEuro, targetCreditedEuro, alreadyBackEuro } = computeMemberCreditRefundGapEuro({
+        totalAmount: Number(ch.totalAmount) || 0,
+        memberCreditUsed: Number(ch.memberCreditUsed) || 0,
+        memberCreditRefundedEuro: Number(ch.memberCreditRefundedEuro) || 0,
+        totalRefundedItemsEuro: totalRefunded,
+      });
+
+      if (totalRefunded <= 0.001) {
+        throw createAppError('VALIDATION_ERROR', '订单尚无已退菜品，无法计算储值退回');
+      }
+      if (gapEuro <= 0.001) {
+        res.json({
+          ok: true,
+          skipped: true,
+          message: '储值退款已足额入账',
+          totalRefundedItemsEuro: totalRefunded,
+          targetCreditedEuro,
+          alreadyBackEuro,
+          gapEuro: 0,
+        });
+        return;
+      }
+
+      await creditMemberWallet({
+        Member,
+        MemberWalletTxn,
+        storeId: req.storeId!,
+        memberId: ch.memberId,
+        amountEuro: gapEuro,
+        type: 'refund_credit',
+        checkoutId: new mongoose.Types.ObjectId(checkoutId),
+        note: '补录：订单退款退回储值（系统重试）',
+      });
+      ch.memberCreditRefundedEuro = round2Euro(alreadyBackEuro + gapEuro);
+      await checkout.save();
+
+      res.json({
+        ok: true,
+        creditedEuro: gapEuro,
+        memberCreditRefundedEuro: ch.memberCreditRefundedEuro,
+        totalRefundedItemsEuro: totalRefunded,
+        targetCreditedEuro,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// POST /api/admin/members/:memberId/recharge — 老板/有 config 权限：手动充值
+router.post(
+  '/members/:memberId/recharge',
+  ...requireAuthSameStore,
+  requirePermission('config:*'),
+  requireFeature(FeatureKeys.CashierMemberWallet),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { Member, MemberWalletTxn } = adminModels();
+      const rawMid = req.params.memberId;
+      const memberId = typeof rawMid === 'string' ? rawMid : rawMid[0];
+      if (!mongoose.Types.ObjectId.isValid(memberId)) {
+        throw createAppError('VALIDATION_ERROR', 'Invalid member ID');
+      }
+      const amount = Number(req.body.amountEuro);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw createAppError('VALIDATION_ERROR', 'amountEuro 须为正数');
+      }
+      const note = String(req.body.note || '后台充值').slice(0, 200);
+      const adminId = req.user?.userId;
+      const opId = adminId && mongoose.Types.ObjectId.isValid(adminId) ? new mongoose.Types.ObjectId(adminId) : undefined;
+
+      const member = await Member.findOne({
+        _id: memberId,
+        storeId: req.storeId,
+        status: 'active',
+      });
+      if (!member) throw createAppError('NOT_FOUND', '会员不存在');
+
+      const { balanceAfter } = await creditMemberWallet({
+        Member,
+        MemberWalletTxn,
+        storeId: req.storeId!,
+        memberId: new mongoose.Types.ObjectId(memberId),
+        amountEuro: amount,
+        type: 'recharge',
+        note,
+        operatorAdminId: opId,
+      });
+
+      res.json({ ok: true, creditBalance: balanceAfter });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // DELETE /api/admin/users/:id — Delete admin (requires auth + admin:users)
 router.delete('/users/:id', ...requireAuthSameStore, requirePermission('admin:users'), async (req: Request, res: Response, next: NextFunction) => {

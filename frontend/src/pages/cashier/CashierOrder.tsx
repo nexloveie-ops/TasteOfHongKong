@@ -13,6 +13,11 @@ import {
   type DeliveryFeeTier,
 } from '../../utils/deliveryFeeRules';
 import { apiFetch } from '../../api/client';
+import CashierMemberCheckoutBlock, {
+  buildMemberFullWalletCheckoutBody,
+  canMemberFullWalletPay,
+  type CashierMemberPreview,
+} from '../../components/cashier/CashierMemberCheckoutBlock';
 
 interface Translation { locale: string; name: string; description?: string; }
 interface Category { _id: string; sortOrder: number; translations: Translation[]; }
@@ -40,10 +45,21 @@ interface OrderLine {
 let lineIdCounter = 0;
 function nextLineId() { return `line-${++lineIdCounter}-${Date.now()}`; }
 
+const FREQUENT_LOOKBACK_DAYS = 60;
+const FREQUENT_ITEMS_LIMIT = 8;
+
+interface FrequentItemRow {
+  menuItemId: string;
+  itemName: string;
+  itemNameEn: string;
+  orderCount: number;
+}
+
 export default function CashierOrder() {
   const { t, i18n } = useTranslation();
   const { token, hasFeature } = useAuth();
   const canDelivery = hasFeature('cashier.delivery.page');
+  const canMemberWallet = hasFeature('cashier.member.wallet');
   const lang = i18n.language;
 
   const [categories, setCategories] = useState<Category[]>([]);
@@ -60,17 +76,33 @@ export default function CashierOrder() {
   const [deliveryGeoLoading, setDeliveryGeoLoading] = useState(false);
   const [deliveryDistanceKm, setDeliveryDistanceKm] = useState<number | null>(null);
   const [deliveryGeoError, setDeliveryGeoError] = useState('');
+  const [deliveryCustomerProfileId, setDeliveryCustomerProfileId] = useState('');
+  const [deliveryProfiles, setDeliveryProfiles] = useState<
+    { _id: string; customerName: string; deliveryAddress: string; postalCode: string }[]
+  >([]);
   const eircodeReqRef = useRef(0);
+  /** 会员资料填充邮编后，下一次邮编解析只更新距离，不覆盖详细地址 */
+  const skipNextGeoAddressFillRef = useRef(false);
+  const memberDeliveryLookupReqRef = useRef(0);
+  const deliveryPhoneRef = useRef('');
+  /** 命中会员后折叠送餐客户表单，仅显示摘要与地图信息 */
+  const [deliveryCustomerCollapsed, setDeliveryCustomerCollapsed] = useState(false);
+  const frequentFetchGenRef = useRef(0);
+  const [frequentItems, setFrequentItems] = useState<FrequentItemRow[]>([]);
+  const [frequentItemsLoading, setFrequentItemsLoading] = useState(false);
+  const [frequentItemsExpanded, setFrequentItemsExpanded] = useState(false);
   const [phoneCustomerPhone, setPhoneCustomerPhone] = useState('');
   const [error, setError] = useState('');
   const [optionModal, setOptionModal] = useState<MenuItem | null>(null);
 
   // Payment modal state
   const [showPayment, setShowPayment] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'mixed'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'mixed' | 'member'>('cash');
   const [cashReceived, setCashReceived] = useState('');
   const [mixedCash, setMixedCash] = useState('');
   const [mixedCard, setMixedCard] = useState('');
+  const [memberPhone, setMemberPhone] = useState('');
+  const [memberPreview, setMemberPreview] = useState<CashierMemberPreview | null>(null);
   const [payingTotal, setPayingTotal] = useState(0);
   const [paying, setPaying] = useState(false);
   const [selectedCoupon, setSelectedCoupon] = useState<{ name: string; nameEn: string; amount: number } | null>(null);
@@ -82,6 +114,13 @@ export default function CashierOrder() {
   const [receiptBundleDiscounts, setReceiptBundleDiscounts] = useState<{ name: string; nameEn: string; discount: number }[]>([]);
   const [phoneOrderId, setPhoneOrderId] = useState<string | null>(null);
   const [offers, setOffers] = useState<OfferData[]>([]);
+
+  useEffect(() => {
+    if (!canMemberWallet && paymentMethod === 'member') {
+      setPaymentMethod('cash');
+      setMemberPreview(null);
+    }
+  }, [canMemberWallet, paymentMethod]);
 
   const fetchData = useCallback(async () => {
     const [catRes, itemRes, offersRes, couponsRes] = await Promise.all([
@@ -101,6 +140,33 @@ export default function CashierOrder() {
   }, [lang]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    if (orderType !== 'delivery' || !token) {
+      setDeliveryProfiles([]);
+      return;
+    }
+    const phone = deliveryCustomerPhone.trim();
+    if (phone.length < 5) {
+      setDeliveryProfiles([]);
+      return;
+    }
+    const tmr = setTimeout(() => {
+      void apiFetch(`/api/orders/customer-profiles?phone=${encodeURIComponent(phone)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => (r.ok ? r.json() : []))
+        .then((list: unknown) => {
+          setDeliveryProfiles(Array.isArray(list) ? (list as typeof deliveryProfiles) : []);
+        })
+        .catch(() => setDeliveryProfiles([]));
+    }, 400);
+    return () => clearTimeout(tmr);
+  }, [orderType, deliveryCustomerPhone, token]);
+
+  useEffect(() => {
+    deliveryPhoneRef.current = deliveryCustomerPhone;
+  }, [deliveryCustomerPhone]);
 
   useEffect(() => {
     if (!token || !canDelivery) {
@@ -124,11 +190,14 @@ export default function CashierOrder() {
   const lookupEircode = useCallback(async (raw: string) => {
     const norm = raw.toUpperCase().replace(/[\s-]/g, '');
     if (norm.length !== 7 || !/^[A-Z][0-9][0-9W][0-9A-Z]{4}$/.test(norm)) {
+      skipNextGeoAddressFillRef.current = false;
       setDeliveryDistanceKm(null);
       setDeliveryGeoError('');
       setDeliveryGeoLoading(false);
       return;
     }
+    const preserveAddress = skipNextGeoAddressFillRef.current;
+    if (preserveAddress) skipNextGeoAddressFillRef.current = false;
     const id = ++eircodeReqRef.current;
     setDeliveryGeoLoading(true);
     setDeliveryGeoError('');
@@ -141,16 +210,106 @@ export default function CashierOrder() {
         const msg = data?.error?.message || `HTTP ${res.status}`;
         throw new Error(msg);
       }
-      setDeliveryAddress(data?.formattedAddress || '');
+      if (!preserveAddress) {
+        setDeliveryAddress(data?.formattedAddress || '');
+      }
       setDeliveryDistanceKm(typeof data?.distanceKm === 'number' ? data.distanceKm : null);
     } catch (e) {
       if (id !== eircodeReqRef.current) return;
       setDeliveryDistanceKm(null);
-      setDeliveryGeoError(e instanceof Error ? e.message : '解析失败');
+      setDeliveryGeoError(e instanceof Error ? e.message : t('cashier.geoLookupErrorFallback'));
     } finally {
       if (id === eircodeReqRef.current) setDeliveryGeoLoading(false);
     }
-  }, []);
+  }, [t]);
+
+  const runMemberDeliveryLookup = useCallback(async (phoneRaw?: string) => {
+    if (orderType !== 'delivery' || !token) return;
+    const raw = phoneRaw ?? deliveryPhoneRef.current;
+    const digits = raw.replace(/\D/g, '');
+    if (digits.length < 8) return;
+    const id = ++memberDeliveryLookupReqRef.current;
+    try {
+      const res = await apiFetch(`/api/members/delivery-lookup?phone=${encodeURIComponent(raw.trim() || digits)}`);
+      const data = (res.ok ? await res.json().catch(() => null) : null) as {
+        _id?: string;
+        displayName?: string;
+        deliveryAddress?: string;
+        postalCode?: string;
+      } | null;
+      if (id !== memberDeliveryLookupReqRef.current) return;
+      if (deliveryPhoneRef.current.replace(/\D/g, '') !== digits) return;
+      if (!data?._id) return;
+      skipNextGeoAddressFillRef.current = true;
+      setDeliveryCustomerName(String(data.displayName || '').trim());
+      setDeliveryPostalCode(String(data.postalCode || '').trim());
+      setDeliveryAddress(String(data.deliveryAddress || '').trim());
+      setDeliveryCustomerCollapsed(true);
+    } catch {
+      /* ignore */
+    }
+  }, [orderType, token]);
+
+  /** 输入足够位数后自动查会员（不依赖离焦，避免 ref 与受控值不同步） */
+  useEffect(() => {
+    if (orderType !== 'delivery' || !token) return;
+    const digits = deliveryCustomerPhone.replace(/\D/g, '');
+    if (digits.length < 10) return;
+    const t = window.setTimeout(() => {
+      void runMemberDeliveryLookup(deliveryPhoneRef.current);
+    }, 450);
+    return () => window.clearTimeout(t);
+  }, [orderType, token, deliveryCustomerPhone, runMemberDeliveryLookup]);
+
+  useEffect(() => {
+    if (orderType !== 'delivery') {
+      setDeliveryCustomerCollapsed(false);
+      setFrequentItems([]);
+      setFrequentItemsExpanded(false);
+    }
+  }, [orderType]);
+
+  useEffect(() => {
+    if (orderType !== 'delivery' || !token || !canDelivery) {
+      setFrequentItems([]);
+      setFrequentItemsLoading(false);
+      return;
+    }
+    if (!deliveryCustomerCollapsed) {
+      setFrequentItems([]);
+      setFrequentItemsLoading(false);
+      return;
+    }
+    if (!frequentItemsExpanded) {
+      return;
+    }
+    const digits = deliveryCustomerPhone.replace(/\D/g, '');
+    if (digits.length < 8) {
+      setFrequentItems([]);
+      setFrequentItemsLoading(false);
+      return;
+    }
+    const gen = ++frequentFetchGenRef.current;
+    setFrequentItemsLoading(true);
+    const phoneQ = encodeURIComponent(deliveryCustomerPhone.trim());
+    void apiFetch(
+      `/api/orders/customer-frequent-items?phone=${phoneQ}&days=${FREQUENT_LOOKBACK_DAYS}&limit=${FREQUENT_ITEMS_LIMIT}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list: unknown) => {
+        if (gen !== frequentFetchGenRef.current) return;
+        setFrequentItems(Array.isArray(list) ? (list as FrequentItemRow[]) : []);
+      })
+      .catch(() => {
+        if (gen !== frequentFetchGenRef.current) return;
+        setFrequentItems([]);
+      })
+      .finally(() => {
+        if (gen !== frequentFetchGenRef.current) return;
+        setFrequentItemsLoading(false);
+      });
+  }, [orderType, deliveryCustomerCollapsed, deliveryCustomerPhone, frequentItemsExpanded, token, canDelivery]);
 
   useEffect(() => {
     if (orderType !== 'delivery' || !canDelivery) {
@@ -272,7 +431,7 @@ export default function CashierOrder() {
     }
     if (orderType === 'delivery') {
       if (!canDelivery) {
-        setError('当前套餐未开通送餐功能');
+        setError(t('cashier.deliveryNotEnabledPlan'));
         return;
       }
       handleDeliveryPhoneOrder();
@@ -281,6 +440,8 @@ export default function CashierOrder() {
     setPayingTotal(finalTotal);
     setCashReceived('');
     setPaymentMethod('cash');
+    setMemberPhone('');
+    setMemberPreview(null);
     setSelectedCoupon(null);
     setError('');
     setShowPayment(true);
@@ -290,7 +451,7 @@ export default function CashierOrder() {
   const handlePhoneOrder = async () => {
     const guestPhone = phoneCustomerPhone.trim();
     if (!guestPhone) {
-      setError('请填写客人电话');
+      setError(t('cashier.errFillGuestPhone'));
       return;
     }
     setPaying(true);
@@ -347,7 +508,7 @@ export default function CashierOrder() {
 
   const handleDeliveryPhoneOrder = async () => {
     if (!deliveryCustomerName.trim() || !deliveryCustomerPhone.trim() || !deliveryAddress.trim() || !deliveryPostalCode.trim()) {
-      setError('送餐订单需填写姓名、电话、邮编、地址');
+      setError(t('cashier.errDeliveryNeedFields'));
       return;
     }
     if (deliveryFeeRules.length > 0 && deliveryDistanceKm == null) {
@@ -372,12 +533,23 @@ export default function CashierOrder() {
       if (deliveryDistanceKm != null) {
         orderBody.deliveryDistanceKm = deliveryDistanceKm;
       }
+      if (deliveryCustomerProfileId.trim()) {
+        orderBody.customerProfileId = deliveryCustomerProfileId.trim();
+      }
       const orderRes = await apiFetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(orderBody),
       });
-      if (!orderRes.ok) { const d = await orderRes.json().catch(() => null); throw new Error(d?.error?.message || 'Failed'); }
+      if (!orderRes.ok) {
+        const d = (await orderRes.json().catch(() => null)) as {
+          error?: { message?: string; details?: { customerProfiles?: typeof deliveryProfiles } };
+        } | null;
+        if (orderRes.status === 409 && d?.error?.details?.customerProfiles?.length) {
+          setDeliveryProfiles(d.error.details.customerProfiles);
+        }
+        throw new Error(d?.error?.message || 'Failed');
+      }
       const orderData = await orderRes.json();
       try {
         const configRes = await apiFetch('/api/admin/config');
@@ -427,6 +599,11 @@ export default function CashierOrder() {
       setDeliveryCustomerPhone('');
       setDeliveryAddress('');
       setDeliveryPostalCode('');
+      setDeliveryCustomerProfileId('');
+      setDeliveryProfiles([]);
+      setDeliveryCustomerCollapsed(false);
+      setFrequentItems([]);
+      setFrequentItemsExpanded(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed');
     } finally {
@@ -485,17 +662,31 @@ export default function CashierOrder() {
       const orderData = await orderRes.json();
 
       // Step 2: Checkout immediately
-      const checkoutBody: Record<string, unknown> = { paymentMethod };
-      if (bundleTotals.bundleDiscount > 0) {
-        checkoutBody.totalAmountOverride = payingTotal;
+      const checkoutBody: Record<string, unknown> =
+        paymentMethod === 'member' && memberPreview
+          ? {
+              ...buildMemberFullWalletCheckoutBody(payAfterCoupon, memberPreview.phone),
+              ...(bundleTotals.bundleDiscount > 0 ? { totalAmountOverride: payingTotal } : {}),
+              ...(selectedCoupon
+                ? { couponName: selectedCoupon.name, couponAmount: selectedCoupon.amount }
+                : {}),
+            }
+          : { paymentMethod };
+      if (paymentMethod !== 'member') {
+        if (bundleTotals.bundleDiscount > 0) {
+          checkoutBody.totalAmountOverride = payingTotal;
+        }
+        if (selectedCoupon) {
+          checkoutBody.couponName = selectedCoupon.name;
+          checkoutBody.couponAmount = selectedCoupon.amount;
+        }
+        if (paymentMethod === 'cash') checkoutBody.cashAmount = payAfterCoupon;
+        else if (paymentMethod === 'card') checkoutBody.cardAmount = payAfterCoupon;
+        else {
+          checkoutBody.cashAmount = Number(mixedCash);
+          checkoutBody.cardAmount = Number(mixedCard);
+        }
       }
-      if (selectedCoupon) {
-        checkoutBody.couponName = selectedCoupon.name;
-        checkoutBody.couponAmount = selectedCoupon.amount;
-      }
-      if (paymentMethod === 'cash') checkoutBody.cashAmount = payAfterCoupon;
-      else if (paymentMethod === 'card') checkoutBody.cardAmount = payAfterCoupon;
-      else { checkoutBody.cashAmount = Number(mixedCash); checkoutBody.cardAmount = Number(mixedCard); }
 
       const checkoutRes = await apiFetch(`/api/checkout/seat/${orderData._id}`, {
         method: 'POST',
@@ -522,15 +713,47 @@ export default function CashierOrder() {
     setReceiptBundleDiscounts([]);
   };
 
+  const renderDeliveryGeoSection = () => (
+    <>
+      {deliveryGeoLoading ? (
+        <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{t('cashier.deliveryParsingPostcode')}</div>
+      ) : null}
+      {deliveryGeoError ? (
+        <div style={{ fontSize: 11, color: 'var(--red-primary)' }}>{deliveryGeoError}</div>
+      ) : null}
+      {deliveryDistanceKm != null && !deliveryGeoLoading ? (
+        <div style={{ fontSize: 12, color: '#1565c0' }}>{t('cashier.deliveryDistanceKm', { km: deliveryDistanceKm })}</div>
+      ) : null}
+      {deliveryAddress.trim() || deliveryPostalCode.trim() ? (
+        <a
+          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(deliveryAddress.trim() || deliveryPostalCode.trim())}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ fontSize: 11, color: '#1565c0', textDecoration: 'underline', display: 'inline-block', marginTop: 2 }}
+        >
+          {t('cashier.openInGoogleMaps')} ↗
+        </a>
+      ) : null}
+      {deliveryFeeRules.length > 0 && deliveryDistanceKm != null ? (
+        <div style={{ fontSize: 12, color: '#1565c0', marginTop: 4 }}>
+          {t('cashier.deliveryFee')}: <strong>€{deliveryFeeAmount.toFixed(2)}</strong>
+        </div>
+      ) : null}
+      {deliveryFeeRules.length > 0 && !deliveryGeoLoading && deliveryPostalCode.trim().length >= 5 && deliveryDistanceKm == null && !deliveryGeoError ? (
+        <div style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 4 }}>{t('cashier.deliveryFeeRulesNeedDistance')}</div>
+      ) : null}
+    </>
+  );
+
   // Phone order success screen
   if (phoneOrderId) {
     return (
       <div style={{ maxWidth: 500, margin: '0 auto' }}>
         <div style={{ textAlign: 'center', padding: 20 }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>📞</div>
-          <h2 style={{ color: 'var(--blue, #1976D2)', marginBottom: 12 }}>电话订单已创建</h2>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>客人来取时在"电话"页面完成支付</p>
-          <button className="btn btn-primary" onClick={() => setPhoneOrderId(null)} style={{ marginBottom: 20 }}>继续点单</button>
+          <h2 style={{ color: 'var(--blue, #1976D2)', marginBottom: 12 }}>{t('cashier.phoneOrderCreated')}</h2>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>{t('cashier.phoneOrderPayLater')}</p>
+          <button className="btn btn-primary" onClick={() => setPhoneOrderId(null)} style={{ marginBottom: 20 }}>{t('cashier.continueOrder')}</button>
         </div>
       </div>
     );
@@ -550,9 +773,9 @@ export default function CashierOrder() {
               <div style={{ fontSize: 24, fontWeight: 700, color: '#E65100' }}>{t('cashier.change')}: €{checkoutMeta.change.toFixed(2)}</div>
             </div>
           )}
-          <button className="btn btn-primary" onClick={handleCloseReceipt} style={{ marginBottom: 20 }}>继续点单</button>
+          <button className="btn btn-primary" onClick={handleCloseReceipt} style={{ marginBottom: 20 }}>{t('cashier.continueOrder')}</button>
           <button className="btn btn-outline" onClick={() => window.print()} style={{ marginBottom: 20, marginLeft: 8 }}>
-            🖨️ 打印小票
+            {t('cashier.printReceiptBtn')}
           </button>
         </div>
         <ReceiptPrint checkoutId={checkoutId} cashReceived={checkoutMeta?.cashReceived} changeAmount={checkoutMeta?.change} bundleDiscounts={receiptBundleDiscounts} />
@@ -578,10 +801,10 @@ export default function CashierOrder() {
       {/* Center: Menu Grid */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '10px 12px', background: 'var(--bg-white)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-          <input className="input" placeholder={`🔍  ${t('common.search')}...`} value={search} onChange={e => setSearch(e.target.value)} style={{ width: '100%', padding: '10px 14px', fontSize: 14 }} />
+          <input className="input" placeholder={t('cashier.searchMenuPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} style={{ width: '100%', padding: '10px 14px', fontSize: 14 }} />
         </div>
         <div style={{ padding: '10px 12px 6px', fontSize: 14, fontWeight: 700, background: 'var(--bg)', flexShrink: 0 }}>
-          {search ? `搜索: "${search}"` : getName(categories.find(c => c._id === activeCat)?.translations || [])}
+          {search ? t('cashier.searchResultsFor', { q: search }) : getName(categories.find(c => c._id === activeCat)?.translations || [])}
           <span style={{ fontWeight: 400, color: 'var(--text-light)', marginLeft: 8 }}>({filteredItems.length})</span>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '8px 10px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, alignContent: 'start' }}>
@@ -590,7 +813,7 @@ export default function CashierOrder() {
             return (
               <div key={item._id} onClick={() => addToOrder(item)} style={{ background: 'var(--bg-white)', border: qty > 0 ? '2px solid var(--red-primary)' : '1px solid var(--border)', borderRadius: 8, padding: '10px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', cursor: item.isSoldOut ? 'not-allowed' : 'pointer', opacity: item.isSoldOut ? 0.4 : 1, boxShadow: '0 1px 3px rgba(0,0,0,0.06)', minHeight: 80, justifyContent: 'center', position: 'relative', userSelect: 'none' }}>
                 {qty > 0 && <span style={{ position: 'absolute', top: -6, left: -6, width: 22, height: 22, borderRadius: '50%', background: 'var(--red-primary)', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{qty}</span>}
-                {item.isSoldOut && <span style={{ position: 'absolute', top: 4, right: 4, fontSize: 9, padding: '1px 5px', borderRadius: 3, fontWeight: 600, background: '#9E9E9E', color: '#fff' }}>售罄</span>}
+                {item.isSoldOut && <span style={{ position: 'absolute', top: 4, right: 4, fontSize: 9, padding: '1px 5px', borderRadius: 3, fontWeight: 600, background: '#9E9E9E', color: '#fff' }}>{t('cashier.orderSoldOutBadge')}</span>}
                 <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3, marginBottom: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{getName(item.translations)}</div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--red-primary)' }}>€{item.price}</div>
                 {item.optionGroups && item.optionGroups.length > 0 && <div style={{ fontSize: 9, color: 'var(--text-light)', marginTop: 2 }}>⚙ {t('customer.selectOptions')}</div>}
@@ -603,63 +826,185 @@ export default function CashierOrder() {
       {/* Right: Order Panel */}
       <div style={{ width: 320, flexShrink: 0, background: 'var(--bg-white)', borderLeft: '2px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700 }}>🧾 点单</h3>
-          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={clearOrder}>清空</button>
+          <h3 style={{ fontSize: 15, fontWeight: 700 }}>🧾 {t('cashier.orderPoint')}</h3>
+          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={clearOrder}>{t('cashier.clearOrder')}</button>
         </div>
         <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', gap: 6 }}>
-            <button className="btn" onClick={() => setOrderType('dine_in')} style={{ flex: 1, fontSize: 12, padding: '6px 0', background: orderType === 'dine_in' ? 'var(--red-primary)' : 'var(--bg)', color: orderType === 'dine_in' ? '#fff' : 'var(--text-secondary)', border: '1px solid var(--border)' }}>堂食</button>
-            <button className="btn" onClick={() => setOrderType('takeout')} style={{ flex: 1, fontSize: 12, padding: '6px 0', background: orderType === 'takeout' ? 'var(--red-primary)' : 'var(--bg)', color: orderType === 'takeout' ? '#fff' : 'var(--text-secondary)', border: '1px solid var(--border)' }}>外卖</button>
-            <button className="btn" onClick={() => setOrderType('phone')} style={{ flex: 1, fontSize: 12, padding: '6px 0', background: orderType === 'phone' ? 'var(--red-primary)' : 'var(--bg)', color: orderType === 'phone' ? '#fff' : 'var(--text-secondary)', border: '1px solid var(--border)' }}>📞 电话</button>
+            <button className="btn" onClick={() => { setOrderType('dine_in'); setDeliveryCustomerProfileId(''); }} style={{ flex: 1, fontSize: 12, padding: '6px 0', background: orderType === 'dine_in' ? 'var(--red-primary)' : 'var(--bg)', color: orderType === 'dine_in' ? '#fff' : 'var(--text-secondary)', border: '1px solid var(--border)' }}>{t('cashier.orderTypeDineIn')}</button>
+            <button className="btn" onClick={() => { setOrderType('takeout'); setDeliveryCustomerProfileId(''); }} style={{ flex: 1, fontSize: 12, padding: '6px 0', background: orderType === 'takeout' ? 'var(--red-primary)' : 'var(--bg)', color: orderType === 'takeout' ? '#fff' : 'var(--text-secondary)', border: '1px solid var(--border)' }}>{t('cashier.orderTypeTakeout')}</button>
+            <button className="btn" onClick={() => { setOrderType('phone'); setDeliveryCustomerProfileId(''); }} style={{ flex: 1, fontSize: 12, padding: '6px 0', background: orderType === 'phone' ? 'var(--red-primary)' : 'var(--bg)', color: orderType === 'phone' ? '#fff' : 'var(--text-secondary)', border: '1px solid var(--border)' }}>{t('cashier.orderTypePhone')}</button>
             {canDelivery ? (
-              <button className="btn" onClick={() => setOrderType('delivery')} style={{ flex: 1, fontSize: 12, padding: '6px 0', background: orderType === 'delivery' ? 'var(--red-primary)' : 'var(--bg)', color: orderType === 'delivery' ? '#fff' : 'var(--text-secondary)', border: '1px solid var(--border)' }}>🚚 送餐</button>
+              <button className="btn" onClick={() => setOrderType('delivery')} style={{ flex: 1, fontSize: 12, padding: '6px 0', background: orderType === 'delivery' ? 'var(--red-primary)' : 'var(--bg)', color: orderType === 'delivery' ? '#fff' : 'var(--text-secondary)', border: '1px solid var(--border)' }}>{t('cashier.orderTypeDelivery')}</button>
             ) : null}
           </div>
         </div>
         {orderType === 'phone' && (
           <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
-            <input className="input" placeholder="客人电话（必填）" value={phoneCustomerPhone} onChange={e => setPhoneCustomerPhone(e.target.value)} />
+            <input className="input" placeholder={t('cashier.phoneGuestPlaceholder')} value={phoneCustomerPhone} onChange={e => setPhoneCustomerPhone(e.target.value)} />
           </div>
         )}
-        {orderType === 'delivery' && (
+        {orderType === 'delivery' && deliveryCustomerCollapsed ? (
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', background: 'var(--bg)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 700 }}>{t('cashier.deliverySummaryTitle')}</span>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ fontSize: 11, padding: '2px 8px' }}
+                onClick={() => setDeliveryCustomerCollapsed(false)}
+              >
+                {t('cashier.deliveryEditCustomer')}
+              </button>
+            </div>
+            <div style={{ display: 'grid', gap: 4, fontSize: 12 }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', lineHeight: 1.35 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ color: 'var(--text-light)', fontSize: 11 }}>{t('cashier.deliverySummaryName')}</span>{' '}
+                  <span style={{ fontWeight: 600, wordBreak: 'break-word' }}>{deliveryCustomerName.trim() || t('cashier.profileAddressDash')}</span>
+                </div>
+                <div style={{ width: 1, alignSelf: 'stretch', minHeight: 28, background: 'var(--border)', flexShrink: 0 }} aria-hidden />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ color: 'var(--text-light)', fontSize: 11 }}>{t('cashier.deliverySummaryPhone')}</span>{' '}
+                  <span style={{ fontWeight: 600, wordBreak: 'break-all' }}>{deliveryCustomerPhone.trim() || t('cashier.profileAddressDash')}</span>
+                </div>
+              </div>
+              <div style={{ lineHeight: 1.35 }}>
+                <span style={{ color: 'var(--text-light)', fontSize: 11 }}>{t('cashier.deliverySummaryAddress')}</span>{' '}
+                <span style={{ fontWeight: 600, wordBreak: 'break-word' }}>{deliveryAddress.trim() || t('cashier.profileAddressDash')}</span>
+              </div>
+            </div>
+            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setFrequentItemsExpanded((v) => !v)}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: '4px 0',
+                  textAlign: 'left',
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                <span>{t('cashier.frequentItemsTitle', { days: FREQUENT_LOOKBACK_DAYS })}</span>
+                <span style={{ fontSize: 10, opacity: 0.7 }} aria-hidden>{frequentItemsExpanded ? '▲' : '▼'}</span>
+              </button>
+              {frequentItemsExpanded ? (
+                <div style={{ marginTop: 4 }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-light)', marginBottom: 6, lineHeight: 1.35 }}>
+                    {t('cashier.frequentItemsHint')}
+                  </div>
+                  {frequentItemsLoading ? (
+                    <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{t('cashier.frequentItemsLoading')}</div>
+                  ) : frequentItems.length === 0 ? (
+                    <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{t('cashier.frequentItemsEmpty')}</div>
+                  ) : (
+                    <ol style={{ margin: 0, paddingLeft: 18, fontSize: 11, lineHeight: 1.45 }}>
+                      {frequentItems.map((row) => {
+                        const label =
+                          lang.startsWith('zh') || !row.itemNameEn?.trim()
+                            ? row.itemName
+                            : row.itemNameEn;
+                        return (
+                          <li key={row.menuItemId} style={{ marginBottom: 3 }}>
+                            <span style={{ fontWeight: 600 }}>{label}</span>
+                            <span style={{ color: 'var(--text-light)', marginLeft: 4 }}>
+                              {t('cashier.frequentItemsCount', { count: row.orderCount })}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  )}
+                </div>
+              ) : null}
+            </div>
+            <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-light)', marginBottom: 6, fontWeight: 600 }}>{t('cashier.deliveryMapInfoTitle')}</div>
+              <div style={{ fontSize: 12, marginBottom: 6 }}>
+                <span style={{ color: 'var(--text-light)', fontSize: 11 }}>{t('cashier.deliverySummaryEircode')}</span>{' '}
+                <span style={{ fontWeight: 600 }}>{deliveryPostalCode.trim() || t('cashier.profileAddressDash')}</span>
+              </div>
+              {renderDeliveryGeoSection()}
+            </div>
+          </div>
+        ) : null}
+        {orderType === 'delivery' && !deliveryCustomerCollapsed ? (
           <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', display: 'grid', gap: 6 }}>
-            <input className="input" placeholder="客人姓名" value={deliveryCustomerName} onChange={e => setDeliveryCustomerName(e.target.value)} />
-            <input className="input" placeholder="电话" value={deliveryCustomerPhone} onChange={e => setDeliveryCustomerPhone(e.target.value)} />
             <input
               className="input"
-              placeholder="爱尔兰 Eircode（7 位，如 D02 XY43）"
+              placeholder={t('cashier.deliveryPhonePlaceholder')}
+              value={deliveryCustomerPhone}
+              onChange={(e) => {
+                deliveryPhoneRef.current = e.target.value;
+                setDeliveryCustomerPhone(e.target.value);
+                setDeliveryCustomerProfileId('');
+                setDeliveryCustomerCollapsed(false);
+              }}
+              onBlur={(e) => void runMemberDeliveryLookup(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const el = e.target as HTMLInputElement;
+                  void runMemberDeliveryLookup(el.value);
+                  el.blur();
+                }
+              }}
+            />
+            <input className="input" placeholder={t('cashier.deliveryCustomerNamePlaceholder')} value={deliveryCustomerName} onChange={e => setDeliveryCustomerName(e.target.value)} />
+            {deliveryProfiles.length > 0 ? (
+              <div>
+                <label style={{ fontSize: 11, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>{t('cashier.deliveryProfileLabel')}</label>
+                <select
+                  className="input"
+                  style={{ width: '100%', fontSize: 13 }}
+                  value={deliveryCustomerProfileId}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setDeliveryCustomerProfileId(v);
+                    if (v) {
+                      const p = deliveryProfiles.find((x) => x._id === v);
+                      if (p) {
+                        if (p.customerName) setDeliveryCustomerName(p.customerName);
+                        if (p.deliveryAddress) setDeliveryAddress(p.deliveryAddress);
+                        if (p.postalCode) setDeliveryPostalCode(p.postalCode);
+                      }
+                    }
+                  }}
+                >
+                  <option value="">{t('cashier.deliveryProfileAutoOption')}</option>
+                  {deliveryProfiles.map((p) => (
+                    <option key={p._id} value={p._id}>
+                      {p.deliveryAddress || t('cashier.profileAddressDash')} · {p.postalCode || t('cashier.profileAddressDash')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+            <input
+              className="input"
+              placeholder={t('cashier.deliveryEircodePlaceholder')}
               value={deliveryPostalCode}
               onChange={e => setDeliveryPostalCode(e.target.value)}
               autoCapitalize="characters"
             />
-            <input className="input" placeholder="地址（填写邮编后可自动填充）" value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} />
-            {deliveryGeoLoading ? (
-              <div style={{ fontSize: 11, color: 'var(--text-light)' }}>正在解析邮编…</div>
-            ) : null}
-            {deliveryGeoError ? (
-              <div style={{ fontSize: 11, color: 'var(--red-primary)' }}>{deliveryGeoError}</div>
-            ) : null}
-            {deliveryDistanceKm != null && !deliveryGeoLoading ? (
-              <div style={{ fontSize: 12, color: '#1565c0' }}>
-                距店铺直线约 <strong>{deliveryDistanceKm}</strong> km（大圆距离，非行车路线）
-              </div>
-            ) : null}
-            {deliveryFeeRules.length > 0 && deliveryDistanceKm != null ? (
-              <div style={{ fontSize: 12, color: '#1565c0' }}>
-                {t('cashier.deliveryFee')}: <strong>€{deliveryFeeAmount.toFixed(2)}</strong>
-              </div>
-            ) : null}
-            {deliveryFeeRules.length > 0 && !deliveryGeoLoading && deliveryPostalCode.trim().length >= 5 && deliveryDistanceKm == null && !deliveryGeoError ? (
-              <div style={{ fontSize: 11, color: 'var(--text-light)' }}>{t('cashier.deliveryFeeRulesNeedDistance')}</div>
-            ) : null}
+            <input className="input" placeholder={t('cashier.deliveryAddressPlaceholder')} value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} />
+            {renderDeliveryGeoSection()}
           </div>
-        )}
+        ) : null}
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
           {order.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-light)', gap: 8 }}>
               <span style={{ fontSize: 36, opacity: 0.3 }}>📋</span>
-              <span style={{ fontSize: 13 }}>点击左侧菜品加入</span>
+              <span style={{ fontSize: 13 }}>{t('cashier.emptyOrderHint')}</span>
             </div>
           ) : order.map((line, idx) => {
             const optExtra = (line.options || []).reduce((sum, opt) => sum + opt.extraPrice, 0);
@@ -717,7 +1062,7 @@ export default function CashierOrder() {
             </div>
           )}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>合计 · {order.length} 件</span>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{t('cashier.totalItemsLine', { count: order.length })}</span>
             <div style={{ textAlign: 'right' }}>
               {bundleTotals.bundleDiscount > 0 && (
                 <div style={{ fontSize: 12, color: 'var(--text-light)', textDecoration: 'line-through' }}>€{totalAmount.toFixed(2)}</div>
@@ -726,7 +1071,7 @@ export default function CashierOrder() {
             </div>
           </div>
           <button className="btn btn-primary" onClick={handleOpenPayment} disabled={order.length === 0} style={{ width: '100%', fontSize: 15, padding: '12px 0', letterSpacing: 1 }}>
-            下单结账
+            {t('cashier.placeOrderCheckout')}
           </button>
         </div>
       </div>
@@ -744,7 +1089,7 @@ export default function CashierOrder() {
             {/* Coupon selection */}
             {availableCoupons.length > 0 && (
               <div style={{ marginBottom: 12, padding: 10, background: 'var(--bg)', borderRadius: 8 }}>
-                <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 6 }}>🎟️ Coupon</div>
+                <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 6 }}>{t('cashier.couponSectionTitle')}</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {availableCoupons.map(c => {
                     const isSelected = selectedCoupon?.name === c.name && selectedCoupon?.amount === c.amount;
@@ -766,20 +1111,48 @@ export default function CashierOrder() {
                 </div>
                 {selectedCoupon && (
                   <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 16 }}>
-                    <span style={{ color: '#2E7D32' }}>After Coupon</span>
+                    <span style={{ color: '#2E7D32' }}>{t('cashier.afterCoupon')}</span>
                     <span style={{ color: '#2E7D32' }}>€{payAfterCoupon.toFixed(2)}</span>
                   </div>
                 )}
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-              {(['cash', 'card', 'mixed'] as const).map(m => (
-                <button key={m} onClick={() => { setPaymentMethod(m); setCashReceived(''); }} className="btn" style={{ flex: 1, background: paymentMethod === m ? 'var(--red-primary)' : 'var(--bg)', color: paymentMethod === m ? '#fff' : 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+              {(canMemberWallet ? (['cash', 'card', 'mixed', 'member'] as const) : (['cash', 'card', 'mixed'] as const)).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    setPaymentMethod(m);
+                    setCashReceived('');
+                    if (m !== 'member') {
+                      setMemberPreview(null);
+                    }
+                  }}
+                  className="btn"
+                  style={{
+                    flex: '1 1 40%',
+                    minWidth: 72,
+                    background: paymentMethod === m ? 'var(--red-primary)' : 'var(--bg)',
+                    color: paymentMethod === m ? '#fff' : 'var(--text-secondary)',
+                    border: '1px solid var(--border)',
+                  }}
+                >
                   {t(`cashier.${m}`)}
                 </button>
               ))}
             </div>
+
+            {paymentMethod === 'member' ? (
+              <CashierMemberCheckoutBlock
+                payAmount={payAfterCoupon}
+                phone={memberPhone}
+                setPhone={setMemberPhone}
+                preview={memberPreview}
+                setPreview={setMemberPreview}
+              />
+            ) : null}
 
             {paymentMethod === 'cash' && (
               <div style={{ padding: 10, background: 'var(--bg)', borderRadius: 8, marginBottom: 12 }}>
@@ -805,7 +1178,11 @@ export default function CashierOrder() {
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setShowPayment(false)}>{t('common.cancel')}</button>
               <button className="btn btn-primary" style={{ flex: 1 }} onClick={handlePay}
-                disabled={paying || (paymentMethod === 'cash' && cashReceivedNum < payAfterCoupon)}>
+                disabled={
+                  paying ||
+                  (paymentMethod === 'cash' && cashReceivedNum < payAfterCoupon) ||
+                  (paymentMethod === 'member' && !canMemberFullWalletPay(memberPreview, payAfterCoupon))
+                }>
                 {paying ? t('common.loading') : t('cashier.submitCheckout')}
               </button>
             </div>

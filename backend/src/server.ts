@@ -25,6 +25,9 @@ import couponsRouter from './routes/coupons';
 import platformRouter from './routes/platform';
 import publicAdsRouter from './routes/publicAds';
 import geoRouter, { guestEircodeMiddleware } from './routes/geo';
+import membersRouter, { membersScanOrderLookup } from './routes/members';
+import { requireFeature } from './middleware/featureAccess';
+import { FeatureKeys } from './utils/featureCatalog';
 import { storeIoRoom } from './socketRooms';
 
 dotenv.config();
@@ -100,6 +103,12 @@ app.use('/api/orders', createOrdersRouter(io));
 // Checkout routes
 app.use('/api/checkout', createCheckoutRouter(io));
 
+// 扫码会员手机号校验：与 geo 顾客接口同理，显式挂在 server，避免 Express 5 下子 Router 的 GET 未命中而落入 SPA 404
+app.get('/api/members/scan-order-lookup', requireFeature(FeatureKeys.CashierMemberWallet), membersScanOrderLookup);
+
+// 会员（顾客自助 + 收银 verify-pin）
+app.use('/api/members', membersRouter);
+
 // Admin routes（单路由内按需 auth + enforceJwtStoreMatch）
 app.use('/api/admin', adminRouter);
 app.use('/api/admin/option-group-templates', optionGroupTemplatesRouter);
@@ -144,6 +153,28 @@ app.get('/{*splat}', (req, res) => {
     return;
   }
   res.sendFile(indexHtml);
+});
+
+/**
+ * 未匹配的 /api/*（尤其是 POST）若落到此处，Express 默认会返回 HTML「Cannot POST …」。
+ * 统一为 JSON，并提示常见原因：沿用旧 dist、未重新 build。
+ */
+app.use((req, res, next) => {
+  const pathOnly = (req.originalUrl || req.url || '').split('?')[0];
+  if (!pathOnly.startsWith('/api')) {
+    next();
+    return;
+  }
+  res.status(404).json({
+    error: {
+      code: 'NOT_FOUND',
+      message: `无此 API：${req.method} ${pathOnly}`,
+      details: {
+        hint:
+          '若项目已包含会员等接口仍出现本错误，多为后端未加载最新代码：开发请用 `cd backend && npm run dev`；生产请在本机执行 `npm run build` 后再 `npm start`，勿沿用旧的 dist/server.js。',
+      },
+    },
+  });
 });
 
 // Unified error handler (must be after all routes)

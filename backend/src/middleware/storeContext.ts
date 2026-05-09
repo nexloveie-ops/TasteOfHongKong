@@ -44,9 +44,15 @@ export const attachStoreContext: RequestHandler = async (req, _res, next) => {
   }
 
   try {
+    let bodySlug = '';
+    if (req.body && typeof req.body === 'object' && !Array.isArray(req.body)) {
+      const s = (req.body as Record<string, unknown>).storeSlug;
+      if (typeof s === 'string') bodySlug = s.trim();
+    }
     const raw =
       (req.headers[STORE_SLUG_HEADER] as string | undefined)?.trim() ||
       (typeof req.query.storeSlug === 'string' ? req.query.storeSlug.trim() : '') ||
+      bodySlug ||
       process.env.DEFAULT_STORE_SLUG?.trim();
     if (!raw) {
       next(

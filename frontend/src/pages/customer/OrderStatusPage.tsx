@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useCart } from '../../context/CartContext';
 import type { CartItem } from '../../context/CartContext';
 import PaymentModal from '../../components/customer/PaymentModal';
+import MemberWalletPayModal from '../../components/customer/MemberWalletPayModal';
 import { apiFetch } from '../../api/client';
 import { resolveBackendAssetUrl } from '../../utils/backendPublicUrl';
 import { useRestaurantConfig } from '../../hooks/useRestaurantConfig';
@@ -154,6 +155,7 @@ export default function OrderStatusPage() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [showPayment, setShowPayment] = useState(false);
+  const [showMemberWallet, setShowMemberWallet] = useState(false);
   const [postOrderAds, setPostOrderAds] = useState<PostOrderAdBanner[]>([]);
   const qs = searchParams.toString();
   const menuHref = storeSlug ? `/${storeSlug}/customer/menu${qs ? `?${qs}` : ''}` : '/';
@@ -411,6 +413,26 @@ export default function OrderStatusPage() {
               }}>
               <span style={{ fontSize: 20 }}>💳</span> {t('customer.payNow')} · €{computeOrderPayableEuro(order).toFixed(2)}
             </button>
+            <button
+              className="btn btn-outline"
+              onClick={() => setShowMemberWallet(true)}
+              style={{
+                width: '100%',
+                padding: '14px 0',
+                fontSize: 15,
+                fontWeight: 700,
+                borderRadius: 12,
+                border: '2px solid var(--gold-primary, #C5A059)',
+                color: 'var(--text-dark)',
+                background: 'linear-gradient(180deg, #fffef8 0%, #faf6eb 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+            >
+              <span style={{ fontSize: 20 }}>👛</span> {t('customer.memberWalletPay')} · €{computeOrderPayableEuro(order).toFixed(2)}
+            </button>
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleModifyOrder}>
                 {t('customer.modifyOrder')}
@@ -514,6 +536,17 @@ export default function OrderStatusPage() {
             fetchOrder(); // Refresh to show checked_out status
           }}
           onClose={() => setShowPayment(false)}
+        />
+      )}
+      {showMemberWallet && order && (
+        <MemberWalletPayModal
+          orderId={order._id}
+          amount={computeOrderPayableEuro(order)}
+          onSuccess={() => {
+            setShowMemberWallet(false);
+            fetchOrder();
+          }}
+          onClose={() => setShowMemberWallet(false)}
         />
       )}
     </div>

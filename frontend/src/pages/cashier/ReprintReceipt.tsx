@@ -216,13 +216,30 @@ export default function ReprintReceipt() {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ itemIds: [...selectedItems] }),
       });
+      const data = (await res.json().catch(() => null)) as {
+        refundChannelBreakdown?: { memberWalletEuro?: number; cashEuro?: number; cardEuro?: number; onlineEuro?: number };
+        memberWalletRefundError?: string;
+        error?: { message?: string };
+      } | null;
       if (res.ok) {
-        // Refresh the list
+        const hints: string[] = [];
+        const b = data?.refundChannelBreakdown;
+        if (b) {
+          if ((b.memberWalletEuro ?? 0) > 0.001) hints.push(`储值退回钱包 €${Number(b.memberWalletEuro).toFixed(2)}`);
+          if ((b.cashEuro ?? 0) > 0.001) hints.push(`现金退回 €${Number(b.cashEuro).toFixed(2)}`);
+          if ((b.cardEuro ?? 0) > 0.001) hints.push(`刷卡原路 €${Number(b.cardEuro).toFixed(2)}`);
+          if ((b.onlineEuro ?? 0) > 0.001) hints.push(`线上原路 €${Number(b.onlineEuro).toFixed(2)}`);
+        }
+        if (data?.memberWalletRefundError) {
+          hints.push(
+            `注意：储值退回失败（${data.memberWalletRefundError}）。请在管理后台「会员与储值」中使用 Checkout ID ${r.checkoutId} 执行补录。`,
+          );
+        }
+        if (hints.length) alert(`退单已完成。\n\n${hints.join('\n')}`);
         setExpandedId(null);
         setSelectedItems(new Set());
         handleSearch(orderNumber);
       } else {
-        const data = await res.json().catch(() => null);
         alert(data?.error?.message || '退单失败');
       }
     } catch {

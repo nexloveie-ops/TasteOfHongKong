@@ -2,7 +2,10 @@ import mongoose from 'mongoose';
 import { getModels } from '../getModels';
 
 export const FeatureKeys = {
+  /** 送餐收银页、运费配置、顾客端送餐入口与二维码 */
   CashierDeliveryPage: 'cashier.delivery.page',
+  /** 会员注册/登录、储值、钱包结账、管理端「会员与储值」、扫码会员校验等（与送餐独立） */
+  CashierMemberWallet: 'cashier.member.wallet',
   AdminOptionTemplatePage: 'admin.optionGroupTemplates.page',
   AdminOffersPage: 'admin.offers.page',
   AdminCouponsPage: 'admin.coupons.page',

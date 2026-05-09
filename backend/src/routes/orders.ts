@@ -14,6 +14,11 @@ import {
   parseDeliveryFeeRulesJson,
 } from '../utils/deliveryFeeRules';
 import { computeOrderPayableTotalEuro } from '../utils/orderPayableTotal';
+import { requirePermission } from '../middleware/auth';
+import { requireAuthSameStore } from '../middleware/authForStore';
+import { customerPhoneMatchCandidates, normalizeMemberPhone } from '../utils/memberWalletOps';
+import { attachCustomerProfileToDeliveryOrder } from '../utils/customerProfileDelivery';
+import { aggregateFrequentMenuItemsForCustomer } from '../utils/customerFrequentOrderItems';
 
 function orderModels() {
   return getModels() as {
@@ -21,6 +26,7 @@ function orderModels() {
     Order: mongoose.Model<any>;
     DailyOrderCounter: mongoose.Model<any>;
     SystemConfig: mongoose.Model<any>;
+    CustomerProfile: mongoose.Model<any>;
   };
 }
 
@@ -136,7 +142,7 @@ export function createOrdersRouter(io: SocketIOServer): Router {
   // POST /api/orders — Create a new order
   router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { MenuItem, Order, DailyOrderCounter, SystemConfig } = orderModels();
+      const { MenuItem, Order, DailyOrderCounter, SystemConfig, CustomerProfile } = orderModels();
       const {
         type,
         tableNumber,
@@ -151,6 +157,7 @@ export function createOrdersRouter(io: SocketIOServer): Router {
         deliveryDistanceKm: rawDeliveryDistanceKm,
         pickupSlotLabel: rawPickupSlotLabel,
         pickupSlotStart: rawPickupSlotStart,
+        customerProfileId: rawCustomerProfileId,
       } = req.body;
 
       // Customer self-order channels follow business hour restrictions.
@@ -270,7 +277,12 @@ export function createOrdersRouter(io: SocketIOServer): Router {
         );
         orderData.dailyOrderNumber = counter!.currentNumber;
         orderData.customerName = String(customerName || '').trim();
-        orderData.customerPhone = String(customerPhone || '').trim();
+        {
+          const rawPhone = String(customerPhone || '').trim();
+          const normPhone = normalizeMemberPhone(rawPhone);
+          orderData.customerPhone =
+            normPhone.length >= 8 ? normPhone : rawPhone.replace(/\D/g, '') || rawPhone;
+        }
         orderData.deliveryAddress = String(deliveryAddress || '').trim();
         orderData.postalCode = String(postalCode || '').trim();
         orderData.deliverySource = String(deliverySource || '').trim();
@@ -302,6 +314,22 @@ export function createOrdersRouter(io: SocketIOServer): Router {
         if (dist !== undefined) orderData.deliveryDistanceKm = dist;
         orderData.deliveryFeeEuro = fee;
         appendDeliveryFeeLineToOrderItems(orderItems as Record<string, unknown>[], type, fee);
+
+        const reqProf =
+          typeof rawCustomerProfileId === 'string' && mongoose.Types.ObjectId.isValid(rawCustomerProfileId)
+            ? rawCustomerProfileId
+            : null;
+        const profileId = await attachCustomerProfileToDeliveryOrder({
+          CustomerProfile,
+          storeId: req.storeId!,
+          phoneRaw: String(customerPhone || ''),
+          customerName: String(customerName || ''),
+          deliveryAddress: String(deliveryAddress || ''),
+          postalCode: String(postalCode || ''),
+          deliverySource: String(deliverySource || '').trim() === 'qr' ? 'qr' : 'phone',
+          requestedProfileId: reqProf,
+        });
+        orderData.customerProfileId = profileId;
       }
 
       if (type === 'takeout') {
@@ -318,11 +346,13 @@ export function createOrdersRouter(io: SocketIOServer): Router {
       }
 
       if (type === 'phone') {
-        const phone = typeof customerPhone === 'string' ? customerPhone.trim() : '';
-        if (!phone) {
+        const rawPhone = typeof customerPhone === 'string' ? customerPhone.trim() : '';
+        if (!rawPhone) {
           throw createAppError('VALIDATION_ERROR', 'phone orders require customerPhone');
         }
-        orderData.customerPhone = phone;
+        const normPhone = normalizeMemberPhone(rawPhone);
+        orderData.customerPhone =
+          normPhone.length >= 8 ? normPhone : rawPhone.replace(/\D/g, '') || rawPhone;
         const name = typeof customerName === 'string' ? customerName.trim() : '';
         if (name) {
           orderData.customerName = name;
@@ -496,8 +526,9 @@ export function createOrdersRouter(io: SocketIOServer): Router {
       const models = getModels() as {
         Order: mongoose.Model<any>;
         Checkout: mongoose.Model<any>;
+        MemberWalletTxn: mongoose.Model<any>;
       };
-      const { Order, Checkout } = models;
+      const { Order, Checkout, MemberWalletTxn } = models;
       const id = req.params.id as string;
       if (!mongoose.Types.ObjectId.isValid(id)) {
         throw createAppError('VALIDATION_ERROR', 'Invalid order ID');
@@ -515,14 +546,44 @@ export function createOrdersRouter(io: SocketIOServer): Router {
       }
 
       const totalAmount = computeOrderPayableTotalEuro(order);
-      await Checkout.create({
+      const stripePi = String(order.stripePaymentIntentId || '').trim();
+      const memberUsed = Number(order.memberCreditUsed) || 0;
+      const memberPrepaid = !stripePi && memberUsed > 0.001 && order.memberId;
+
+      if (memberPrepaid && Math.abs(totalAmount - memberUsed) > 0.02) {
+        throw createAppError('VALIDATION_ERROR', '订单金额与已扣储值不一致，请核对订单', {
+          totalAmount,
+          memberCreditUsed: memberUsed,
+        });
+      }
+
+      const checkoutPayload: Record<string, unknown> = {
         storeId: req.storeId,
         type: 'seat',
         totalAmount,
-        paymentMethod: 'online',
+        paymentMethod: memberPrepaid ? 'member' : 'online',
         orderIds: [order._id],
         tableNumber: order.tableNumber,
-      });
+      };
+      if (memberPrepaid) {
+        checkoutPayload.memberId = order.memberId;
+        checkoutPayload.memberPhoneSnapshot = String(order.memberPhoneSnapshot || '');
+        checkoutPayload.memberCreditUsed = memberUsed;
+      }
+
+      const checkout = await Checkout.create(checkoutPayload);
+
+      if (memberPrepaid) {
+        await MemberWalletTxn.updateMany(
+          {
+            storeId: req.storeId,
+            orderId: order._id,
+            type: 'spend',
+            $or: [{ checkoutId: { $exists: false } }, { checkoutId: null }],
+          },
+          { $set: { checkoutId: checkout._id } },
+        );
+      }
 
       const updated = await Order.findOneAndUpdate(
         { _id: id, storeId: req.storeId },
@@ -543,8 +604,9 @@ export function createOrdersRouter(io: SocketIOServer): Router {
       const models = getModels() as {
         Order: mongoose.Model<any>;
         Checkout: mongoose.Model<any>;
+        MemberWalletTxn: mongoose.Model<any>;
       };
-      const { Order, Checkout } = models;
+      const { Order, Checkout, MemberWalletTxn } = models;
       const id = req.params.id as string;
       if (!mongoose.Types.ObjectId.isValid(id)) {
         throw createAppError('VALIDATION_ERROR', 'Invalid order ID');
@@ -573,14 +635,44 @@ export function createOrdersRouter(io: SocketIOServer): Router {
         .reduce((s: number, b: { discount: number }) => s + b.discount, 0);
       const totalAmount = Math.round((itemTotal - bundleDiscount) * 100) / 100;
 
-      await Checkout.create({
+      const stripePi = String(order.stripePaymentIntentId || '').trim();
+      const memberUsed = Number(order.memberCreditUsed) || 0;
+      const memberPrepaid = !stripePi && memberUsed > 0.001 && order.memberId;
+
+      if (memberPrepaid && Math.abs(totalAmount - memberUsed) > 0.02) {
+        throw createAppError('VALIDATION_ERROR', '订单金额与已扣储值不一致，请核对订单', {
+          totalAmount,
+          memberCreditUsed: memberUsed,
+        });
+      }
+
+      const checkoutPayload: Record<string, unknown> = {
         storeId: req.storeId,
         type: 'seat',
         totalAmount,
-        paymentMethod: 'online',
+        paymentMethod: memberPrepaid ? 'member' : 'online',
         orderIds: [order._id],
         tableNumber: order.tableNumber,
-      });
+      };
+      if (memberPrepaid) {
+        checkoutPayload.memberId = order.memberId;
+        checkoutPayload.memberPhoneSnapshot = String(order.memberPhoneSnapshot || '');
+        checkoutPayload.memberCreditUsed = memberUsed;
+      }
+
+      const checkout = await Checkout.create(checkoutPayload);
+
+      if (memberPrepaid) {
+        await MemberWalletTxn.updateMany(
+          {
+            storeId: req.storeId,
+            orderId: order._id,
+            type: 'spend',
+            $or: [{ checkoutId: { $exists: false } }, { checkoutId: null }],
+          },
+          { $set: { checkoutId: checkout._id } },
+        );
+      }
 
       const updated = await Order.findOneAndUpdate(
         { _id: id, storeId: req.storeId },
@@ -630,6 +722,61 @@ export function createOrdersRouter(io: SocketIOServer): Router {
       await order.save();
       io.to(storeIoRoom(req.storeId!)).emit('order:updated', order);
       res.json(order);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /api/orders/customer-frequent-items — 近 N 天常点菜品（收银建议；须置于 /:id 之前）
+  router.get(
+    '/customer-frequent-items',
+    ...requireAuthSameStore,
+    requirePermission('checkout:process'),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const { Order } = orderModels();
+        const qRaw = String(req.query.phone || '');
+        const candidates = customerPhoneMatchCandidates(qRaw);
+        if (candidates.length === 0) {
+          res.json([]);
+          return;
+        }
+        const days = Math.min(90, Math.max(1, Number(req.query.days) || 60));
+        const limit = Math.min(20, Math.max(1, Number(req.query.limit) || 8));
+        const list = await aggregateFrequentMenuItemsForCustomer(Order, req.storeId!, candidates, {
+          days,
+          limit,
+        });
+        res.json(list);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // GET /api/orders/customer-profiles — 按手机号列举送餐客户档案（须置于 /:id 之前）
+  router.get('/customer-profiles', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { CustomerProfile } = orderModels();
+      const phone = normalizeMemberPhone(String(req.query.phone || ''));
+      if (!phone) {
+        res.json([]);
+        return;
+      }
+      const list = await CustomerProfile.find({ storeId: req.storeId, phoneNorm: phone })
+        .sort({ updatedAt: -1 })
+        .limit(30)
+        .lean();
+      res.json(
+        list.map((p: Record<string, unknown>) => ({
+          _id: p._id,
+          customerName: String(p.customerName || ''),
+          deliveryAddress: String(p.deliveryAddress || ''),
+          postalCode: String(p.postalCode || ''),
+          memberId: p.memberId || null,
+          updatedAt: p.updatedAt,
+        })),
+      );
     } catch (err) {
       next(err);
     }

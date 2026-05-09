@@ -11,6 +11,7 @@ function paymentModels() {
   return getModels() as {
     Order: mongoose.Model<any>;
     Checkout: mongoose.Model<any>;
+    MemberWalletTxn: mongoose.Model<any>;
   };
 }
 
@@ -134,7 +135,7 @@ router.get('/config', async (req: Request, res: Response, next: NextFunction) =>
  */
 router.post('/finalize', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { Order, Checkout } = paymentModels();
+    const { Order, Checkout, MemberWalletTxn } = paymentModels();
     const { orderId } = req.body;
     if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
       throw createAppError('VALIDATION_ERROR', 'Valid orderId is required');
@@ -156,15 +157,44 @@ router.post('/finalize', async (req: Request, res: Response, next: NextFunction)
       .reduce((s: number, b: { discount: number }) => s + b.discount, 0);
     const totalAmount = Math.round((itemTotal - bundleDiscount) * 100) / 100;
 
-    // Create checkout record
-    const checkout = await Checkout.create({
+    const stripePi = String((order as { stripePaymentIntentId?: string }).stripePaymentIntentId || '').trim();
+    const memberUsed = Number((order as { memberCreditUsed?: number }).memberCreditUsed) || 0;
+    const memberPrepaid = !stripePi && memberUsed > 0.001 && (order as { memberId?: unknown }).memberId;
+
+    if (memberPrepaid && Math.abs(totalAmount - memberUsed) > 0.02) {
+      throw createAppError('VALIDATION_ERROR', '订单金额与已扣储值不一致，请核对订单', {
+        totalAmount,
+        memberCreditUsed: memberUsed,
+      });
+    }
+
+    const checkoutPayload: Record<string, unknown> = {
       storeId: req.storeId,
       type: 'seat',
       totalAmount,
-      paymentMethod: 'online',
+      paymentMethod: memberPrepaid ? 'member' : 'online',
       orderIds: [order._id],
       tableNumber: order.tableNumber,
-    });
+    };
+    if (memberPrepaid) {
+      checkoutPayload.memberId = (order as { memberId: mongoose.Types.ObjectId }).memberId;
+      checkoutPayload.memberPhoneSnapshot = String((order as { memberPhoneSnapshot?: string }).memberPhoneSnapshot || '');
+      checkoutPayload.memberCreditUsed = memberUsed;
+    }
+
+    const checkout = await Checkout.create(checkoutPayload);
+
+    if (memberPrepaid) {
+      await MemberWalletTxn.updateMany(
+        {
+          storeId: req.storeId,
+          orderId: order._id,
+          type: 'spend',
+          $or: [{ checkoutId: { $exists: false } }, { checkoutId: null }],
+        },
+        { $set: { checkoutId: checkout._id } },
+      );
+    }
 
     order.status = 'checked_out';
     await order.save();

@@ -95,14 +95,22 @@ export default function DineInOrderBoard() {
         });
         if (res.ok) {
           const data = await res.json();
-          // Build and print receipt
+          const stripePi = String((order as { stripePaymentIntentId?: string }).stripePaymentIntentId || '').trim();
+          const memberUsed = Number((order as { memberCreditUsed?: number }).memberCreditUsed) || 0;
+          const memberPrepaid = !stripePi && memberUsed > 0.001;
+          // Build and print receipt（Stripe → online；顾客会员预付 → member，与报表/退款分类一致）
           const receiptData = {
             checkoutId: data.checkoutId,
             type: 'seat' as const,
             tableNumber: order.tableNumber,
             totalAmount: data.totalAmount,
-            paymentMethod: 'card' as const,
-            cardAmount: data.totalAmount,
+            paymentMethod: (memberPrepaid ? 'member' : 'online') as const,
+            ...(memberPrepaid
+              ? {
+                  memberCreditUsed: memberUsed,
+                  memberPhoneSnapshot: String((order as { memberPhoneSnapshot?: string }).memberPhoneSnapshot || ''),
+                }
+              : { cardAmount: data.totalAmount }),
             checkedOutAt: new Date().toISOString(),
             orders: [{
               _id: order._id,

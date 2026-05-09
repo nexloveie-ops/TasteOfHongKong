@@ -9,7 +9,8 @@ interface QRItem { label: string; url: string; dataUrl: string; }
 
 export default function QRCodeManager() {
   const { t } = useTranslation();
-  const { token } = useAuth();
+  const { token, hasFeature } = useAuth();
+  const canDelivery = hasFeature('cashier.delivery.page');
   const storeSlug = useStoreSlug();
   const [tables, setTables] = useState(5);
   const [seatsPerTable, setSeatsPerTable] = useState(4);
@@ -45,9 +46,11 @@ export default function QRCodeManager() {
     const takeoutDataUrl = await QRCode.toDataURL(takeoutUrl, { width: 200, margin: 1 });
     items.push({ label: 'Take Away', url: takeoutUrl, dataUrl: takeoutDataUrl });
 
-    const deliveryUrl = `${baseUrl}/${storeSlug}/customer?type=delivery`;
-    const deliveryDataUrl = await QRCode.toDataURL(deliveryUrl, { width: 200, margin: 1 });
-    items.push({ label: 'Delivery', url: deliveryUrl, dataUrl: deliveryDataUrl });
+    if (canDelivery) {
+      const deliveryUrl = `${baseUrl}/${storeSlug}/customer?type=delivery`;
+      const deliveryDataUrl = await QRCode.toDataURL(deliveryUrl, { width: 200, margin: 1 });
+      items.push({ label: 'Delivery', url: deliveryUrl, dataUrl: deliveryDataUrl });
+    }
 
     setQrItems(items);
     setGenerating(false);
@@ -58,10 +61,12 @@ export default function QRCodeManager() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ qr_tables: String(tables), qr_seats_per_table: String(seatsPerTable) }),
     }).catch(() => {});
-  }, [tables, seatsPerTable, baseUrl, token, storeSlug]);
+  }, [tables, seatsPerTable, baseUrl, token, storeSlug, canDelivery]);
 
-  // Auto-generate after config loaded
-  useEffect(() => { if (configLoaded) generate(); }, [configLoaded]);
+  // Auto-generate after config loaded（送餐开关变化时同步 QR 列表）
+  useEffect(() => {
+    if (configLoaded) void generate();
+  }, [configLoaded, generate]);
 
   const printAll = () => {
     const w = window.open('', '_blank');
@@ -121,12 +126,14 @@ export default function QRCodeManager() {
           {generating ? t('common.loading') : '生成 QR 码'}
         </button>
       </div>
-      <div className="card" style={{ padding: 12, marginBottom: 16, background: '#fff8e1', border: '1px solid #ffe0b2' }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#8d6e63', marginBottom: 4 }}>Delivery 二维码说明</div>
-        <div style={{ fontSize: 12, color: '#8d6e63', lineHeight: 1.6 }}>
-          客人扫码进入送餐下单流程时，需先填写姓名、电话、地址、邮编，再提交订单。
+      {canDelivery ? (
+        <div className="card" style={{ padding: 12, marginBottom: 16, background: '#fff8e1', border: '1px solid #ffe0b2' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#8d6e63', marginBottom: 4 }}>Delivery 二维码说明</div>
+          <div style={{ fontSize: 12, color: '#8d6e63', lineHeight: 1.6 }}>
+            客人扫码进入送餐下单流程时，需先填写姓名、电话、地址、邮编，再提交订单。
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {/* QR Grid */}
       <div ref={printRef} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>

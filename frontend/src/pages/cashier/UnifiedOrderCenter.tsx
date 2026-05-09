@@ -4,6 +4,11 @@ import { io } from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
 import { apiFetch } from '../../api/client';
 import { buildReceiptHTML, printViaIframe } from '../../components/cashier/ReceiptPrint';
+import CashierMemberCheckoutBlock, {
+  buildMemberFullWalletCheckoutBody,
+  canMemberFullWalletPay,
+  type CashierMemberPreview,
+} from '../../components/cashier/CashierMemberCheckoutBlock';
 
 type OrderType = 'dine_in' | 'takeout' | 'phone' | 'delivery';
 type OrderStatus = 'pending' | 'paid_online' | 'checked_out' | 'completed' | 'refunded' | 'checked_out-hide' | 'completed-hide';
@@ -33,6 +38,10 @@ interface OrderRow {
   items: { _id: string; quantity: number; unitPrice: number; itemName: string; lineKind?: string; selectedOptions?: { extraPrice?: number }[] }[];
   appliedBundles?: { discount: number }[];
   createdAt: string;
+  stripePaymentIntentId?: string;
+  memberCreditUsed?: number;
+  memberPhoneSnapshot?: string;
+  memberId?: string;
 }
 
 interface RestaurantConfig {
@@ -64,11 +73,18 @@ function calcTotal(order: OrderRow): number {
   return itemTotal - disc + deliveryExtra;
 }
 
+/** 与 Stripe 区分：无 PaymentIntent 且已记会员扣款（顾客扫码会员付 / 柜台会员全额等） */
+function isCustomerMemberWalletPrepaid(o: OrderRow): boolean {
+  if (String(o.stripePaymentIntentId || '').trim()) return false;
+  return (Number(o.memberCreditUsed) || 0) > 0.001;
+}
+
 export default function UnifiedOrderCenter() {
   const { t, i18n } = useTranslation();
   const isEn = i18n.language?.startsWith('en');
   const { token, user, hasFeature } = useAuth();
   const canDelivery = hasFeature('cashier.delivery.page');
+  const canMemberWallet = hasFeature('cashier.member.wallet');
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -78,12 +94,21 @@ export default function UnifiedOrderCenter() {
   const [checkoutModalOrder, setCheckoutModalOrder] = useState<OrderRow | null>(null);
   const [checkoutModalTable, setCheckoutModalTable] = useState<{ tableNumber: number; orders: OrderRow[] } | null>(null);
   const [detailModalOrder, setDetailModalOrder] = useState<OrderRow | null>(null);
-  const [checkoutMethod, setCheckoutMethod] = useState<'cash' | 'card' | 'mixed'>('cash');
+  const [checkoutMethod, setCheckoutMethod] = useState<'cash' | 'card' | 'mixed' | 'member'>('cash');
   const [cashReceived, setCashReceived] = useState('');
   const [mixedCash, setMixedCash] = useState('');
   const [mixedCard, setMixedCard] = useState('');
-  /** takeout + paid_online: enforce "print first, then complete" sequence in cashier UI */
-  const [takeoutPrintedOnlineIds, setTakeoutPrintedOnlineIds] = useState<Record<string, true>>({});
+  const [memberPhone, setMemberPhone] = useState('');
+  const [memberPreview, setMemberPreview] = useState<CashierMemberPreview | null>(null);
+  /** 外卖自提 paid_online / checked_out：先厨房小票，再完结（与 Stripe 网单一致；checked_out 含误带店员 JWT 导致的旧数据） */
+  const [takeoutKitchenTicketPrintedIds, setTakeoutKitchenTicketPrintedIds] = useState<Record<string, true>>({});
+
+  useEffect(() => {
+    if (!canMemberWallet && checkoutMethod === 'member') {
+      setCheckoutMethod('cash');
+      setMemberPreview(null);
+    }
+  }, [canMemberWallet, checkoutMethod]);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -129,13 +154,12 @@ export default function UnifiedOrderCenter() {
   }, [fetchAll, user?.storeId]);
 
   useEffect(() => {
-    // Keep only currently visible takeout paid_online orders
     const allowed = new Set(
       orders
-        .filter((o) => o.type === 'takeout' && o.status === 'paid_online')
+        .filter((o) => o.type === 'takeout' && (o.status === 'paid_online' || o.status === 'checked_out'))
         .map((o) => o._id),
     );
-    setTakeoutPrintedOnlineIds((prev) => {
+    setTakeoutKitchenTicketPrintedIds((prev) => {
       const next: Record<string, true> = {};
       for (const id of Object.keys(prev)) {
         if (allowed.has(id)) next[id] = true;
@@ -154,19 +178,25 @@ export default function UnifiedOrderCenter() {
 
   const checkoutSeat = useCallback(async (
     order: OrderRow,
-    paymentMethod: 'cash' | 'card' | 'mixed',
+    paymentMethod: 'cash' | 'card' | 'mixed' | 'member',
     mixed?: { cashAmount: number; cardAmount: number },
     cashMeta?: { cashReceived: number; changeAmount: number },
+    memberPay?: { phone: string },
   ) => {
     setBusyId(order._id);
     try {
       const total = calcTotal(order);
-      const body: Record<string, unknown> = { paymentMethod };
-      if (paymentMethod === 'cash') body.cashAmount = total;
-      if (paymentMethod === 'card') body.cardAmount = total;
-      if (paymentMethod === 'mixed' && mixed) {
-        body.cashAmount = mixed.cashAmount;
-        body.cardAmount = mixed.cardAmount;
+      const body: Record<string, unknown> =
+        paymentMethod === 'member' && memberPay
+          ? buildMemberFullWalletCheckoutBody(total, memberPay.phone)
+          : { paymentMethod };
+      if (paymentMethod !== 'member') {
+        if (paymentMethod === 'cash') body.cashAmount = total;
+        if (paymentMethod === 'card') body.cardAmount = total;
+        if (paymentMethod === 'mixed' && mixed) {
+          body.cashAmount = mixed.cashAmount;
+          body.cardAmount = mixed.cardAmount;
+        }
       }
       const res = await apiFetch(`/api/checkout/seat/${order._id}`, {
         method: 'POST',
@@ -185,21 +215,27 @@ export default function UnifiedOrderCenter() {
 
   const checkoutTable = useCallback(async (
     tableNumber: number,
-    paymentMethod: 'cash' | 'card' | 'mixed',
+    paymentMethod: 'cash' | 'card' | 'mixed' | 'member',
     mixed?: { cashAmount: number; cardAmount: number },
     cashMeta?: { cashReceived: number; changeAmount: number },
+    memberPay?: { phone: string },
   ) => {
     const busyKey = `table-${tableNumber}`;
     setBusyId(busyKey);
     try {
       const tableOrders = orders.filter((o) => o.type === 'dine_in' && o.tableNumber === tableNumber && o.status === 'pending');
       const total = tableOrders.reduce((sum, o) => sum + calcTotal(o), 0);
-      const body: Record<string, unknown> = { paymentMethod };
-      if (paymentMethod === 'cash') body.cashAmount = total;
-      if (paymentMethod === 'card') body.cardAmount = total;
-      if (paymentMethod === 'mixed' && mixed) {
-        body.cashAmount = mixed.cashAmount;
-        body.cardAmount = mixed.cardAmount;
+      const body: Record<string, unknown> =
+        paymentMethod === 'member' && memberPay
+          ? buildMemberFullWalletCheckoutBody(total, memberPay.phone)
+          : { paymentMethod };
+      if (paymentMethod !== 'member') {
+        if (paymentMethod === 'cash') body.cashAmount = total;
+        if (paymentMethod === 'card') body.cardAmount = total;
+        if (paymentMethod === 'mixed' && mixed) {
+          body.cashAmount = mixed.cashAmount;
+          body.cardAmount = mixed.cardAmount;
+        }
       }
       const res = await apiFetch(`/api/checkout/table/${tableNumber}`, {
         method: 'POST',
@@ -223,6 +259,8 @@ export default function UnifiedOrderCenter() {
     setCashReceived('');
     setMixedCash('');
     setMixedCard('');
+    setMemberPhone('');
+    setMemberPreview(null);
   };
 
   const openTableCheckoutModal = (tableNumber: number, tableOrders: OrderRow[]) => {
@@ -232,6 +270,8 @@ export default function UnifiedOrderCenter() {
     setCashReceived('');
     setMixedCash('');
     setMixedCard('');
+    setMemberPhone('');
+    setMemberPreview(null);
   };
 
   const submitCheckoutModal = async () => {
@@ -239,6 +279,21 @@ export default function UnifiedOrderCenter() {
     const targetTable = checkoutModalTable;
     if (!targetOrder && !targetTable) return;
     const total = targetOrder ? calcTotal(targetOrder) : (targetTable?.orders.reduce((sum, o) => sum + calcTotal(o), 0) || 0);
+    if (checkoutMethod === 'member') {
+      if (!canMemberFullWalletPay(memberPreview, total)) {
+        alert(isEn ? 'Load member and ensure balance covers the total.' : '请载入会员并确认余额不少于应付金额。');
+        return;
+      }
+      const mp = { phone: memberPreview!.phone };
+      if (targetOrder) {
+        await checkoutSeat(targetOrder, 'member', undefined, undefined, mp);
+      } else if (targetTable) {
+        await checkoutTable(targetTable.tableNumber, 'member', undefined, undefined, mp);
+      }
+      setCheckoutModalOrder(null);
+      setCheckoutModalTable(null);
+      return;
+    }
     if (checkoutMethod === 'mixed') {
       const cash = Number(mixedCash) || 0;
       const card = Number(mixedCard) || 0;
@@ -371,11 +426,23 @@ export default function UnifiedOrderCenter() {
         extraPrice: opt.extraPrice || 0,
       })),
     }));
+    const pm: 'cash' | 'online' | 'member' =
+      src.status !== 'paid_online'
+        ? 'cash'
+        : !String(src.stripePaymentIntentId || '').trim() && (Number(src.memberCreditUsed) || 0) > 0.001
+          ? 'member'
+          : 'online';
     const receiptData = {
       checkoutId: src._id,
       type: 'seat' as const,
       totalAmount: calcTotal(src),
-      paymentMethod: src.status === 'paid_online' ? 'online' as const : 'cash' as const,
+      paymentMethod: pm,
+      ...(pm === 'member'
+        ? {
+            memberCreditUsed: Number(src.memberCreditUsed) || 0,
+            memberPhoneSnapshot: String(src.memberPhoneSnapshot || ''),
+          }
+        : {}),
       checkedOutAt: new Date().toISOString(),
       tableNumber: src.tableNumber,
       orders: [{
@@ -513,10 +580,15 @@ export default function UnifiedOrderCenter() {
     cash: isEn ? 'Cash' : '现金',
     card: isEn ? 'Card' : '刷卡',
     mixed: isEn ? 'Mixed' : '混合',
+    member: isEn ? 'Member' : '会员',
     cashAmount: isEn ? 'Cash amount' : '现金金额',
     cardAmount: isEn ? 'Card amount' : '刷卡金额',
     paidAmount: isEn ? 'Amount paid by customer' : '客人支付金额',
     paidOnlineBadge: isEn ? 'Paid online' : '线上已付',
+    memberPaidBadge: isEn ? 'Paid (member wallet)' : '会员已付',
+    memberPaidBanner: isEn ? 'MEMBER PAID · PRIORITY ORDER' : '会员已付 · 优先出单',
+    stripePaidBanner: isEn ? 'ONLINE PAID · PRIORITY ORDER' : '线上已付 · 优先出单',
+    paymentMethodLabel: isEn ? 'Payment' : '支付方式',
     change: isEn ? 'Change' : '找零',
     confirmCheckout: isEn ? 'Confirm Checkout' : '确认结账',
     deliverySource: isEn ? 'Source' : '来源',
@@ -640,19 +712,49 @@ export default function UnifiedOrderCenter() {
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 6 }}>
                         {tableGroup.orders.map((o) => {
                           const seatOnlinePaid = String(o.status || '').toLowerCase().includes('paid');
+                          const seatMemberPaid = o.status === 'paid_online' && isCustomerMemberWalletPrepaid(o);
+                          const paidAccent = seatMemberPaid
+                            ? {
+                                border: '1px solid #7E57C2',
+                                bg: 'linear-gradient(180deg, #F3E5F5 0%, #FFFFFF 100%)',
+                                padLeft: 10,
+                                bar: '6px solid #6A1B9A',
+                                shadow: '0 0 0 1px rgba(106, 27, 154, 0.2)',
+                                chipBg: '#EDE7F6',
+                                chipFg: '#4A148C',
+                              }
+                            : seatOnlinePaid
+                              ? {
+                                  border: '1px solid #43A047',
+                                  bg: 'linear-gradient(180deg, #ECF9F0 0%, #FFFFFF 100%)',
+                                  padLeft: 10,
+                                  bar: '6px solid #2E7D32',
+                                  shadow: '0 0 0 1px rgba(67, 160, 71, 0.18)',
+                                  chipBg: '#DFF6E3',
+                                  chipFg: '#1B5E20',
+                                }
+                              : {
+                                  border: '1px solid #e8e8e8',
+                                  bg: '#fff',
+                                  padLeft: 7,
+                                  bar: undefined as string | undefined,
+                                  shadow: 'none',
+                                  chipBg: '#eee',
+                                  chipFg: '#333',
+                                };
                           return (
                           <div
                             key={o._id}
                             onClick={() => setDetailModalOrder(o)}
                             title={L.clickToView}
                             style={{
-                              border: seatOnlinePaid ? '1px solid #43A047' : '1px solid #e8e8e8',
+                              border: paidAccent.border,
                               borderRadius: 7,
-                              background: seatOnlinePaid ? 'linear-gradient(180deg, #ECF9F0 0%, #FFFFFF 100%)' : '#fff',
+                              background: paidAccent.bg,
                               padding: 7,
-                              paddingLeft: seatOnlinePaid ? 10 : 7,
-                              borderLeft: seatOnlinePaid ? '6px solid #2E7D32' : undefined,
-                              boxShadow: seatOnlinePaid ? '0 0 0 1px rgba(67, 160, 71, 0.18)' : 'none',
+                              paddingLeft: paidAccent.padLeft,
+                              borderLeft: paidAccent.bar,
+                              boxShadow: paidAccent.shadow,
                               cursor: 'pointer',
                               display: 'flex',
                               flexDirection: 'column',
@@ -678,12 +780,25 @@ export default function UnifiedOrderCenter() {
                                 fontSize: 10,
                                 padding: '1px 6px',
                                 borderRadius: 10,
-                                background: seatOnlinePaid ? '#DFF6E3' : '#eee',
-                                color: seatOnlinePaid ? '#1B5E20' : '#333',
+                                background: paidAccent.chipBg,
+                                color: paidAccent.chipFg,
                                 fontWeight: seatOnlinePaid ? 700 : 500,
                               }}>{o.status}</span>
                             </div>
-                            {seatOnlinePaid ? (
+                            {seatMemberPaid ? (
+                              <div style={{
+                                marginBottom: 5,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                color: '#fff',
+                                background: 'linear-gradient(90deg, #6A1B9A 0%, #8E24AA 100%)',
+                                borderRadius: 6,
+                                padding: '2px 6px',
+                                width: 'fit-content',
+                              }}>
+                                {L.memberPaidBadge}
+                              </div>
+                            ) : seatOnlinePaid ? (
                               <div style={{
                                 marginBottom: 5,
                                 fontSize: 10,
@@ -694,7 +809,7 @@ export default function UnifiedOrderCenter() {
                                 padding: '2px 6px',
                                 width: 'fit-content',
                               }}>
-                                ONLINE PAID
+                                {L.paidOnlineBadge}
                               </div>
                             ) : null}
                             <div style={{ fontSize: 11, color: '#666', marginBottom: 6 }}>
@@ -737,21 +852,47 @@ export default function UnifiedOrderCenter() {
                     (o.customerOnlinePaymentAt ||
                       (o.deliverySource === 'qr' &&
                         (statusLower.includes('paid') || o.status === 'checked_out'))));
-                const emphasizePaidOnline = !!isOnlinePaidFlow;
+                const memberWalletPaidUi =
+                  isCustomerMemberWalletPrepaid(o) &&
+                  (o.status === 'paid_online' || o.status === 'checked_out');
+                const emphasizePaidOnline = !!(isOnlinePaidFlow || memberWalletPaidUi);
+                const memberPayTitle = [
+                  o.memberPhoneSnapshot?.trim() || '',
+                  o.memberCreditUsed != null
+                    ? `€${(Number(o.memberCreditUsed) || 0).toFixed(2)}`
+                    : '',
+                  o.customerOnlinePaymentAt || '',
+                ]
+                  .filter(Boolean)
+                  .join(' · ');
                 return (
                 <div
                   key={o._id}
                   onClick={() => setDetailModalOrder(o)}
                   style={{
-                    border: emphasizePaidOnline ? '1px solid #43A047' : '1px solid #eee',
+                    border: memberWalletPaidUi
+                      ? '1px solid #7E57C2'
+                      : emphasizePaidOnline
+                        ? '1px solid #43A047'
+                        : '1px solid #eee',
                     borderRadius: 10,
                     padding: 10,
                     paddingLeft: emphasizePaidOnline ? 14 : 10,
-                    background: emphasizePaidOnline
-                      ? 'linear-gradient(180deg, #EAF9EE 0%, #F7FFF9 100%)'
-                      : '#fafafa',
-                    boxShadow: emphasizePaidOnline ? '0 0 0 2px rgba(67, 160, 71, 0.22)' : 'none',
-                    borderLeft: emphasizePaidOnline ? '8px solid #2E7D32' : undefined,
+                    background: memberWalletPaidUi
+                      ? 'linear-gradient(180deg, #F3E5F5 0%, #FDFBFF 100%)'
+                      : emphasizePaidOnline
+                        ? 'linear-gradient(180deg, #EAF9EE 0%, #F7FFF9 100%)'
+                        : '#fafafa',
+                    boxShadow: memberWalletPaidUi
+                      ? '0 0 0 2px rgba(106, 27, 154, 0.18)'
+                      : emphasizePaidOnline
+                        ? '0 0 0 2px rgba(67, 160, 71, 0.22)'
+                        : 'none',
+                    borderLeft: memberWalletPaidUi
+                      ? '8px solid #6A1B9A'
+                      : emphasizePaidOnline
+                        ? '8px solid #2E7D32'
+                        : undefined,
                     cursor: 'pointer',
                     display: 'flex',
                     flexDirection: 'column',
@@ -779,14 +920,37 @@ export default function UnifiedOrderCenter() {
                         fontSize: 12,
                         padding: '2px 8px',
                         borderRadius: 12,
-                        background: emphasizePaidOnline ? '#DFF6E3' : '#eee',
-                        color: emphasizePaidOnline ? '#1B5E20' : '#333',
+                        background: memberWalletPaidUi
+                          ? '#EDE7F6'
+                          : emphasizePaidOnline
+                            ? '#DFF6E3'
+                            : '#eee',
+                        color: memberWalletPaidUi
+                          ? '#4A148C'
+                          : emphasizePaidOnline
+                            ? '#1B5E20'
+                            : '#333',
                         fontWeight: emphasizePaidOnline ? 700 : 500,
                       }}
                     >
                       {o.status}
                     </span>
-                    {isOnlinePaidFlow ? (
+                    {memberWalletPaidUi ? (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: '2px 6px',
+                          borderRadius: 8,
+                          background: '#EDE7F6',
+                          color: '#4A148C',
+                          border: '1px solid #B39DDB',
+                        }}
+                        title={memberPayTitle}
+                      >
+                        {L.memberPaidBadge}
+                      </span>
+                    ) : isOnlinePaidFlow ? (
                       <span
                         style={{
                           fontSize: 10,
@@ -802,7 +966,23 @@ export default function UnifiedOrderCenter() {
                       </span>
                     ) : null}
                   </div>
-                  {isOnlinePaidFlow ? (
+                  {memberWalletPaidUi ? (
+                    <div
+                      style={{
+                        marginBottom: 6,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: '#fff',
+                        background: 'linear-gradient(90deg, #6A1B9A 0%, #8E24AA 100%)',
+                        border: '1px solid #5E35B1',
+                        borderRadius: 8,
+                        padding: '5px 10px',
+                        letterSpacing: 0.2,
+                      }}
+                    >
+                      {L.memberPaidBanner}
+                    </div>
+                  ) : isOnlinePaidFlow ? (
                     <div
                       style={{
                         marginBottom: 6,
@@ -816,7 +996,7 @@ export default function UnifiedOrderCenter() {
                         letterSpacing: 0.2,
                       }}
                     >
-                      ONLINE PAID · PRIORITY ORDER
+                      {L.stripePaidBanner}
                     </div>
                   ) : null}
                   {o.type === 'delivery' ? (
@@ -932,21 +1112,44 @@ export default function UnifiedOrderCenter() {
                             </>
                           ) : null}
                           {o.type === 'takeout' && o.status === 'checked_out' ? (
-                            <button className="btn btn-primary" style={{ fontSize: 12, minWidth: 198 }} disabled={busyId === o._id} onClick={() => void completeTakeout(o._id)}>{L.markComplete}</button>
-                          ) : null}
-                          {o.type === 'takeout' && o.status === 'paid_online' ? (
                             <>
-                              {!takeoutPrintedOnlineIds[o._id] ? (
+                              {!takeoutKitchenTicketPrintedIds[o._id] ? (
                                 <button
                                   className="btn btn-outline"
                                   style={{ fontSize: 12, minWidth: 198 }}
                                   disabled={busyId === o._id}
                                   onClick={() => {
                                     void printOrderTicket(o);
-                                    setTakeoutPrintedOnlineIds((prev) => ({ ...prev, [o._id]: true }));
+                                    setTakeoutKitchenTicketPrintedIds((prev) => ({ ...prev, [o._id]: true }));
                                   }}
                                 >
-                                  {L.printReceipt}
+                                  {L.printAndKitchenDone}
+                                </button>
+                              ) : (
+                                <button
+                                  className="btn btn-primary"
+                                  style={{ fontSize: 12, minWidth: 198 }}
+                                  disabled={busyId === o._id}
+                                  onClick={() => void completeTakeout(o._id)}
+                                >
+                                  {busyId === o._id ? L.processing : L.markComplete}
+                                </button>
+                              )}
+                            </>
+                          ) : null}
+                          {o.type === 'takeout' && o.status === 'paid_online' ? (
+                            <>
+                              {!takeoutKitchenTicketPrintedIds[o._id] ? (
+                                <button
+                                  className="btn btn-outline"
+                                  style={{ fontSize: 12, minWidth: 198 }}
+                                  disabled={busyId === o._id}
+                                  onClick={() => {
+                                    void printOrderTicket(o);
+                                    setTakeoutKitchenTicketPrintedIds((prev) => ({ ...prev, [o._id]: true }));
+                                  }}
+                                >
+                                  {L.printAndKitchenDone}
                                 </button>
                               ) : (
                                 <button
@@ -984,23 +1187,42 @@ export default function UnifiedOrderCenter() {
                 : `${L.tableLabel} ${checkoutModalTable?.tableNumber ?? '-'} · ${L.total} €${(checkoutModalTable?.orders.reduce((sum, o) => sum + calcTotal(o), 0) || 0).toFixed(2)}`
               }
             </div>
-            <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-              {(['cash', 'card', 'mixed'] as const).map((m) => (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+              {(['cash', 'card', 'mixed', 'member'] as const)
+                .filter((m) => m !== 'member' || canMemberWallet)
+                .map((m) => (
                 <button
                   key={m}
+                  type="button"
                   className="btn"
-                  onClick={() => setCheckoutMethod(m)}
+                  onClick={() => {
+                    setCheckoutMethod(m);
+                    if (m !== 'member') {
+                      setMemberPreview(null);
+                    }
+                  }}
                   style={{
-                    flex: 1,
+                    flex: '1 1 40%',
+                    minWidth: 72,
                     fontSize: 12,
                     background: checkoutMethod === m ? 'var(--red-primary)' : '#f5f5f5',
                     color: checkoutMethod === m ? '#fff' : '#444',
                   }}
                 >
-                  {m === 'cash' ? L.cash : m === 'card' ? L.card : L.mixed}
+                  {m === 'cash' ? L.cash : m === 'card' ? L.card : m === 'mixed' ? L.mixed : L.member}
                 </button>
               ))}
             </div>
+            {checkoutMethod === 'member' ? (
+              <CashierMemberCheckoutBlock
+                payAmount={checkoutModalOrder ? calcTotal(checkoutModalOrder) : (checkoutModalTable?.orders.reduce((sum, o) => sum + calcTotal(o), 0) || 0)}
+                phone={memberPhone}
+                setPhone={setMemberPhone}
+                preview={memberPreview}
+                setPreview={setMemberPreview}
+                compact
+              />
+            ) : null}
             {checkoutMethod === 'mixed' ? (
               <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
                 <input className="input" type="number" placeholder={L.cashAmount} value={mixedCash} onChange={e => setMixedCash(e.target.value)} />
@@ -1019,7 +1241,20 @@ export default function UnifiedOrderCenter() {
             ) : null}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button className="btn btn-outline" onClick={() => { setCheckoutModalOrder(null); setCheckoutModalTable(null); }}>{L.cancel}</button>
-              <button className="btn btn-primary" disabled={busyId === (checkoutModalOrder?._id || `table-${checkoutModalTable?.tableNumber ?? '-'}`)} onClick={() => void submitCheckoutModal()}>
+              <button
+                className="btn btn-primary"
+                disabled={
+                  busyId === (checkoutModalOrder?._id || `table-${checkoutModalTable?.tableNumber ?? '-'}`) ||
+                  (checkoutMethod === 'member' &&
+                    !canMemberFullWalletPay(
+                      memberPreview,
+                      checkoutModalOrder
+                        ? calcTotal(checkoutModalOrder)
+                        : checkoutModalTable?.orders.reduce((sum, o) => sum + calcTotal(o), 0) || 0,
+                    ))
+                }
+                onClick={() => void submitCheckoutModal()}
+              >
                 {busyId === (checkoutModalOrder?._id || `table-${checkoutModalTable?.tableNumber ?? '-'}`) ? L.processing : L.confirmCheckout}
               </button>
             </div>
@@ -1057,6 +1292,26 @@ export default function UnifiedOrderCenter() {
               <div style={{ fontSize: 12, color: '#777' }}>
                 {new Date(detailModalOrder.createdAt).toLocaleString()}
               </div>
+              {detailModalOrder.status === 'paid_online' || detailModalOrder.status === 'checked_out' ? (
+                isCustomerMemberWalletPrepaid(detailModalOrder) ? (
+                  <div style={{ fontSize: 12, marginTop: 10, paddingTop: 10, borderTop: '1px solid #e8e8e8', color: '#4A148C', fontWeight: 600 }}>
+                    {L.paymentMethodLabel}：{L.memberPaidBadge}
+                    {detailModalOrder.memberPhoneSnapshot?.trim()
+                      ? ` · ${detailModalOrder.memberPhoneSnapshot.trim()}`
+                      : ''}
+                    {detailModalOrder.memberCreditUsed != null
+                      ? ` · €${(Number(detailModalOrder.memberCreditUsed) || 0).toFixed(2)}`
+                      : ''}
+                  </div>
+                ) : detailModalOrder.customerOnlinePaymentAt || String(detailModalOrder.stripePaymentIntentId || '').trim() ? (
+                  <div style={{ fontSize: 12, marginTop: 10, paddingTop: 10, borderTop: '1px solid #e8e8e8', color: '#2E7D32', fontWeight: 600 }}>
+                    {L.paymentMethodLabel}：{L.paidOnlineBadge}
+                    {detailModalOrder.customerOnlinePaymentAt
+                      ? ` · ${new Date(detailModalOrder.customerOnlinePaymentAt).toLocaleString()}`
+                      : ''}
+                  </div>
+                ) : null
+              ) : null}
             </div>
 
             {detailModalOrder.type === 'dine_in' ? (

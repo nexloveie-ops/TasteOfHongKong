@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import type { CSSProperties } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useRestaurantConfig } from '../../hooks/useRestaurantConfig';
 import { useBusinessStatus } from '../../hooks/useBusinessStatus';
@@ -27,10 +27,21 @@ export default function StoreFrontPage() {
   const storeSlug = useStoreSlug();
   const [searchParams, setSearchParams] = useSearchParams();
   const { config, displayName, displayNameOther } = useRestaurantConfig();
-  const { isOpen, loading: hoursLoading } = useBusinessStatus();
+  const { isOpen, loading: hoursLoading, deliveryEnabled, memberWalletEnabled } = useBusinessStatus();
+  const canDelivery = deliveryEnabled !== false;
+  const canMemberPortal = memberWalletEnabled !== false;
 
   const orderType = searchParams.get('type');
-  const showMenu = orderType === 'delivery' || orderType === 'takeout';
+  const showMenu = orderType === 'takeout' || (orderType === 'delivery' && canDelivery);
+
+  useEffect(() => {
+    if (hoursLoading) return;
+    if (orderType === 'delivery' && !canDelivery) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('type');
+      setSearchParams(next, { replace: true });
+    }
+  }, [orderType, canDelivery, hoursLoading, searchParams, setSearchParams]);
 
   const phone = (config.restaurant_phone || '').trim();
   const address = (config.restaurant_address || '').trim();
@@ -280,32 +291,41 @@ export default function StoreFrontPage() {
               }}>
                 {t('customer.storePortalChooseTitle')}
               </div>
+              {canMemberPortal ? (
+                <div style={{ textAlign: 'center', marginBottom: 10 }}>
+                  <Link to={`/${storeSlug}/customer/member`} style={{ fontSize: 13, color: 'var(--blue, #1565c0)', fontWeight: 600 }}>
+                    {t('member.title')}
+                  </Link>
+                </div>
+              ) : null}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {canDelivery ? (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={!isOpen || hoursLoading}
+                    onClick={() => setMode('delivery')}
+                    style={{
+                      width: '100%',
+                      padding: '14px 16px',
+                      fontSize: 16,
+                      fontWeight: 700,
+                      borderRadius: 14,
+                      textAlign: 'left',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'stretch',
+                      gap: 4,
+                      boxShadow: '0 6px 20px rgba(196,30,36,0.22)',
+                    }}
+                  >
+                    <span>🚚 {lang.startsWith('zh') ? '外卖送餐' : 'Delivery'}</span>
+                    <span style={{ fontSize: 12, fontWeight: 500, opacity: 0.92 }}>{t('customer.storePortalDeliveryHint')}</span>
+                  </button>
+                ) : null}
                 <button
                   type="button"
-                  className="btn btn-primary"
-                  disabled={!isOpen || hoursLoading}
-                  onClick={() => setMode('delivery')}
-                  style={{
-                    width: '100%',
-                    padding: '14px 16px',
-                    fontSize: 16,
-                    fontWeight: 700,
-                    borderRadius: 14,
-                    textAlign: 'left',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'stretch',
-                    gap: 4,
-                    boxShadow: '0 6px 20px rgba(196,30,36,0.22)',
-                  }}
-                >
-                  <span>🚚 {lang.startsWith('zh') ? '外卖送餐' : 'Delivery'}</span>
-                  <span style={{ fontSize: 12, fontWeight: 500, opacity: 0.92 }}>{t('customer.storePortalDeliveryHint')}</span>
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline"
+                  className={canDelivery ? 'btn btn-outline' : 'btn btn-primary'}
                   disabled={!isOpen || hoursLoading}
                   onClick={() => setMode('takeout')}
                   style={{
@@ -314,13 +334,13 @@ export default function StoreFrontPage() {
                     fontSize: 16,
                     fontWeight: 700,
                     borderRadius: 14,
-                    borderWidth: 2,
+                    borderWidth: canDelivery ? 2 : undefined,
                     textAlign: 'left',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'stretch',
                     gap: 4,
-                    background: 'var(--bg-white)',
+                    background: canDelivery ? 'var(--bg-white)' : undefined,
                   }}
                 >
                   <span>🥡 {lang.startsWith('zh') ? '到店自取' : 'Pickup'}</span>

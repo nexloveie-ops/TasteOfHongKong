@@ -14,7 +14,8 @@ export default function ScanLanding() {
   const storeSlug = useStoreSlug();
   const { displayName, displayNameOther } = useRestaurantConfig();
   const storeTitle = displayName || storeSlug;
-  const { isOpen, reason, loading } = useBusinessStatus();
+  const { isOpen, reason, loading, deliveryEnabled } = useBusinessStatus();
+  const canDelivery = deliveryEnabled !== false;
   const params = parseQRParams(searchParams);
 
   useEffect(() => {
@@ -24,9 +25,13 @@ export default function ScanLanding() {
     } else if (params.type === 'takeout') {
       navigate('menu?type=takeout', { replace: true });
     } else if (params.type === 'delivery') {
-      navigate('menu?type=delivery', { replace: true });
+      if (canDelivery) {
+        navigate('menu?type=delivery', { replace: true });
+      } else {
+        navigate(`/${storeSlug}`, { replace: true });
+      }
     }
-  }, [params, navigate, loading, isOpen]);
+  }, [params, navigate, loading, isOpen, canDelivery, storeSlug]);
 
   if (loading) {
     return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>{t('common.loading')}</div>;

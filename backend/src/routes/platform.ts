@@ -110,6 +110,7 @@ const DEFAULT_PLAN_PRESETS: Array<{ name: string; code: string; description: str
     description: '专业版：含送餐、优惠、订单历史、VAT 导出等',
     features: [
       FeatureKeys.CashierDeliveryPage,
+      FeatureKeys.CashierMemberWallet,
       FeatureKeys.AdminOptionTemplatePage,
       FeatureKeys.AdminOffersPage,
       FeatureKeys.AdminCouponsPage,
@@ -124,6 +125,7 @@ const DEFAULT_PLAN_PRESETS: Array<{ name: string; code: string; description: str
     description: '企业版：默认不启用广告能力',
     features: [
       FeatureKeys.CashierDeliveryPage,
+      FeatureKeys.CashierMemberWallet,
       FeatureKeys.AdminOptionTemplatePage,
       FeatureKeys.AdminOffersPage,
       FeatureKeys.AdminCouponsPage,
@@ -181,6 +183,11 @@ async function ensureDefaultFeatureProducts(): Promise<void> {
       { upsert: true },
     );
   }
+  /** 历史 Plan 仅含送餐键时补录独立会员键，避免升级后会员能力被误关 */
+  await FeaturePlan.updateMany(
+    { code: { $in: ['pro-base', 'enterprise-base'] }, features: FeatureKeys.CashierDeliveryPage },
+    { $addToSet: { features: FeatureKeys.CashierMemberWallet } },
+  );
 }
 
 async function assertEnterpriseAdsPolicy(

@@ -47,6 +47,25 @@ export function authMiddleware(req: Request, _res: Response, next: NextFunction)
 }
 
 /**
+ * 若带 Bearer 则校验并写入 req.user；无头则继续（req.user 为空）。
+ * 令牌无效时仍返回 401，避免误把坏令牌当匿名请求。
+ */
+export function optionalAuthMiddleware(req: Request, _res: Response, next: NextFunction): void {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    next();
+    return;
+  }
+  const token = authHeader.slice(7);
+  try {
+    req.user = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    next();
+  } catch {
+    next(createAppError('UNAUTHORIZED', 'Invalid or expired token'));
+  }
+}
+
+/**
  * Middleware factory that checks if the authenticated user has the required permission.
  * Must be used after authMiddleware.
  */
@@ -57,7 +76,7 @@ export function requirePermission(permission: string) {
       return;
     }
 
-    if (!hasPermission(req.user.role as Role, permission)) {
+    if (!hasPermission(req.user.role, permission)) {
       next(createAppError('FORBIDDEN', 'Insufficient permissions'));
       return;
     }

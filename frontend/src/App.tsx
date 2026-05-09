@@ -16,6 +16,7 @@ import StoreFrontPage from './pages/customer/StoreFrontPage';
 import MenuView from './pages/customer/MenuView';
 import CartPage from './pages/customer/CartPage';
 import OrderStatusPage from './pages/customer/OrderStatusPage';
+import MemberPortalPage from './pages/customer/MemberPortalPage';
 import CashierOrder from './pages/cashier/CashierOrder';
 import ReprintReceipt from './pages/cashier/ReprintReceipt';
 import PhoneOrderList from './pages/cashier/PhoneOrderList';
@@ -38,6 +39,7 @@ import RestaurantInfo from './pages/admin/RestaurantInfo';
 import DeliveryFeeSettings from './pages/admin/DeliveryFeeSettings';
 import OfferManager from './pages/admin/OfferManager';
 import CouponManager from './pages/admin/CouponManager';
+import MemberManager from './pages/admin/MemberManager';
 import BusinessHours from './pages/admin/BusinessHours';
 import StripeSettings from './pages/admin/StripeSettings';
 
@@ -105,6 +107,7 @@ export default function App() {
                 <Route path="menu" element={<MenuView />} />
                 <Route path="cart" element={<CartPage />} />
                 <Route path="order/:orderId" element={<OrderStatusPage />} />
+                <Route path="member" element={<MemberPortalPage />} />
               </Route>
             </Route>
 
@@ -141,6 +144,7 @@ export default function App() {
               <Route path="stripe" element={<StripeSettings />} />
               <Route path="offers" element={<RequireFeature featureKey="admin.offers.page"><OfferManager /></RequireFeature>} />
               <Route path="coupons" element={<RequireFeature featureKey="admin.coupons.page"><CouponManager /></RequireFeature>} />
+              <Route path="members" element={<RequireFeature featureKey="cashier.member.wallet"><MemberManager /></RequireFeature>} />
             </Route>
 
             <Route path="*" element={<StoreUnknownRoute />} />

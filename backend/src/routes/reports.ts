@@ -105,7 +105,7 @@ router.get('/orders', ...requireAuthSameStore, requirePermission('report:view'),
     });
 
     // Filter by payment method after joining with checkout
-    if (paymentMethod && ['cash', 'card', 'mixed', 'online'].includes(paymentMethod as string)) {
+    if (paymentMethod && ['cash', 'card', 'mixed', 'online', 'member'].includes(paymentMethod as string)) {
       result = result.filter(r => r.checkout?.paymentMethod === paymentMethod);
     }
 
@@ -168,6 +168,8 @@ router.get('/summary', ...requireAuthSameStore, requirePermission('report:view')
     let cashTotal = 0;
     let cardTotal = 0;
     let mixedTotal = 0;
+    let memberCheckoutTotal = 0;
+    let memberCheckoutCount = 0;
 
     for (const c of visibleCheckouts) {
       totalRevenue += c.totalAmount;
@@ -177,6 +179,9 @@ router.get('/summary', ...requireAuthSameStore, requirePermission('report:view')
         cardTotal += c.totalAmount;
       } else if (c.paymentMethod === 'mixed') {
         mixedTotal += c.totalAmount;
+      } else if (c.paymentMethod === 'member') {
+        memberCheckoutTotal += c.totalAmount;
+        memberCheckoutCount++;
       }
     }
 
@@ -186,6 +191,8 @@ router.get('/summary', ...requireAuthSameStore, requirePermission('report:view')
       cashTotal,
       cardTotal,
       mixedTotal,
+      memberCheckoutTotal,
+      memberCheckoutCount,
     });
   } catch (err) {
     next(err);
@@ -246,6 +253,10 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
     let mixedCount = 0;
     let onlineTotal = 0;
     let onlineCount = 0;
+    let memberCheckoutGross = 0;
+    let memberCheckoutCount = 0;
+    /** 现金/刷卡/混合订单中使用的储值部分（欧元），与 member 全额结账互补；均计入总营业额 */
+    let memberCreditPartialTotal = 0;
     let couponCount = 0;
     let couponTotalAmount = 0;
     let grossCashAmount = 0;
@@ -276,6 +287,13 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
       } else if (checkout.paymentMethod === 'online') {
         onlineTotal += checkout.totalAmount;
         onlineCount++;
+      } else if (checkout.paymentMethod === 'member') {
+        memberCheckoutGross += checkout.totalAmount;
+        memberCheckoutCount++;
+      }
+      const mcu = Number((checkout as unknown as { memberCreditUsed?: number }).memberCreditUsed) || 0;
+      if (mcu > 0.001 && checkout.paymentMethod !== 'member') {
+        memberCreditPartialTotal += mcu;
       }
       if (
         (checkout as unknown as { couponAmount?: number }).couponAmount &&
@@ -309,6 +327,7 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
     let cardRefund = 0;
     let mixedRefund = 0;
     let onlineRefund = 0;
+    let memberCheckoutRefund = 0;
     for (const order of allOrders) {
       const checkout = orderCheckoutMap.get(String(order._id));
       const pm = checkout?.paymentMethod;
@@ -358,6 +377,7 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
         mixedRefund += amt;
       }
       else if (pm === 'online') onlineRefund += amt;
+      else if (pm === 'member') memberCheckoutRefund += amt;
     }
 
     // Net revenue = gross - refunded
@@ -453,6 +473,9 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
       mixedCount,
       onlineTotal: Math.round((onlineTotal - onlineRefund) * 100) / 100,
       onlineCount,
+      memberCheckoutTotal: Math.round((memberCheckoutGross - memberCheckoutRefund) * 100) / 100,
+      memberCheckoutCount,
+      memberCreditPartialTotal: Math.round(memberCreditPartialTotal * 100) / 100,
       couponCount,
       couponTotalAmount: Math.round(couponTotalAmount * 100) / 100,
       bundleOfferCount,

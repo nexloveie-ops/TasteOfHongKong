@@ -34,20 +34,72 @@ interface FeatureAddonRow {
   isActive: boolean;
 }
 
-const FEATURE_OPTIONS: { key: string; label: string }[] = [
-  { key: 'cashier.delivery.page', label: 'Cashier 送餐功能' },
-  { key: 'admin.optionGroupTemplates.page', label: '管理员-选项组模板' },
-  { key: 'admin.offers.page', label: '管理员-套餐优惠' },
-  { key: 'admin.coupons.page', label: '管理员-Coupon 管理' },
-  { key: 'admin.orderHistory.page', label: '管理员-订单历史' },
-  { key: 'admin.reports.vatExport.action', label: '报表-VAT 导出' },
-  { key: 'admin.inventory.restoreTime.action', label: '库存-恢复供应时间' },
-  { key: 'platform.postOrderAds.manage.action', label: '平台-广告管理' },
+/** 平台配置 Plan/Add-on 时的功能键分组 */
+const FEATURE_GROUPS: { section: string; options: { key: string; label: string }[] }[] = [
+  {
+    section: 'Cashier',
+    options: [
+      {
+        key: 'cashier.delivery.page',
+        label: '送餐：队列、运费、顾客送餐入口与送餐二维码',
+      },
+      {
+        key: 'cashier.member.wallet',
+        label: '会员：储值/钱包结账、顾客会员中心、管理端会员与储值、扫码会员校验（与送餐独立）',
+      },
+    ],
+  },
+  {
+    section: '管理员扩展',
+    options: [
+      { key: 'admin.optionGroupTemplates.page', label: '管理员-选项组模板' },
+      { key: 'admin.offers.page', label: '管理员-套餐优惠' },
+      { key: 'admin.coupons.page', label: '管理员-Coupon 管理' },
+      { key: 'admin.orderHistory.page', label: '管理员-订单历史' },
+      { key: 'admin.reports.vatExport.action', label: '报表-VAT 导出' },
+      { key: 'admin.inventory.restoreTime.action', label: '库存-恢复供应时间' },
+    ],
+  },
+  {
+    section: '平台',
+    options: [{ key: 'platform.postOrderAds.manage.action', label: '平台-广告管理' }],
+  },
 ];
+
+const FEATURE_OPTIONS: { key: string; label: string }[] = FEATURE_GROUPS.flatMap((g) => g.options);
 
 const FEATURE_OVERRIDE_TEMPLATE: Record<string, boolean> = Object.fromEntries(
   FEATURE_OPTIONS.map((f) => [f.key, false]),
 ) as Record<string, boolean>;
+
+function FeatureCheckboxList(props: {
+  selected: string[];
+  onToggle: (key: string) => void;
+  maxHeight?: number;
+}) {
+  const { selected, onToggle, maxHeight = 180 } = props;
+  return (
+    <div style={{ border: '1px solid #eee', borderRadius: 6, padding: 8, marginBottom: 8, maxHeight, overflowY: 'auto' }}>
+      {FEATURE_GROUPS.map((group) => (
+        <div key={group.section} style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#455a64', marginBottom: 6, letterSpacing: 0.2 }}>{group.section}</div>
+          {group.options.map((opt) => (
+            <label key={opt.key} style={{ display: 'block', fontSize: 12, marginBottom: 6, paddingLeft: 4 }}>
+              <input
+                type="checkbox"
+                checked={selected.includes(opt.key)}
+                onChange={() => onToggle(opt.key)}
+                style={{ marginRight: 6 }}
+              />
+              {opt.label}
+              <span style={{ color: '#888', marginLeft: 6 }}>{opt.key}</span>
+            </label>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function PlatformStoresPage() {
   const [stores, setStores] = useState<StoreRow[]>([]);
@@ -459,20 +511,11 @@ export default function PlatformStoresPage() {
                   <form onSubmit={createPlan} style={{ marginTop: 8 }}>
                     <input className="input" style={{ width: '100%', marginBottom: 8 }} placeholder="名称（如 Pro Base）" value={newPlanName} onChange={e => setNewPlanName(e.target.value)} />
                     <input className="input" style={{ width: '100%', marginBottom: 8 }} placeholder="Code（如 pro-base）" value={newPlanCode} onChange={e => setNewPlanCode(e.target.value)} />
-                    <div style={{ border: '1px solid #eee', borderRadius: 6, padding: 8, marginBottom: 8, maxHeight: 180, overflowY: 'auto' }}>
-                      {FEATURE_OPTIONS.map(opt => (
-                        <label key={opt.key} style={{ display: 'block', fontSize: 12, marginBottom: 6 }}>
-                          <input
-                            type="checkbox"
-                            checked={newPlanFeatures.includes(opt.key)}
-                            onChange={() => setNewPlanFeatures(prev => toggleInList(prev, opt.key))}
-                            style={{ marginRight: 6 }}
-                          />
-                          {opt.label}
-                          <span style={{ color: '#888', marginLeft: 6 }}>{opt.key}</span>
-                        </label>
-                      ))}
-                    </div>
+                    <FeatureCheckboxList
+                      selected={newPlanFeatures}
+                      onToggle={(key) => setNewPlanFeatures((prev) => toggleInList(prev, key))}
+                      maxHeight={180}
+                    />
                     <button className="btn btn-primary" type="submit">创建 Plan</button>
                   </form>
                 ) : null}
@@ -488,20 +531,11 @@ export default function PlatformStoresPage() {
                   <form onSubmit={createAddon} style={{ marginTop: 8 }}>
                     <input className="input" style={{ width: '100%', marginBottom: 8 }} placeholder="名称（如 VAT Export）" value={newAddonName} onChange={e => setNewAddonName(e.target.value)} />
                     <input className="input" style={{ width: '100%', marginBottom: 8 }} placeholder="Code（如 vat-export）" value={newAddonCode} onChange={e => setNewAddonCode(e.target.value)} />
-                    <div style={{ border: '1px solid #eee', borderRadius: 6, padding: 8, marginBottom: 8, maxHeight: 180, overflowY: 'auto' }}>
-                      {FEATURE_OPTIONS.map(opt => (
-                        <label key={opt.key} style={{ display: 'block', fontSize: 12, marginBottom: 6 }}>
-                          <input
-                            type="checkbox"
-                            checked={newAddonFeatures.includes(opt.key)}
-                            onChange={() => setNewAddonFeatures(prev => toggleInList(prev, opt.key))}
-                            style={{ marginRight: 6 }}
-                          />
-                          {opt.label}
-                          <span style={{ color: '#888', marginLeft: 6 }}>{opt.key}</span>
-                        </label>
-                      ))}
-                    </div>
+                    <FeatureCheckboxList
+                      selected={newAddonFeatures}
+                      onToggle={(key) => setNewAddonFeatures((prev) => toggleInList(prev, key))}
+                      maxHeight={180}
+                    />
                     <button className="btn btn-primary" type="submit">创建 Add-on</button>
                   </form>
                 ) : null}
@@ -785,20 +819,11 @@ export default function PlatformStoresPage() {
               <input type="checkbox" checked={editPlanActive} onChange={e => setEditPlanActive(e.target.checked)} style={{ marginRight: 6 }} />
               启用
             </label>
-            <div style={{ border: '1px solid #eee', borderRadius: 6, padding: 8, marginBottom: 12, maxHeight: 280, overflowY: 'auto' }}>
-              {FEATURE_OPTIONS.map(opt => (
-                <label key={opt.key} style={{ display: 'block', fontSize: 12, marginBottom: 6 }}>
-                  <input
-                    type="checkbox"
-                    checked={editPlanFeatures.includes(opt.key)}
-                    onChange={() => setEditPlanFeatures(prev => toggleInList(prev, opt.key))}
-                    style={{ marginRight: 6 }}
-                  />
-                  {opt.label}
-                  <span style={{ color: '#888', marginLeft: 6 }}>{opt.key}</span>
-                </label>
-              ))}
-            </div>
+            <FeatureCheckboxList
+              selected={editPlanFeatures}
+              onToggle={(key) => setEditPlanFeatures((prev) => toggleInList(prev, key))}
+              maxHeight={280}
+            />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button type="button" className="btn btn-outline" onClick={() => setEditingPlan(null)}>取消</button>
               <button type="button" className="btn btn-primary" onClick={() => void saveEditPlan()}>保存</button>

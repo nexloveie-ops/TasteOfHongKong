@@ -23,6 +23,8 @@ export const StoreSchema = new mongoose.Schema(
     basePlanId: { type: mongoose.Schema.Types.ObjectId, ref: 'FeaturePlan', default: null },
     enabledAddOnIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'FeatureAddon' }],
     featureOverrides: { type: Map, of: Boolean, default: {} },
+    /** 单调递增，用于生成店内唯一会员号 */
+    memberSeq: { type: Number, default: 0 },
   },
   { timestamps: true },
 );

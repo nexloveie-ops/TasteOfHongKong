@@ -15,6 +15,9 @@ import { LZFoodAdminSchema } from './LZFoodAdmin';
 import { PostOrderAdSchema } from './PostOrderAd';
 import { FeaturePlanSchema } from './FeaturePlan';
 import { FeatureAddonSchema } from './FeatureAddon';
+import { MemberSchema } from '../models/Member';
+import { MemberWalletTxnSchema } from '../models/MemberWalletTxn';
+import { CustomerProfileSchema } from '../models/CustomerProfile';
 
 const storeIdField = {
   storeId: {
@@ -68,6 +71,9 @@ export type LZFoodModels = {
   PostOrderAd: Model<unknown>;
   FeaturePlan: Model<unknown>;
   FeatureAddon: Model<unknown>;
+  Member: Model<unknown>;
+  MemberWalletTxn: Model<unknown>;
+  CustomerProfile: Model<unknown>;
 };
 
 let cached: LZFoodModels | null = null;
@@ -106,6 +112,9 @@ export function registerLZFoodModels(conn: Connection): LZFoodModels {
   const PostOrderAd = m('PostOrderAd', PostOrderAdSchema, 'platform_post_order_ads');
   const FeaturePlan = m('FeaturePlan', FeaturePlanSchema, 'feature_plans');
   const FeatureAddon = m('FeatureAddon', FeatureAddonSchema, 'feature_addons');
+  const Member = m('Member', withStoreId(MemberSchema), 'members');
+  const MemberWalletTxn = m('MemberWalletTxn', withStoreId(MemberWalletTxnSchema), 'member_wallet_txns');
+  const CustomerProfile = m('CustomerProfile', withStoreId(CustomerProfileSchema), 'customer_profiles');
 
   cached = {
     Store,
@@ -125,6 +134,9 @@ export function registerLZFoodModels(conn: Connection): LZFoodModels {
     PostOrderAd,
     FeaturePlan,
     FeatureAddon,
+    Member,
+    MemberWalletTxn,
+    CustomerProfile,
   };
   return cached;
 }

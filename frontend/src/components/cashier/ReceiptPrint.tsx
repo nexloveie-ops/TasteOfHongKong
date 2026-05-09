@@ -33,11 +33,21 @@ interface ReceiptData {
   type: 'table' | 'seat';
   tableNumber?: number;
   totalAmount: number;
-  paymentMethod: 'cash' | 'card' | 'mixed' | 'online';
+  paymentMethod: 'cash' | 'card' | 'mixed' | 'online' | 'member';
   cashAmount?: number;
   cardAmount?: number;
+  memberCreditUsed?: number;
+  memberPhoneSnapshot?: string;
   checkedOutAt: string;
   orders: ReceiptOrder[];
+}
+
+function paymentMethodLabel(pm: ReceiptData['paymentMethod']): string {
+  if (pm === 'cash') return 'Cash';
+  if (pm === 'card') return 'Card';
+  if (pm === 'online') return 'Online';
+  if (pm === 'member') return 'Member balance';
+  return 'Mixed';
 }
 
 interface RestaurantConfig {
@@ -112,7 +122,7 @@ function buildReceiptHTML(
   const isPhone = receipt.orders.some(o => o.type === 'phone');
   const isDelivery = receipt.orders.some(o => o.type === 'delivery');
   const checkedOutAt = new Date(receipt.checkedOutAt);
-  const paymentLabel = receipt.paymentMethod === 'cash' ? 'Cash' : receipt.paymentMethod === 'card' ? 'Card' : receipt.paymentMethod === 'online' ? 'Online' : 'Mixed';
+  const paymentLabel = paymentMethodLabel(receipt.paymentMethod);
   const restaurantName = config.restaurant_name_en || config.restaurant_name_zh || '';
   const termsSegments = config.receipt_terms ? parseQRCodes(config.receipt_terms) : [];
 
@@ -223,6 +233,9 @@ function buildReceiptHTML(
     html += `<div class="row" style="font-size:18px"><span>Total</span><span>€${receipt.totalAmount.toFixed(2)}</span></div>`;
   }
   html += `<div class="row" style="margin-top:4px"><span>Payment</span><span>${paymentLabel}</span></div>`;
+  if ((receipt.memberCreditUsed ?? 0) > 0.001) {
+    html += `<div class="row"><span>Member credit</span><span>€${(receipt.memberCreditUsed ?? 0).toFixed(2)}</span></div>`;
+  }
 
   if (receipt.paymentMethod === 'mixed') {
     html += `<div class="row"><span>Cash</span><span>€${(receipt.cashAmount ?? 0).toFixed(2)}</span></div>`;
@@ -377,7 +390,7 @@ export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, b
   const previewDeliveryAddr = previewDel?.deliveryAddress?.trim();
   const previewDeliveryPc = previewDel?.postalCode?.trim();
   const checkedOutAt = new Date(receipt.checkedOutAt);
-  const paymentLabel = receipt.paymentMethod === 'cash' ? 'Cash' : receipt.paymentMethod === 'card' ? 'Card' : receipt.paymentMethod === 'online' ? 'Online' : 'Mixed';
+  const paymentLabel = paymentMethodLabel(receipt.paymentMethod);
   const restaurantName = config.restaurant_name_en || config.restaurant_name_zh || '';
   const termsSegments = config.receipt_terms ? parseQRCodes(config.receipt_terms) : [];
 
@@ -462,6 +475,15 @@ export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, b
         );
       })()}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}><span>Payment</span><span>{paymentLabel}</span></div>
+      {(receipt.memberCreditUsed ?? 0) > 0.001 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Member credit</span><span>€{(receipt.memberCreditUsed ?? 0).toFixed(2)}</span></div>
+      )}
+      {receipt.paymentMethod === 'mixed' && (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Cash</span><span>€{(receipt.cashAmount ?? 0).toFixed(2)}</span></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Card</span><span>€{(receipt.cardAmount ?? 0).toFixed(2)}</span></div>
+        </>
+      )}
 
       {receipt.paymentMethod === 'cash' && cashReceived != null && cashReceived > 0 && (
         <>

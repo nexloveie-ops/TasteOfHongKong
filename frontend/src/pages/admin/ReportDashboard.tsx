@@ -34,6 +34,11 @@ interface DetailedStats {
   refundedAmount: number;
   onlineTotal: number;
   onlineCount: number;
+  /** 结账方式 member：全额储值支付（净额，已计入 totalRevenue） */
+  memberCheckoutTotal?: number;
+  memberCheckoutCount?: number;
+  /** 现金/刷卡/混合中抵扣的储值合计 */
+  memberCreditPartialTotal?: number;
   cashCount?: number;
   cardCount?: number;
   mixedCount?: number;
@@ -346,7 +351,7 @@ export default function ReportDashboard() {
           >
             <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10, color: 'var(--text-secondary)' }}>💰 营业概览</h3>
             <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.55, maxWidth: 920 }}>
-              统计按<strong>结账时间</strong>（与收款一致）。「现金」「刷卡」已包含混合支付中的拆分金额，请勿再与「混合支付」相加；净营业额 ≈ 现金(净) + 刷卡(净) + Online(净)。
+              统计按<strong>结账时间</strong>（与收款一致）。「现金」「刷卡」已包含混合支付中的拆分金额，请勿再与「混合支付」相加；净营业额含会员储值全额结账及其他方式。{t('admin.reportMemberWalletDetail')}
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
               <StatCard label="净营业额" value={euro(stats.totalRevenue)} color="var(--red-primary)" icon="💰"
@@ -366,6 +371,21 @@ export default function ReportDashboard() {
               />
               <StatCard label="Online" value={`${stats.onlineCount} 单 · ${euro(stats.onlineTotal)}`} color="#7B1FA2" icon="💳"
                 onClick={() => openDetail({ title: '💳 Online Payment', icon: '💳', filters: { paymentMethod: 'online' } })} />
+              <StatCard
+                label={t('admin.reportMemberWallet')}
+                value={`${stats.memberCheckoutCount ?? 0} 单 · ${euro(stats.memberCheckoutTotal ?? 0)}`}
+                color="#00695C"
+                icon="👛"
+                onClick={() => openDetail({ title: `👛 ${t('admin.reportMemberWallet')}`, icon: '👛', filters: { paymentMethod: 'member' } })}
+              />
+              {(stats.memberCreditPartialTotal ?? 0) > 0.001 ? (
+                <StatCard
+                  label={t('admin.reportMemberCreditMixed')}
+                  value={euro(stats.memberCreditPartialTotal ?? 0)}
+                  color="#4E342E"
+                  icon="➕"
+                />
+              ) : null}
               <StatCard label="Coupon" value={`${stats.couponCount} 次 · ${euro(stats.couponTotalAmount)}`} color="#FF6F00" icon="🎟️"
                 onClick={() => openDetail({ title: '🎟️ Coupon Orders', icon: '🎟️', filters: { hasCoupon: 'true' } })} />
               <StatCard label="Bundle" value={`${stats.bundleOfferCount} 次 · -${euro(stats.bundleOfferDiscount)}`} color="#00897B" icon="🎁"
