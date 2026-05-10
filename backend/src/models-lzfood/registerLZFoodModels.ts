@@ -17,7 +17,6 @@ import { FeaturePlanSchema } from './FeaturePlan';
 import { FeatureAddonSchema } from './FeatureAddon';
 import { MemberSchema } from '../models/Member';
 import { MemberWalletTxnSchema } from '../models/MemberWalletTxn';
-import { MemberTopUpCardSchema } from '../models/MemberTopUpCard';
 import { CustomerProfileSchema } from '../models/CustomerProfile';
 
 const storeIdField = {
@@ -74,7 +73,6 @@ export type LZFoodModels = {
   FeatureAddon: Model<unknown>;
   Member: Model<unknown>;
   MemberWalletTxn: Model<unknown>;
-  MemberTopUpCard: Model<unknown>;
   CustomerProfile: Model<unknown>;
 };
 
@@ -116,7 +114,6 @@ export function registerLZFoodModels(conn: Connection): LZFoodModels {
   const FeatureAddon = m('FeatureAddon', FeatureAddonSchema, 'feature_addons');
   const Member = m('Member', withStoreId(MemberSchema), 'members');
   const MemberWalletTxn = m('MemberWalletTxn', withStoreId(MemberWalletTxnSchema), 'member_wallet_txns');
-  const MemberTopUpCard = m('MemberTopUpCard', withStoreId(MemberTopUpCardSchema), 'member_topup_cards');
   const CustomerProfile = m('CustomerProfile', withStoreId(CustomerProfileSchema), 'customer_profiles');
 
   cached = {
@@ -139,7 +136,6 @@ export function registerLZFoodModels(conn: Connection): LZFoodModels {
     FeatureAddon,
     Member,
     MemberWalletTxn,
-    MemberTopUpCard,
     CustomerProfile,
   };
   return cached;
