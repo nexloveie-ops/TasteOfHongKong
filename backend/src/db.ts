@@ -10,7 +10,10 @@ export async function connectDB(): Promise<void> {
   if (!dbUri) {
     throw new Error('环境变量 DBCON 或 LZFOOD_DBCON 至少设置其一');
   }
-  await mongoose.connect(dbUri);
+  await mongoose.connect(dbUri, {
+    serverSelectionTimeoutMS: 15_000,
+    socketTimeoutMS: 45_000,
+  });
   console.log('MongoDB 连接成功');
   const models = registerLZFoodModels(mongoose.connection);
   await ensureLZFoodIndexes(models);

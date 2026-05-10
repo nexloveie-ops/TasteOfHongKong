@@ -45,6 +45,11 @@ const io = new SocketIOServer(server, {
 app.use(cors());
 app.use(express.json());
 
+/** Liveness：必须在 attachStoreContext 之前，且中间件内显式跳过，避免 Cloud Run 探活依赖店铺头或 DB */
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok' });
+});
+
 /** 除登录外，所有 /api/* 需解析店铺（X-Store-Slug / storeSlug / DEFAULT_STORE_SLUG） */
 app.use('/api', attachStoreContext);
 
@@ -78,10 +83,6 @@ if (USE_GCS) {
 const publicPath = path.join(__dirname, '..', 'public');
 
 // 所有 /api 路由须先于 express.static，否则部分非 GET 请求可能被静态中间件以 404 结束，无法到达平台路由等处理器。
-// Health check
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok' });
-});
 
 // Auth routes
 app.use('/api/auth', authRouter);
@@ -207,8 +208,9 @@ async function startServer() {
     console.error('数据库连接失败:', err);
     process.exit(1);
   }
-  server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  const portNum = Number(PORT);
+  server.listen(portNum, '0.0.0.0', () => {
+    console.log(`Server running on 0.0.0.0:${portNum}`);
   });
 }
 

@@ -17,13 +17,14 @@ declare global {
 }
 
 function skipStoreContext(req: Request): boolean {
+  const pathOnly = (req.originalUrl || req.path || '').split('?')[0];
+  if (pathOnly === '/api/health' || req.path === '/health') {
+    return true;
+  }
   if (req.path.startsWith('/platform')) {
     return true;
   }
   if (req.path.startsWith('/public')) {
-    return true;
-  }
-  if (req.path === '/health') {
     return true;
   }
   if (req.method === 'POST' && (req.path === '/auth/login' || req.path.endsWith('/auth/login'))) {
