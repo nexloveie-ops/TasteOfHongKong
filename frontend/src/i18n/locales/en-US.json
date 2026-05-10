@@ -110,7 +110,10 @@
     "storePortalOpenNow": "Open now",
     "storePortalClosedNow": "Closed",
     "storePortalCheckingHours": "Checking hours…",
-    "storePortalMapEmbedTitle": "Store location map"
+    "storePortalMapEmbedTitle": "Store location map",
+    "storePortalOffersTitle": "Special offers",
+    "storePortalOfferPriceLabel": "Bundle price",
+    "storePortalOfferHint": "Add the matching items in the menu to get this price."
   },
   "cashier": {
     "title": "Cashier",

@@ -106,7 +106,8 @@ export default function App() {
               <Route index element={<StoreFrontPage />} />
               <Route path="customer" element={<Outlet />}>
                 <Route index element={<ScanLanding />} />
-                <Route path="menu" element={<MenuView />} />
+                {/* Same compact hero / offer strip as storefront ?type=takeout|delivery (storeFrontEmbed) */}
+                <Route path="menu" element={<MenuView storeFrontEmbed />} />
                 <Route path="cart" element={<CartPage />} />
                 <Route path="order/:orderId" element={<OrderStatusPage />} />
                 <Route path="member" element={<MemberPortalPage />} />

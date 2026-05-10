@@ -415,7 +415,7 @@ export default function MenuView({ storeFrontEmbed = false }: { storeFrontEmbed?
 
       {/* Scrollable Content — all categories rendered continuously */}
       <div ref={scrollContainerRef} onScroll={handleScroll} style={{ flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
-        {categories.map(cat => {
+        {categories.map((cat, catIndex) => {
           const catItems = itemsByCategory.get(cat._id) || [];
           return (
             <div
@@ -437,7 +437,7 @@ export default function MenuView({ storeFrontEmbed = false }: { storeFrontEmbed?
 
               {/* Items */}
               <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {catItems.length > 0 ? catItems.map(item => (
+                {catItems.length > 0 ? catItems.map((item, itemIndex) => (
                   <MenuItemCard
                     key={item._id}
                     id={item._id}
@@ -448,6 +448,7 @@ export default function MenuView({ storeFrontEmbed = false }: { storeFrontEmbed?
                     calories={item.calories}
                     avgWaitMinutes={item.avgWaitMinutes}
                     photoUrl={item.photoUrl}
+                    photoFetchPriority={catIndex === 0 && itemIndex < 8 ? 'high' : 'auto'}
                     arFileUrl={item.arFileUrl}
                     isSoldOut={item.isSoldOut}
                     allergenIcons={(item.allergenIds || []).map(aid => allergens.find(a => a._id === aid)?.icon).filter((x): x is string => !!x)}
