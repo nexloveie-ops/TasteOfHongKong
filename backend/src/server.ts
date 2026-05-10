@@ -202,16 +202,19 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 8080;
 
 async function startServer() {
+  const portNum = Number(PORT);
+  // Bind immediately so Cloud Run TCP / startup probes see PORT=8080 without waiting for MongoDB.
+  server.listen(portNum, '0.0.0.0', () => {
+    console.log(`Server listening on 0.0.0.0:${portNum} (connecting MongoDB...)`);
+  });
+
   try {
     await connectDB();
+    console.log('MongoDB ready');
   } catch (err) {
     console.error('数据库连接失败:', err);
     process.exit(1);
   }
-  const portNum = Number(PORT);
-  server.listen(portNum, '0.0.0.0', () => {
-    console.log(`Server running on 0.0.0.0:${portNum}`);
-  });
 }
 
 startServer();

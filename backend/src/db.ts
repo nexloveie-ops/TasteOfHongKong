@@ -16,6 +16,8 @@ export async function connectDB(): Promise<void> {
   });
   console.log('MongoDB 连接成功');
   const models = registerLZFoodModels(mongoose.connection);
-  await ensureLZFoodIndexes(models);
-  console.log('多店集合与索引已同步');
+  // Do not block process startup on createIndexes (Cloud Run must bind PORT quickly).
+  void ensureLZFoodIndexes(models)
+    .then(() => console.log('多店集合与索引已同步'))
+    .catch((err) => console.error('多店索引同步失败（服务已启动，可稍后重试或检查日志）:', err));
 }
