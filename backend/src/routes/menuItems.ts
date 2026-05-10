@@ -10,7 +10,7 @@ import { requireAuthSameStore } from '../middleware/authForStore';
 import { createAppError } from '../middleware/errorHandler';
 import { uploadFile } from '../storage';
 import { mergeTemplateOptionGroupsForItems } from '../utils/optionGroupTemplateApply';
-import { validateOptionGroups } from '../utils/optionGroups';
+import { normalizeNestedOptionGroups, validateOptionGroups } from '../utils/optionGroups';
 import { resolveStoreEffectiveFeatures, FeatureKeys } from '../utils/featureCatalog';
 
 function menuModels() {
@@ -70,7 +70,13 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     }
 
     const items = await MenuItem.find(filter).lean();
-    const baseItems = ownOnly ? items : await mergeTemplateOptionGroupsForItems(req.storeId!, items);
+    const baseItemsUnknown = ownOnly
+      ? items.map((item) => ({
+          ...(item as Record<string, unknown>),
+          optionGroups: normalizeNestedOptionGroups((item as { optionGroups?: unknown }).optionGroups),
+        }))
+      : await mergeTemplateOptionGroupsForItems(req.storeId!, items);
+    const baseItems = baseItemsUnknown as unknown as Array<{ translations: Array<{ locale: string; name?: string }> }>;
 
     if (lang) {
       const filtered = baseItems.map((item) => {
@@ -129,8 +135,10 @@ router.post(
         }
       }
 
+      let normalizedOptionGroups: unknown[] | undefined;
       if (optionGroups !== undefined) {
-        validateOptionGroups(optionGroups);
+        normalizedOptionGroups = normalizeNestedOptionGroups(optionGroups);
+        validateOptionGroups(normalizedOptionGroups);
       }
 
       const item = await MenuItem.create({
@@ -144,7 +152,7 @@ router.post(
         isSoldOut: isSoldOut ?? false,
         translations,
         allergenIds: allergenIds || [],
-        optionGroups: optionGroups || [],
+        optionGroups: normalizedOptionGroups ?? [],
       });
 
       res.status(201).json(item);
@@ -194,8 +202,10 @@ router.put(
         }
       }
 
+      let normalizedOptionGroups: unknown[] | undefined;
       if (optionGroups !== undefined) {
-        validateOptionGroups(optionGroups);
+        normalizedOptionGroups = normalizeNestedOptionGroups(optionGroups);
+        validateOptionGroups(normalizedOptionGroups);
       }
 
       const updateData: Record<string, unknown> = {};
@@ -208,7 +218,7 @@ router.put(
       if (isSoldOut !== undefined) updateData.isSoldOut = isSoldOut;
       if (translations !== undefined) updateData.translations = translations;
       if (allergenIds !== undefined) updateData.allergenIds = allergenIds;
-      if (optionGroups !== undefined) updateData.optionGroups = optionGroups;
+      if (normalizedOptionGroups !== undefined) updateData.optionGroups = normalizedOptionGroups;
 
       if (Object.keys(updateData).length === 0) {
         throw createAppError('VALIDATION_ERROR', 'At least one field must be provided for update');

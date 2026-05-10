@@ -15,8 +15,8 @@ interface MenuItem {
   optionGroups?: OptionGroupData[];
 }
 
-interface FormOptionChoice { nameZh: string; nameEn: string; extraPrice: number; originalPrice: number; }
-interface FormOptionGroup { nameZh: string; nameEn: string; required: boolean; choices: FormOptionChoice[]; }
+interface FormOptionChoice { _id?: string; nameZh: string; nameEn: string; extraPrice: number; originalPrice: number; }
+interface FormOptionGroup { _id?: string; nameZh: string; nameEn: string; required: boolean; choices: FormOptionChoice[]; }
 
 const emptyForm = { categoryId: '', price: 0, calories: 0, avgWaitMinutes: 0, nameZh: '', nameEn: '', descZh: '', descEn: '', allergenIds: [] as string[], optionGroups: [] as FormOptionGroup[] };
 
@@ -48,17 +48,27 @@ export default function MenuItemManager() {
 
   const startEdit = (item: MenuItem | null) => {
     if (item) {
-      const optionGroups: FormOptionGroup[] = (item.optionGroups || []).map(g => ({
-        nameZh: g.translations.find(t2 => t2.locale === 'zh-CN')?.name || '',
-        nameEn: g.translations.find(t2 => t2.locale === 'en-US')?.name || '',
-        required: g.required,
-        choices: g.choices.map(c => ({
-          nameZh: c.translations.find(t2 => t2.locale === 'zh-CN')?.name || '',
-          nameEn: c.translations.find(t2 => t2.locale === 'en-US')?.name || '',
-          extraPrice: c.extraPrice,
-          originalPrice: c.originalPrice || 0,
-        })),
-      }));
+      const optionGroups: FormOptionGroup[] = (item.optionGroups || []).map(g => {
+        const choicesRaw = Array.isArray(g.choices) ? g.choices : [];
+        const choiceRows =
+          choicesRaw.length > 0
+            ? choicesRaw
+            : [{ translations: [] as { locale: string; name: string }[], extraPrice: 0, originalPrice: 0 }];
+        return {
+          _id: g._id != null ? String(g._id) : undefined,
+          nameZh: g.translations.find(t2 => t2.locale === 'zh-CN')?.name || '',
+          nameEn: g.translations.find(t2 => t2.locale === 'en-US')?.name || '',
+          required: g.required,
+          choices: choiceRows.map(c => ({
+            _id: c._id != null ? String(c._id) : undefined,
+            nameZh: c.translations.find(t2 => t2.locale === 'zh-CN')?.name || '',
+            nameEn: c.translations.find(t2 => t2.locale === 'en-US')?.name || '',
+            extraPrice: typeof c.extraPrice === 'number' && Number.isFinite(c.extraPrice) ? c.extraPrice : 0,
+            originalPrice:
+              typeof c.originalPrice === 'number' && Number.isFinite(c.originalPrice) ? c.originalPrice : 0,
+          })),
+        };
+      });
       setForm({
         categoryId: item.categoryId,
         price: item.price,
@@ -80,6 +90,12 @@ export default function MenuItemManager() {
   };
 
   const handleSave = async () => {
+    for (let gi = 0; gi < form.optionGroups.length; gi++) {
+      if (!form.optionGroups[gi].choices?.length) {
+        alert(`选项组 #${gi + 1} 须至少包含一个选项`);
+        return;
+      }
+    }
     const body = {
       categoryId: form.categoryId, price: form.price,
       calories: form.calories, avgWaitMinutes: form.avgWaitMinutes,
@@ -89,14 +105,16 @@ export default function MenuItemManager() {
         { locale: 'en-US', name: form.nameEn, description: form.descEn },
       ],
       optionGroups: form.optionGroups.map(g => ({
+        ...(g._id ? { _id: g._id } : {}),
         required: g.required,
         translations: [
           { locale: 'zh-CN', name: g.nameZh },
           { locale: 'en-US', name: g.nameEn },
         ],
         choices: g.choices.map(c => ({
-          extraPrice: c.extraPrice,
-          originalPrice: c.originalPrice || undefined,
+          ...(c._id ? { _id: c._id } : {}),
+          extraPrice: Number.isFinite(c.extraPrice) ? c.extraPrice : 0,
+          originalPrice: Number.isFinite(c.originalPrice) ? c.originalPrice : undefined,
           translations: [
             { locale: 'zh-CN', name: c.nameZh },
             { locale: 'en-US', name: c.nameEn },
@@ -186,9 +204,11 @@ export default function MenuItemManager() {
   const removeChoice = (gi: number, ci: number) => {
     setForm(prev => ({
       ...prev,
-      optionGroups: prev.optionGroups.map((g, i) =>
-        i === gi ? { ...g, choices: g.choices.filter((_, j) => j !== ci) } : g
-      ),
+      optionGroups: prev.optionGroups.map((g, i) => {
+        if (i !== gi) return g;
+        if (g.choices.length <= 1) return g;
+        return { ...g, choices: g.choices.filter((_, j) => j !== ci) };
+      }),
     }));
   };
 
@@ -318,9 +338,17 @@ export default function MenuItemManager() {
                     <input className="input" placeholder={`${t('admin.choiceName')} (EN)`} value={choice.nameEn}
                       onChange={e => updateChoice(gi, ci, 'nameEn', e.target.value)} style={{ fontSize: 12 }} />
                     <input className="input" type="number" placeholder="原价" value={choice.originalPrice || ''}
-                      onChange={e => updateChoice(gi, ci, 'originalPrice', Number(e.target.value))} style={{ fontSize: 12 }} />
+                      onChange={e => {
+                        const v = e.target.value;
+                        const n = v === '' ? 0 : Number(v);
+                        updateChoice(gi, ci, 'originalPrice', Number.isFinite(n) ? n : 0);
+                      }} style={{ fontSize: 12 }} />
                     <input className="input" type="number" placeholder={t('admin.extraPrice')} value={choice.extraPrice}
-                      onChange={e => updateChoice(gi, ci, 'extraPrice', Number(e.target.value))} style={{ fontSize: 12 }} />
+                      onChange={e => {
+                        const v = e.target.value;
+                        const n = v === '' ? 0 : Number(v);
+                        updateChoice(gi, ci, 'extraPrice', Number.isFinite(n) ? n : 0);
+                      }} style={{ fontSize: 12 }} />
                     <button className="btn btn-ghost" style={{ fontSize: 14, color: 'var(--red-primary)', padding: '0 4px' }}
                       onClick={() => removeChoice(gi, ci)}>✕</button>
                   </div>
@@ -396,7 +424,7 @@ export default function MenuItemManager() {
                   {allergens.length > 0 && (<div style={{ marginTop: 12 }}><label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 6 }}>过敏原</label><div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>{allergens.map(a => { const ck = form.allergenIds.includes(a._id); return (<label key={a._id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 6, fontSize: 13, cursor: 'pointer', background: ck ? 'var(--red-light)' : '#fff', border: ck ? '1px solid var(--red-primary)' : '1px solid var(--border)', color: ck ? 'var(--red-primary)' : 'var(--text-secondary)' }}><input type="checkbox" checked={ck} style={{ display: 'none' }} onChange={() => setForm(prev => ({ ...prev, allergenIds: ck ? prev.allergenIds.filter(id => id !== a._id) : [...prev.allergenIds, a._id] }))} /><span>{a.icon}</span><span>{a.translations.find(t2 => t2.locale === 'zh-CN')?.name || a.name}</span></label>); })}</div></div>)}
                   <div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}><label style={{ fontSize: 13, fontWeight: 700 }}>{t('admin.optionGroups')}</label><button className="btn btn-outline" style={{ fontSize: 12, padding: '4px 10px' }} onClick={addOptionGroup}>+ {t('admin.addOptionGroup')}</button></div>
-                    {form.optionGroups.map((group, gi) => (<div key={gi} style={{ background: '#fff', borderRadius: 8, padding: 12, marginBottom: 10, border: '1px solid var(--border)' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}><span style={{ fontSize: 12, fontWeight: 600 }}>#{gi + 1}</span><button className="btn btn-ghost" style={{ fontSize: 11, color: 'var(--red-primary)' }} onClick={() => removeOptionGroup(gi)}>{t('common.delete')}</button></div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 8 }}><div><label style={{ fontSize: 11, color: 'var(--text-light)' }}>名称(中)</label><input className="input" value={group.nameZh} onChange={e => updateOptionGroup(gi, 'nameZh', e.target.value)} style={{ width: '100%' }} /></div><div><label style={{ fontSize: 11, color: 'var(--text-light)' }}>Name(EN)</label><input className="input" value={group.nameEn} onChange={e => updateOptionGroup(gi, 'nameEn', e.target.value)} style={{ width: '100%' }} /></div><div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 2 }}><label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}><input type="checkbox" checked={group.required} onChange={e => updateOptionGroup(gi, 'required', e.target.checked)} />{t('admin.required')}</label></div></div>{group.choices.map((choice, ci) => (<div key={ci} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 70px 70px auto', gap: 6, marginBottom: 4 }}><input className="input" placeholder="中文" value={choice.nameZh} onChange={e => updateChoice(gi, ci, 'nameZh', e.target.value)} style={{ fontSize: 12 }} /><input className="input" placeholder="EN" value={choice.nameEn} onChange={e => updateChoice(gi, ci, 'nameEn', e.target.value)} style={{ fontSize: 12 }} /><input className="input" type="number" placeholder="原价" value={choice.originalPrice || ''} onChange={e => updateChoice(gi, ci, 'originalPrice', Number(e.target.value))} style={{ fontSize: 12 }} /><input className="input" type="number" placeholder="现价" value={choice.extraPrice} onChange={e => updateChoice(gi, ci, 'extraPrice', Number(e.target.value))} style={{ fontSize: 12 }} /><button className="btn btn-ghost" style={{ fontSize: 14, color: 'var(--red-primary)' }} onClick={() => removeChoice(gi, ci)}>✕</button></div>))}<button className="btn btn-ghost" style={{ fontSize: 11, marginTop: 4 }} onClick={() => addChoice(gi)}>+ {t('admin.addChoice')}</button></div>))}
+                    {form.optionGroups.map((group, gi) => (<div key={gi} style={{ background: '#fff', borderRadius: 8, padding: 12, marginBottom: 10, border: '1px solid var(--border)' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}><span style={{ fontSize: 12, fontWeight: 600 }}>#{gi + 1}</span><button className="btn btn-ghost" style={{ fontSize: 11, color: 'var(--red-primary)' }} onClick={() => removeOptionGroup(gi)}>{t('common.delete')}</button></div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 8 }}><div><label style={{ fontSize: 11, color: 'var(--text-light)' }}>名称(中)</label><input className="input" value={group.nameZh} onChange={e => updateOptionGroup(gi, 'nameZh', e.target.value)} style={{ width: '100%' }} /></div><div><label style={{ fontSize: 11, color: 'var(--text-light)' }}>Name(EN)</label><input className="input" value={group.nameEn} onChange={e => updateOptionGroup(gi, 'nameEn', e.target.value)} style={{ width: '100%' }} /></div><div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 2 }}><label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}><input type="checkbox" checked={group.required} onChange={e => updateOptionGroup(gi, 'required', e.target.checked)} />{t('admin.required')}</label></div></div>{group.choices.map((choice, ci) => (<div key={ci} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 70px 70px auto', gap: 6, marginBottom: 4 }}><input className="input" placeholder="中文" value={choice.nameZh} onChange={e => updateChoice(gi, ci, 'nameZh', e.target.value)} style={{ fontSize: 12 }} /><input className="input" placeholder="EN" value={choice.nameEn} onChange={e => updateChoice(gi, ci, 'nameEn', e.target.value)} style={{ fontSize: 12 }} /><input className="input" type="number" placeholder="原价" value={choice.originalPrice || ''} onChange={e => { const v = e.target.value; const n = v === '' ? 0 : Number(v); updateChoice(gi, ci, 'originalPrice', Number.isFinite(n) ? n : 0); }} style={{ fontSize: 12 }} /><input className="input" type="number" placeholder="现价" value={choice.extraPrice} onChange={e => { const v = e.target.value; const n = v === '' ? 0 : Number(v); updateChoice(gi, ci, 'extraPrice', Number.isFinite(n) ? n : 0); }} style={{ fontSize: 12 }} /><button className="btn btn-ghost" style={{ fontSize: 14, color: 'var(--red-primary)' }} onClick={() => removeChoice(gi, ci)}>✕</button></div>))}<button className="btn btn-ghost" style={{ fontSize: 11, marginTop: 4 }} onClick={() => addChoice(gi)}>+ {t('admin.addChoice')}</button></div>))}
                   </div>
                   <div style={{ display: 'flex', gap: 8, marginTop: 14 }}><button className="btn btn-primary" onClick={handleSave}>{t('common.save')}</button><button className="btn btn-outline" onClick={() => setShowForm(false)}>{t('common.cancel')}</button></div>
                 </td></tr>
