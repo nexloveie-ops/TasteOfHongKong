@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { io } from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
 import { apiFetch } from '../../api/client';
-import { buildReceiptHTML, printViaIframe } from '../../components/cashier/ReceiptPrint';
+import { buildReceiptHTML, printViaIframe, type BundleDiscountInfo } from '../../components/cashier/ReceiptPrint';
 import CashierMemberCheckoutBlock, {
   buildMemberFullWalletCheckoutBody,
   canMemberFullWalletPay,
@@ -36,7 +36,7 @@ interface OrderRow {
   pickupSlotLabel?: string;
   pickupSlotStart?: string;
   items: { _id: string; quantity: number; unitPrice: number; itemName: string; lineKind?: string; selectedOptions?: { extraPrice?: number }[] }[];
-  appliedBundles?: { discount: number }[];
+  appliedBundles?: { discount: number; name?: string; nameEn?: string }[];
   createdAt: string;
   stripePaymentIntentId?: string;
   memberCreditUsed?: number;
@@ -173,7 +173,7 @@ export default function UnifiedOrderCenter() {
     if (!receiptRes.ok) return;
     const receipt = await receiptRes.json();
     const html = buildReceiptHTML(receipt, config, opts?.cashReceived, opts?.changeAmount);
-    printViaIframe(html, 1);
+    await printViaIframe(html, 1);
   }, [config]);
 
   const checkoutSeat = useCallback(async (
@@ -395,7 +395,7 @@ export default function UnifiedOrderCenter() {
       <hr/>
       <div style="display:flex;justify-content:space-between;font-weight:700;"><span>合计</span><span>€${calcTotal(order).toFixed(2)}</span></div>
     </body></html>`;
-    printViaIframe(html, 1);
+    void printViaIframe(html, 1).catch(() => {});
   }, []);
 
   const printOrderTicket = useCallback(async (order: OrderRow) => {
@@ -432,6 +432,14 @@ export default function UnifiedOrderCenter() {
         : !String(src.stripePaymentIntentId || '').trim() && (Number(src.memberCreditUsed) || 0) > 0.001
           ? 'member'
           : 'online';
+    const bundleDiscounts: BundleDiscountInfo[] | undefined =
+      (src.appliedBundles?.length ?? 0) > 0
+        ? src.appliedBundles!.map((b) => ({
+            name: b.name || '',
+            nameEn: b.nameEn || '',
+            discount: b.discount,
+          }))
+        : undefined;
     const receiptData = {
       checkoutId: src._id,
       type: 'seat' as const,
@@ -450,6 +458,7 @@ export default function UnifiedOrderCenter() {
         type: receiptOrderType,
         seatNumber: src.seatNumber,
         dailyOrderNumber: src.dailyOrderNumber,
+        dineInOrderNumber: src.dineInOrderNumber,
         status: src.status,
         items: receiptItems,
         customerName: src.customerName,
@@ -459,8 +468,8 @@ export default function UnifiedOrderCenter() {
         deliveryFeeEuro: src.deliveryFeeEuro,
       }],
     };
-    const html = buildReceiptHTML(receiptData, config);
-    printViaIframe(html, 1);
+    const html = buildReceiptHTML(receiptData, config, undefined, undefined, bundleDiscounts);
+    await printViaIframe(html, 1);
   }, [config, token]);
 
   const completeTakeoutOnlinePaid = useCallback(async (order: OrderRow) => {
@@ -500,13 +509,13 @@ export default function UnifiedOrderCenter() {
     } finally {
       setBusyId(null);
     }
-  }, [fetchAll, printOrderTicket, token]);
+  }, [fetchAll, token]);
 
   /** 堂食顾客已在线付款：打印出餐小票 → 后端记 completed + 在线 Checkout → 本单从订单中心移除（流程终结） */
   const completeDineInOnlinePaid = useCallback(async (order: OrderRow) => {
     setBusyId(order._id);
     try {
-      void printOrderTicket(order);
+      await printOrderTicket(order);
       const res = await apiFetch(`/api/orders/dine-in/${order._id}/complete-online-paid`, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}` },

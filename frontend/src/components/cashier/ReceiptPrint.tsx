@@ -266,48 +266,62 @@ function buildReceiptHTML(
   return html;
 }
 
-/** Print HTML content via hidden iframe */
-function printViaIframe(html: string, copies: number) {
-  const iframe = document.createElement('iframe');
-  iframe.style.position = 'fixed';
-  iframe.style.left = '-9999px';
-  iframe.style.top = '-9999px';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
-  document.body.appendChild(iframe);
+/** Print HTML content via hidden iframe. Resolves after print dialog is triggered (and iframe cleaned up). */
+function printViaIframe(html: string, copies: number): Promise<void> {
+  return new Promise((resolve) => {
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.left = '-9999px';
+    iframe.style.top = '-9999px';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    document.body.appendChild(iframe);
 
-  const doc = iframe.contentDocument || iframe.contentWindow?.document;
-  if (!doc) { document.body.removeChild(iframe); return; }
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) {
+      try {
+        document.body.removeChild(iframe);
+      } catch {
+        /* ignore */
+      }
+      resolve();
+      return;
+    }
 
-  let done = false;
-  const runPrint = () => {
-    if (done) return;
-    done = true;
-    const images = doc.querySelectorAll('img');
-    const promises = Array.from(images).map(img => {
-      if (img.complete) return Promise.resolve();
-      return new Promise<void>(r => { img.onload = () => r(); img.onerror = () => r(); });
-    });
-    Promise.all(promises).then(() => {
-      setTimeout(() => {
-        for (let i = 0; i < copies; i++) {
-          iframe.contentWindow?.print();
-        }
-        // Clean up after a delay
-        setTimeout(() => { document.body.removeChild(iframe); }, 1000);
-      }, 100);
-    });
-  };
+    let done = false;
+    const runPrint = () => {
+      if (done) return;
+      done = true;
+      const images = doc.querySelectorAll('img');
+      const imageWaits = Array.from(images).map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise<void>(r => { img.onload = () => r(); img.onerror = () => r(); });
+      });
+      Promise.all(imageWaits).then(() => {
+        setTimeout(() => {
+          for (let i = 0; i < copies; i++) {
+            iframe.contentWindow?.print();
+          }
+          setTimeout(() => {
+            try {
+              document.body.removeChild(iframe);
+            } catch {
+              /* ignore */
+            }
+            resolve();
+          }, 1000);
+        }, 100);
+      });
+    };
 
-  // Bind before writing to avoid missing fast onload events.
-  iframe.onload = runPrint;
+    iframe.onload = runPrint;
 
-  doc.open();
-  doc.write(html);
-  doc.close();
+    doc.open();
+    doc.write(html);
+    doc.close();
 
-  // Fallback for browsers where iframe onload may not fire reliably.
-  setTimeout(runPrint, 250);
+    setTimeout(runPrint, 250);
+  });
 }
 
 export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, bundleDiscounts, printCopies }: ReceiptPrintProps) {
@@ -348,7 +362,7 @@ export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, b
     if (receipt && configLoaded && !autoPrintDone.current) {
       autoPrintDone.current = true;
       const html = buildReceiptHTML(receipt, config, cashReceived, changeAmount, bundleDiscounts);
-      printViaIframe(html, printCopies ?? copies);
+      void printViaIframe(html, printCopies ?? copies).catch(() => {});
     }
   }, [receipt, config, configLoaded, copies, printCopies, cashReceived, changeAmount, bundleDiscounts]);
 
@@ -356,7 +370,7 @@ export default function ReceiptPrint({ checkoutId, cashReceived, changeAmount, b
   const handleManualPrint = useCallback(() => {
     if (!receipt) return;
     const html = buildReceiptHTML(receipt, config, cashReceived, changeAmount, bundleDiscounts);
-    printViaIframe(html, 1);
+    void printViaIframe(html, 1).catch(() => {});
   }, [receipt, config, cashReceived, changeAmount, bundleDiscounts]);
 
   // Expose manual print globally so parent buttons can use window.print()
