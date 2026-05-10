@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
-import { apiFetch } from '../../api/client';
 
 interface OrderItem { _id: string; quantity: number; unitPrice: number; itemName: string; }
 interface HistoryOrder {
@@ -42,14 +41,12 @@ export default function OrderHistory() {
       const params = new URLSearchParams();
       params.set('startDate', startDate);
       params.set('endDate', endDate);
-      params.set('includeHidden', 'true');
       if (typeFilter) params.set('paymentMethod', typeFilter);
-      const res = await apiFetch(`/api/reports/orders?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`/api/reports/orders?${params}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const data: HistoryOrder[] = await res.json();
-        // Only show completed and completed-hide orders
-        const filtered = data.filter(o => o.status === 'completed' || o.status === 'completed-hide');
-        setOrders(filtered);
+        // Use API results as-is: same scope as /api/reports/orders (checked_out, completed, refunded; no *-hide).
+        setOrders(data);
       }
     } catch { /* ignore */ }
     finally { setLoading(false); }
@@ -57,7 +54,7 @@ export default function OrderHistory() {
 
   const toggleHide = useCallback(async (orderId: string) => {
     try {
-      const res = await apiFetch(`/api/orders/${orderId}/toggle-hide`, {
+      const res = await fetch(`/api/orders/${orderId}/toggle-hide`, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       });

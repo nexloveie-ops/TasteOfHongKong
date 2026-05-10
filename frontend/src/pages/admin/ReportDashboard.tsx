@@ -1,7 +1,6 @@
-import { useState, useCallback, useEffect, type ReactNode } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
-import { apiFetch } from '../../api/client';
 
 interface TopItem {
   itemName: string;
@@ -21,11 +20,6 @@ interface DetailedStats {
   takeoutCount: number;
   phoneCount: number;
   phoneRevenue: number;
-  deliveryOrderCount: number;
-  /** 送餐单菜品合计（不含送餐费），后端字段 deliveryOrdersGoodsTotal */
-  deliveryOrdersGoodsTotal: number;
-  /** 送餐费合计（delivery_fee 行 + legacy） */
-  deliveryFeesTotal: number;
   dineInScanCount: number;
   dineInCashierCount: number;
   takeoutScanCount: number;
@@ -34,14 +28,6 @@ interface DetailedStats {
   refundedAmount: number;
   onlineTotal: number;
   onlineCount: number;
-  /** 结账方式 member：全额储值支付（净额，已计入 totalRevenue） */
-  memberCheckoutTotal?: number;
-  memberCheckoutCount?: number;
-  /** 现金/刷卡/混合中抵扣的储值合计 */
-  memberCreditPartialTotal?: number;
-  cashCount?: number;
-  cardCount?: number;
-  mixedCount?: number;
   couponCount: number;
   couponTotalAmount: number;
   bundleOfferCount: number;
@@ -51,7 +37,6 @@ interface DetailedStats {
 
 interface OrderItem {
   _id: string;
-  lineKind?: string;
   quantity: number;
   unitPrice: number;
   itemName: string;
@@ -86,12 +71,24 @@ interface ModalConfig {
   filters: Record<string, string>;
 }
 
-/** 本地日历 YYYY-MM-DD（勿用 toISOString 取日期，否则在非 UTC 时区会把周日/当天错成前一天，报表结束日偏早、漏单） */
-function toLocalYmd(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+/**
+ * Same net amounts as GET /api/reports/detailed (excludes *-hide orders via /orders; refunds applied).
+ * Use for modal header when filters match a dashboard summary card.
+ */
+function getReportAlignedTotal(
+  s: DetailedStats,
+  filters: Record<string, string>,
+): number | null {
+  const entries = Object.entries(filters).filter(([, v]) => v !== undefined && v !== '');
+  if (entries.length === 0) return s.totalRevenue;
+  if (entries.length === 1 && entries[0][0] === 'paymentMethod') {
+    const pm = entries[0][1];
+    if (pm === 'cash') return s.cashTotal;
+    if (pm === 'card') return s.cardTotal;
+    if (pm === 'mixed') return s.mixedTotal;
+    if (pm === 'online') return s.onlineTotal;
+  }
+  return null;
 }
 
 function getWeekRange(): { start: string; end: string } {
@@ -102,13 +99,13 @@ function getWeekRange(): { start: string; end: string } {
   monday.setDate(today.getDate() + diffToMonday);
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
-  return { start: toLocalYmd(monday), end: toLocalYmd(sunday) };
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  return { start: fmt(monday), end: fmt(sunday) };
 }
 
 export default function ReportDashboard() {
   const { t } = useTranslation();
-  const { token, hasFeature } = useAuth();
-  const canDeliveryReports = hasFeature('cashier.delivery.page');
+  const { token } = useAuth();
 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -139,19 +136,10 @@ export default function ReportDashboard() {
       const params = new URLSearchParams();
       params.set('startDate', startDate);
       params.set('endDate', endDate);
-      const res = await apiFetch(`/api/reports/detailed?${params}`, {
+      const res = await fetch(`/api/reports/detailed?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) {
-        const data = (await res.json()) as DetailedStats;
-        const d = data as DetailedStats & { deliveryFeeRevenue?: number };
-        setStats({
-          ...data,
-          deliveryOrderCount: d.deliveryOrderCount ?? 0,
-          deliveryOrdersGoodsTotal: d.deliveryOrdersGoodsTotal ?? d.deliveryFeeRevenue ?? 0,
-          deliveryFeesTotal: d.deliveryFeesTotal ?? 0,
-        });
-      }
+      if (res.ok) setStats(await res.json());
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, [token, startDate, endDate]);
@@ -161,7 +149,7 @@ export default function ReportDashboard() {
     setPdfExporting(true);
     try {
       const params = new URLSearchParams({ startDate, endDate });
-      const res = await apiFetch(`/api/reports/vat-pdf?${params}`, {
+      const res = await fetch(`/api/reports/vat-pdf?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
@@ -209,16 +197,10 @@ export default function ReportDashboard() {
       for (const [k, v] of Object.entries(config.filters)) {
         if (v) params.set(k, v);
       }
-      const res = await apiFetch(`/api/reports/orders?${params}`, {
+      const res = await fetch(`/api/reports/orders?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) {
-        setModalOrders(await res.json());
-      } else {
-        const j = await res.json().catch(() => ({})) as { error?: { message?: string } };
-        alert(j?.error?.message || `加载明细失败（HTTP ${res.status}）`);
-        setModalOrders([]);
-      }
+      if (res.ok) setModalOrders(await res.json());
     } catch { /* ignore */ }
     finally { setModalLoading(false); }
   }, [token, startDate, endDate]);
@@ -230,7 +212,7 @@ export default function ReportDashboard() {
     setItemOptionStats(null);
     try {
       const params = new URLSearchParams({ itemName, startDate, endDate });
-      const res = await apiFetch(`/api/reports/item-options?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`/api/reports/item-options?${params}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) setItemOptionStats(await res.json());
     } catch { /* ignore */ }
     finally { setItemOptionLoading(false); }
@@ -283,36 +265,11 @@ export default function ReportDashboard() {
     o.dineInOrderNumber || (o.dailyOrderNumber ? `#${o.dailyOrderNumber}` : o._id.slice(-6).toUpperCase());
 
   return (
-    <div style={{ padding: '4px 2px 12px' }}>
-      <div
-        style={{
-          borderRadius: 14,
-          padding: '14px 16px',
-          marginBottom: 14,
-          background: 'linear-gradient(135deg, #fff7f3 0%, #fff 40%, #fff3f5 100%)',
-          border: '1px solid #ffe2d7',
-        }}
-      >
-        <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>{t('admin.reports')}</h2>
-        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>
-          实时营业数据看板 · 支持按支付方式与订单类型快速钻取
-        </div>
-      </div>
+    <div>
+      <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>{t('admin.reports')}</h2>
 
       {/* Date picker */}
-      <div
-        className="card"
-        style={{
-          padding: 16,
-          marginBottom: 16,
-          display: 'flex',
-          gap: 12,
-          alignItems: 'end',
-          flexWrap: 'wrap',
-          border: '1px solid #f0e4de',
-          boxShadow: '0 6px 20px rgba(93, 64, 55, 0.06)',
-        }}
-      >
+      <div className="card" style={{ padding: 16, marginBottom: 16, display: 'flex', gap: 12, alignItems: 'end', flexWrap: 'wrap' }}>
         <div>
           <label style={{ fontSize: 12, color: 'var(--text-light)', display: 'block', marginBottom: 4 }}>开始日期</label>
           <input className="input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
@@ -324,35 +281,22 @@ export default function ReportDashboard() {
         <button className="btn btn-primary" onClick={fetchStats} disabled={loading || !startDate || !endDate}>
           {loading ? t('common.loading') : t('common.search')}
         </button>
-        {hasFeature('admin.reports.vatExport.action') ? (
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={exportVatPdf}
-            disabled={pdfExporting || !startDate || !endDate}
-          >
-            {pdfExporting ? t('common.loading') : t('admin.exportVatPdf')}
-          </button>
-        ) : null}
+        <button
+          type="button"
+          className="btn btn-outline"
+          onClick={exportVatPdf}
+          disabled={pdfExporting || !startDate || !endDate}
+        >
+          {pdfExporting ? t('common.loading') : t('admin.exportVatPdf')}
+        </button>
       </div>
 
       {/* Stats display */}
       {stats && (
         <>
           {/* Revenue Summary Cards */}
-          <div
-            style={{
-              marginBottom: 20,
-              padding: 14,
-              borderRadius: 14,
-              background: 'linear-gradient(180deg, #fff 0%, #fff9f7 100%)',
-              border: '1px solid #f7e6df',
-            }}
-          >
+          <div style={{ marginBottom: 20 }}>
             <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10, color: 'var(--text-secondary)' }}>💰 营业概览</h3>
-            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.55, maxWidth: 920 }}>
-              统计按<strong>结账时间</strong>（与收款一致）。「现金」「刷卡」已包含混合支付中的拆分金额，请勿再与「混合支付」相加；净营业额含会员储值全额结账及其他方式。{t('admin.reportMemberWalletDetail')}
-            </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
               <StatCard label="净营业额" value={euro(stats.totalRevenue)} color="var(--red-primary)" icon="💰"
                 onClick={() => openDetail({ title: '💰 全部订单', icon: '💰', filters: {} })} />
@@ -362,64 +306,21 @@ export default function ReportDashboard() {
                 onClick={() => openDetail({ title: '💵 现金订单', icon: '💵', filters: { paymentMethod: 'cash' } })} />
               <StatCard label="刷卡收入" value={euro(stats.cardTotal)} color="var(--blue, #1976D2)" icon="💳"
                 onClick={() => openDetail({ title: '💳 刷卡订单', icon: '💳', filters: { paymentMethod: 'card' } })} />
-              <StatCard
-                label="混合支付"
-                value={`${stats.mixedCount ?? 0} 单 · ${euro(stats.mixedTotal)}`}
-                color="var(--gold-dark, #F57F17)"
-                icon="🔄"
-                onClick={() => openDetail({ title: '🔄 混合支付订单', icon: '🔄', filters: { paymentMethod: 'mixed' } })}
-              />
+              <StatCard label="混合支付" value={euro(stats.mixedTotal)} color="var(--gold-dark, #F57F17)" icon="🔄"
+                onClick={() => openDetail({ title: '🔄 混合支付订单', icon: '🔄', filters: { paymentMethod: 'mixed' } })} />
               <StatCard label="Online" value={`${stats.onlineCount} 单 · ${euro(stats.onlineTotal)}`} color="#7B1FA2" icon="💳"
                 onClick={() => openDetail({ title: '💳 Online Payment', icon: '💳', filters: { paymentMethod: 'online' } })} />
-              <StatCard
-                label={t('admin.reportMemberWallet')}
-                value={`${stats.memberCheckoutCount ?? 0} 单 · ${euro(stats.memberCheckoutTotal ?? 0)}`}
-                color="#00695C"
-                icon="👛"
-                onClick={() => openDetail({ title: `👛 ${t('admin.reportMemberWallet')}`, icon: '👛', filters: { paymentMethod: 'member' } })}
-              />
-              {(stats.memberCreditPartialTotal ?? 0) > 0.001 ? (
-                <StatCard
-                  label={t('admin.reportMemberCreditMixed')}
-                  value={euro(stats.memberCreditPartialTotal ?? 0)}
-                  color="#4E342E"
-                  icon="➕"
-                />
-              ) : null}
               <StatCard label="Coupon" value={`${stats.couponCount} 次 · ${euro(stats.couponTotalAmount)}`} color="#FF6F00" icon="🎟️"
                 onClick={() => openDetail({ title: '🎟️ Coupon Orders', icon: '🎟️', filters: { hasCoupon: 'true' } })} />
               <StatCard label="Bundle" value={`${stats.bundleOfferCount} 次 · -${euro(stats.bundleOfferDiscount)}`} color="#00897B" icon="🎁"
                 onClick={() => openDetail({ title: '🎁 Bundle Orders', icon: '🎁', filters: { hasBundle: 'true' } })} />
-              {canDeliveryReports ? (
-                <StatCard
-                  label="送餐订单合集"
-                  value={(
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>{stats.deliveryOrderCount} 单</div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: '#E65100' }}>菜品（不含运费）{euro(stats.deliveryOrdersGoodsTotal)}</div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: '#BF360C' }}>送餐费 {euro(stats.deliveryFeesTotal)}</div>
-                    </div>
-                  )}
-                  color="#E65100"
-                  icon="🚚"
-                  onClick={() => openDetail({ title: '🚚 送餐订单', icon: '🚚', filters: { type: 'delivery' } })}
-                />
-              ) : null}
               <StatCard label="退单" value={`${stats.refundedCount} 项 · ${euro(stats.refundedAmount)}`} color="#F44336" icon="↩️"
                 onClick={() => openDetail({ title: '↩️ 退单记录', icon: '↩️', filters: { status: 'refunded' } })} />
             </div>
           </div>
 
           {/* Order Breakdown */}
-          <div
-            style={{
-              marginBottom: 20,
-              padding: 14,
-              borderRadius: 14,
-              background: '#fff',
-              border: '1px solid #eee',
-            }}
-          >
+          <div style={{ marginBottom: 20 }}>
             <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10, color: 'var(--text-secondary)' }}>📊 订单分类</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
               {/* Dine-in card */}
@@ -475,28 +376,6 @@ export default function ReportDashboard() {
                   </div>
                 </div>
               )}
-
-              {canDeliveryReports ? (
-                <div className="card" style={{ padding: 20, cursor: 'pointer', transition: 'box-shadow 0.2s' }}
-                  onClick={() => openDetail({ title: '🚚 送餐订单', icon: '🚚', filters: { type: 'delivery' } })}
-                  onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)')}
-                  onMouseLeave={e => (e.currentTarget.style.boxShadow = '')}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                    <span style={{ fontSize: 24 }}>🚚</span>
-                    <div>
-                      <div style={{ fontSize: 12, color: 'var(--text-light)' }}>送餐订单合集</div>
-                      <div style={{ fontSize: 28, fontWeight: 700, color: '#E65100' }}>{stats.deliveryOrderCount}</div>
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#E65100', borderTop: '1px solid var(--border, #eee)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <span>菜品合计（不含送餐费）{euro(stats.deliveryOrdersGoodsTotal)}</span>
-                    <span style={{ color: '#BF360C' }}>送餐费合计 {euro(stats.deliveryFeesTotal)}</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.45 }}>
-                    菜品金额 = 各单结账实收（与净营业额同一 checkout 口径）− 送餐费；送餐费为订单上运费行/字段汇总。扫码网付整单仍体现在「Online / 净营业额」。
-                  </div>
-                </div>
-              ) : null}
             </div>
           </div>
 
@@ -559,8 +438,11 @@ export default function ReportDashboard() {
                 <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                   {modalConfig.filters.status === 'refunded'
                     ? `${modalOrders.length} 条订单 · 退单菜品 ${modalOrders.reduce((s, o) => s + o.items.filter(i => i.refunded).length, 0)} 项 · 退款 ${euro(modalOrders.reduce((s, o) => s + calcOrderRefund(o), 0))}`
-                    : `共 ${modalOrders.length} 条 · 合计 ${euro(deduplicatedTotal(modalOrders))}`
-                  }
+                    : (() => {
+                        const aligned = stats ? getReportAlignedTotal(stats, modalConfig.filters) : null;
+                        const total = aligned !== null ? aligned : deduplicatedTotal(modalOrders);
+                        return `共 ${modalOrders.length} 条 · 合计 ${euro(total)}`;
+                      })()}
                 </span>
                 <button onClick={closeModal} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text-light)', padding: '0 4px' }}>✕</button>
               </div>
@@ -648,7 +530,7 @@ export default function ReportDashboard() {
                   <div><span style={{ color: 'var(--text-light)' }}>选项收入: </span><span style={{ fontWeight: 700, color: 'var(--red-primary)' }}>{euro(itemOptionStats.totalOptionRevenue)}</span></div>
                 </div>
                 {itemOptionStats.options.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-light)' }}>无选项数据（该菜品在订单中未带选项快照）</div>
+                  <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-light)' }}>无付费选项数据</div>
                 ) : (
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
@@ -685,40 +567,16 @@ export default function ReportDashboard() {
 function StatCard({
   label, value, color, icon, onClick,
 }: {
-  label: string; value: ReactNode; color: string; icon: string; onClick?: () => void;
+  label: string; value: string; color: string; icon: string; onClick?: () => void;
 }) {
-  const valueIsPlain = typeof value === 'string' || typeof value === 'number';
   return (
-    <div className="card" style={{
-      padding: 20,
-      textAlign: 'center',
-      cursor: onClick ? 'pointer' : 'default',
-      transition: 'transform 0.16s ease, box-shadow 0.2s ease, border-color 0.2s ease',
-      border: '1px solid #f1e3dc',
-      boxShadow: '0 4px 12px rgba(42, 27, 20, 0.05)',
-      background: 'linear-gradient(180deg, #ffffff 0%, #fffaf8 100%)',
-    }}
+    <div className="card" style={{ padding: 20, textAlign: 'center', cursor: onClick ? 'pointer' : 'default', transition: 'box-shadow 0.2s' }}
       onClick={onClick}
-      onMouseEnter={e => {
-        if (onClick) {
-          e.currentTarget.style.boxShadow = '0 10px 24px rgba(0,0,0,0.12)';
-          e.currentTarget.style.transform = 'translateY(-2px)';
-          e.currentTarget.style.borderColor = '#e8cfc4';
-        }
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.boxShadow = '0 4px 12px rgba(42, 27, 20, 0.05)';
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.borderColor = '#f1e3dc';
-      }}>
-      <div style={{ fontSize: 28, marginBottom: 10 }}>{icon}</div>
+      onMouseEnter={e => { if (onClick) e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'; }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow = ''; }}>
+      <div style={{ fontSize: 28, marginBottom: 8 }}>{icon}</div>
       <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 4 }}>{label}</div>
-      <div style={{
-        fontSize: valueIsPlain ? 24 : undefined,
-        fontWeight: valueIsPlain ? 700 : undefined,
-        color: valueIsPlain ? color : undefined,
-        fontFamily: "'Noto Serif SC', serif",
-      }}>{value}</div>
+      <div style={{ fontSize: 24, fontWeight: 700, color, fontFamily: "'Noto Serif SC', serif" }}>{value}</div>
       {onClick && <div style={{ fontSize: 10, color: 'var(--text-light)', marginTop: 6 }}>点击查看详情 →</div>}
     </div>
   );

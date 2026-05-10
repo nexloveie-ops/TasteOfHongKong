@@ -213,6 +213,20 @@ describe('GET /api/reports/orders', () => {
     const res = await request(app).get('/api/reports/orders');
     expect(res.status).toBe(401);
   });
+
+  it('should exclude checked_out-hide and completed-hide (matches /reports/detailed scope)', async () => {
+    await createAndCheckoutOrder('dine_in', 30, 'cash');
+    const o = await Order.findOne({ status: 'checked_out' });
+    expect(o).not.toBeNull();
+    await Order.findByIdAndUpdate(o!._id, { status: 'checked_out-hide' });
+
+    const res = await request(app)
+      .get('/api/reports/orders')
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(0);
+  });
 });
 
 // --- Revenue Summary ---

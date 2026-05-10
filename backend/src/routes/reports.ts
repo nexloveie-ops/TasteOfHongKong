@@ -1,43 +1,27 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import mongoose from 'mongoose';
-import { getModels } from '../getModels';
-import { requirePermission } from '../middleware/auth';
-import { requireAuthSameStore } from '../middleware/authForStore';
+import { Checkout } from '../models/Checkout';
+import { Order } from '../models/Order';
+import { authMiddleware, requirePermission } from '../middleware/auth';
 import { createAppError } from '../middleware/errorHandler';
-import { requireFeature } from '../middleware/featureAccess';
-import { FeatureKeys } from '../utils/featureCatalog';
 import { aggregateVatSalesByMonth } from '../utils/vatReportAggregation';
 import { buildVatReportPdfBuffer } from '../utils/vatReportPdf';
-import { deliveryFeePortionEuro, deliveryOrderGoodsTotalFromCheckoutEuro } from '../utils/orderPayableTotal';
-
-function reportModels() {
-  return getModels() as {
-    Order: mongoose.Model<any>;
-    Checkout: mongoose.Model<any>;
-  };
-}
 
 const router = Router();
-const REPORT_VISIBLE_STATUSES = ['checked_out', 'completed', 'refunded'] as const;
 
-// GET /api/reports/orders — 报表钻取与订单历史列表共用（需 report:view；勿绑定 admin.orderHistory.page，否则营业报表点击明细会 403 且无数据）
-router.get('/orders', ...requireAuthSameStore, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
+// GET /api/reports/orders — Order history query (requires auth + report:view)
+router.get('/orders', authMiddleware, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { Order, Checkout } = reportModels();
     const { startDate, endDate, type, paymentMethod, source, status } = req.query;
-    const includeHidden = String(req.query.includeHidden || '').toLowerCase() === 'true';
-    const visibleStatuses = includeHidden
-      ? [...REPORT_VISIBLE_STATUSES, 'checked_out-hide', 'completed-hide']
-      : [...REPORT_VISIBLE_STATUSES];
 
-    const filter: Record<string, unknown> = { storeId: req.storeId };
+    const filter: Record<string, unknown> = {};
 
+    // Align with GET /api/reports/detailed: never include *-hide statuses in reports drill-down.
     if (status === 'refunded') {
-      // Find orders that have ANY refunded items (partial or full)
-      filter.status = { $in: visibleStatuses };
+      // Orders that have ANY refunded items (partial or full)
+      filter.status = { $in: ['checked_out', 'completed', 'refunded'] };
       filter['items.refunded'] = true;
     } else {
-      filter.status = { $in: visibleStatuses };
+      filter.status = { $in: ['checked_out', 'completed', 'refunded'] };
     }
 
     if (startDate || endDate) {
@@ -48,21 +32,10 @@ router.get('/orders', ...requireAuthSameStore, requirePermission('report:view'),
       if (endDate) {
         dateFilter.$lte = new Date((endDate as string) + 'T23:59:59.999');
       }
-      const periodCheckouts = await Checkout.find({ storeId: req.storeId, checkedOutAt: dateFilter }).lean();
-      const inPeriod = new Set<string>();
-      for (const c of periodCheckouts) {
-        for (const oid of c.orderIds as mongoose.Types.ObjectId[]) {
-          inPeriod.add(oid.toString());
-        }
-      }
-      if (inPeriod.size === 0) {
-        res.json([]);
-        return;
-      }
-      filter._id = { $in: [...inPeriod].map((id) => new mongoose.Types.ObjectId(id)) };
+      filter.createdAt = dateFilter;
     }
 
-    if (type && ['dine_in', 'takeout', 'phone', 'delivery'].includes(type as string)) {
+    if (type && ['dine_in', 'takeout', 'phone'].includes(type as string)) {
       filter.type = type;
     }
 
@@ -78,7 +51,7 @@ router.get('/orders', ...requireAuthSameStore, requirePermission('report:view'),
 
     // Attach checkout info to each order
     const orderIds = orders.map(o => o._id);
-    const checkouts = await Checkout.find({ storeId: req.storeId, orderIds: { $in: orderIds } }).lean();
+    const checkouts = await Checkout.find({ orderIds: { $in: orderIds } }).lean();
 
     const orderCheckoutMap = new Map<string, typeof checkouts[0]>();
     for (const c of checkouts) {
@@ -88,7 +61,7 @@ router.get('/orders', ...requireAuthSameStore, requirePermission('report:view'),
     }
 
     let result = orders.map(order => {
-      const checkout = orderCheckoutMap.get(String(order._id));
+      const checkout = orderCheckoutMap.get(order._id.toString());
       return {
         ...order,
         checkout: checkout ? {
@@ -105,7 +78,7 @@ router.get('/orders', ...requireAuthSameStore, requirePermission('report:view'),
     });
 
     // Filter by payment method after joining with checkout
-    if (paymentMethod && ['cash', 'card', 'mixed', 'online', 'member'].includes(paymentMethod as string)) {
+    if (paymentMethod && ['cash', 'card', 'mixed', 'online'].includes(paymentMethod as string)) {
       result = result.filter(r => r.checkout?.paymentMethod === paymentMethod);
     }
 
@@ -129,12 +102,11 @@ router.get('/orders', ...requireAuthSameStore, requirePermission('report:view'),
 });
 
 // GET /api/reports/summary — Revenue summary (requires auth + report:view)
-router.get('/summary', ...requireAuthSameStore, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/summary', authMiddleware, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { Checkout } = reportModels();
     const { startDate, endDate } = req.query;
 
-    const filter: Record<string, unknown> = { storeId: req.storeId };
+    const filter: Record<string, unknown> = {};
 
     if (startDate || endDate) {
       const dateFilter: Record<string, Date> = {};
@@ -148,30 +120,13 @@ router.get('/summary', ...requireAuthSameStore, requirePermission('report:view')
     }
 
     const checkouts = await Checkout.find(filter).lean();
-    const { Order } = reportModels();
-    const orderIdsInCheckouts = new Set<string>();
-    for (const c of checkouts) for (const oid of c.orderIds as mongoose.Types.ObjectId[]) orderIdsInCheckouts.add(String(oid));
-    const visibleOrders =
-      orderIdsInCheckouts.size === 0
-        ? []
-        : await Order.find({
-            storeId: req.storeId,
-            _id: { $in: [...orderIdsInCheckouts].map((id) => new mongoose.Types.ObjectId(id)) },
-            status: { $in: [...REPORT_VISIBLE_STATUSES] },
-          }).select('_id').lean();
-    const visibleOrderIdSet = new Set<string>(visibleOrders.map((o) => String((o as { _id: mongoose.Types.ObjectId })._id)));
-    const visibleCheckouts = checkouts.filter((c) =>
-      (c.orderIds as mongoose.Types.ObjectId[]).some((oid) => visibleOrderIdSet.has(String(oid))),
-    );
 
     let totalRevenue = 0;
     let cashTotal = 0;
     let cardTotal = 0;
     let mixedTotal = 0;
-    let memberCheckoutTotal = 0;
-    let memberCheckoutCount = 0;
 
-    for (const c of visibleCheckouts) {
+    for (const c of checkouts) {
       totalRevenue += c.totalAmount;
       if (c.paymentMethod === 'cash') {
         cashTotal += c.totalAmount;
@@ -179,20 +134,15 @@ router.get('/summary', ...requireAuthSameStore, requirePermission('report:view')
         cardTotal += c.totalAmount;
       } else if (c.paymentMethod === 'mixed') {
         mixedTotal += c.totalAmount;
-      } else if (c.paymentMethod === 'member') {
-        memberCheckoutTotal += c.totalAmount;
-        memberCheckoutCount++;
       }
     }
 
     res.json({
       totalRevenue,
-      orderCount: visibleCheckouts.length,
+      orderCount: checkouts.length,
       cashTotal,
       cardTotal,
       mixedTotal,
-      memberCheckoutTotal,
-      memberCheckoutCount,
     });
   } catch (err) {
     next(err);
@@ -200,9 +150,8 @@ router.get('/summary', ...requireAuthSameStore, requirePermission('report:view')
 });
 
 // GET /api/reports/detailed — Detailed stats with order breakdown and top items (requires auth + report:view)
-router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/detailed', authMiddleware, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { Order, Checkout } = reportModels();
     const { startDate, endDate } = req.query;
 
     const dateFilter: Record<string, Date> = {};
@@ -213,37 +162,27 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
       dateFilter.$lte = new Date((endDate as string) + 'T23:59:59.999');
     }
 
-    // 营业额按结账时间 checkedOutAt（与 /summary 一致），避免「下单日」与「收款日」跨日时卡片金额失真
-    const checkoutQuery: Record<string, unknown> = { storeId: req.storeId };
+    // Fetch ALL orders in date range (including refunded, excluding hidden)
+    const orderFilter: Record<string, unknown> = {
+      status: { $in: ['checked_out', 'completed', 'refunded'] },
+    };
     if (startDate || endDate) {
-      checkoutQuery.checkedOutAt = dateFilter;
-    }
-    const checkoutsInRange = await Checkout.find(checkoutQuery).lean();
-
-    const orderIdStrs = new Set<string>();
-    for (const c of checkoutsInRange) {
-      for (const oid of c.orderIds as mongoose.Types.ObjectId[]) {
-        orderIdStrs.add(oid.toString());
-      }
+      orderFilter.createdAt = dateFilter;
     }
 
-    const allOrders =
-      orderIdStrs.size === 0
-        ? []
-        : await Order.find({
-            storeId: req.storeId,
-            _id: { $in: [...orderIdStrs].map((id) => new mongoose.Types.ObjectId(id)) },
-            status: { $in: [...REPORT_VISIBLE_STATUSES] },
-          }).lean();
+    const allOrders = await Order.find(orderFilter).lean();
 
-    const orderCheckoutMap = new Map<string, (typeof checkoutsInRange)[0]>();
-    for (const c of checkoutsInRange) {
-      for (const oid of c.orderIds as mongoose.Types.ObjectId[]) {
+    // Attach checkout info
+    const orderIds = allOrders.map(o => o._id);
+    const checkouts = await Checkout.find({ orderIds: { $in: orderIds } }).lean();
+    const orderCheckoutMap = new Map<string, typeof checkouts[0]>();
+    for (const c of checkouts) {
+      for (const oid of c.orderIds) {
         orderCheckoutMap.set(oid.toString(), c);
       }
     }
 
-    // Calculate revenue from each checkout in period (each checkout counted once)
+    // Calculate revenue from checkout amounts, then subtract refunded items
     let grossRevenue = 0;
     let cashTotal = 0;
     let cardTotal = 0;
@@ -253,54 +192,45 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
     let mixedCount = 0;
     let onlineTotal = 0;
     let onlineCount = 0;
-    let memberCheckoutGross = 0;
-    let memberCheckoutCount = 0;
-    /** 现金/刷卡/混合订单中使用的储值部分（欧元），与 member 全额结账互补；均计入总营业额 */
-    let memberCreditPartialTotal = 0;
     let couponCount = 0;
     let couponTotalAmount = 0;
     let grossCashAmount = 0;
     let grossCardAmount = 0;
+    const countedCheckoutIds = new Set<string>();
 
-    const visibleOrderIdSet = new Set<string>(allOrders.map((o) => String(o._id)));
-    const visibleCheckouts = checkoutsInRange.filter((c) =>
-      (c.orderIds as mongoose.Types.ObjectId[]).some((oid) => visibleOrderIdSet.has(String(oid))),
-    );
-
-    for (const checkout of visibleCheckouts) {
-      grossRevenue += checkout.totalAmount;
-      if (checkout.paymentMethod === 'cash') {
-        cashTotal += checkout.totalAmount;
-        cashCount++;
-        grossCashAmount += checkout.totalAmount;
-      } else if (checkout.paymentMethod === 'card') {
-        cardTotal += checkout.totalAmount;
-        cardCount++;
-        grossCardAmount += checkout.totalAmount;
-      } else if (checkout.paymentMethod === 'mixed') {
-        mixedTotal += checkout.totalAmount;
-        mixedCount++;
-        cashTotal += checkout.cashAmount || 0;
-        cardTotal += checkout.cardAmount || 0;
-        grossCashAmount += checkout.cashAmount || 0;
-        grossCardAmount += checkout.cardAmount || 0;
-      } else if (checkout.paymentMethod === 'online') {
-        onlineTotal += checkout.totalAmount;
-        onlineCount++;
-      } else if (checkout.paymentMethod === 'member') {
-        memberCheckoutGross += checkout.totalAmount;
-        memberCheckoutCount++;
-      }
-      const mcu = Number((checkout as unknown as { memberCreditUsed?: number }).memberCreditUsed) || 0;
-      if (mcu > 0.001 && checkout.paymentMethod !== 'member') {
-        memberCreditPartialTotal += mcu;
-      }
-      if (
-        (checkout as unknown as { couponAmount?: number }).couponAmount &&
-        (checkout as unknown as { couponAmount: number }).couponAmount > 0
-      ) {
-        couponCount++;
-        couponTotalAmount += (checkout as unknown as { couponAmount: number }).couponAmount;
+    for (const order of allOrders) {
+      const checkout = orderCheckoutMap.get(order._id.toString());
+      if (checkout) {
+        const cid = (checkout as unknown as { _id: { toString(): string } })._id.toString();
+        if (!countedCheckoutIds.has(cid)) {
+          countedCheckoutIds.add(cid);
+          grossRevenue += checkout.totalAmount;
+          if (checkout.paymentMethod === 'cash') {
+            cashTotal += checkout.totalAmount;
+            cashCount++;
+            grossCashAmount += checkout.totalAmount;
+          } else if (checkout.paymentMethod === 'card') {
+            cardTotal += checkout.totalAmount;
+            cardCount++;
+            grossCardAmount += checkout.totalAmount;
+          } else if (checkout.paymentMethod === 'mixed') {
+            mixedTotal += checkout.totalAmount;
+            mixedCount++;
+            // Also add mixed cash/card parts into cashTotal/cardTotal
+            cashTotal += checkout.cashAmount || 0;
+            cardTotal += checkout.cardAmount || 0;
+            grossCashAmount += checkout.cashAmount || 0;
+            grossCardAmount += checkout.cardAmount || 0;
+          } else if (checkout.paymentMethod === 'online') {
+            onlineTotal += checkout.totalAmount;
+            onlineCount++;
+          }
+          // Count coupons
+          if ((checkout as unknown as { couponAmount?: number }).couponAmount && (checkout as unknown as { couponAmount: number }).couponAmount > 0) {
+            couponCount++;
+            couponTotalAmount += (checkout as unknown as { couponAmount: number }).couponAmount;
+          }
+        }
       }
     }
 
@@ -327,9 +257,8 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
     let cardRefund = 0;
     let mixedRefund = 0;
     let onlineRefund = 0;
-    let memberCheckoutRefund = 0;
     for (const order of allOrders) {
-      const checkout = orderCheckoutMap.get(String(order._id));
+      const checkout = orderCheckoutMap.get(order._id.toString());
       const pm = checkout?.paymentMethod;
       const refundedItems = order.items.filter((item: { refunded?: boolean }) => (item as unknown as { refunded?: boolean }).refunded);
       if (refundedItems.length === 0) continue;
@@ -377,7 +306,6 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
         mixedRefund += amt;
       }
       else if (pm === 'online') onlineRefund += amt;
-      else if (pm === 'member') memberCheckoutRefund += amt;
     }
 
     // Net revenue = gross - refunded
@@ -388,11 +316,6 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
     let dineInCount = 0;
     let takeoutCount = 0;
     let phoneCount = 0;
-    let deliveryOrderCount = 0;
-    /** 送餐订单菜品合计：各单 **checkout 实收 totalAmount** − 送餐费（与净营业额结账口径一致） */
-    let deliveryOrdersGoodsTotal = 0;
-    /** 送餐费行 / legacy deliveryFeeEuro 汇总（非退款行） */
-    let deliveryFeesTotal = 0;
     let dineInScanCount = 0;
     let dineInCashierCount = 0;
     let dineInRevenue = 0;
@@ -400,7 +323,7 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
     let phoneRevenue = 0;
 
     for (const order of activeOrders) {
-      const checkout = orderCheckoutMap.get(String(order._id));
+      const checkout = orderCheckoutMap.get(order._id.toString());
       const orderItemTotal = order.items.reduce((s: number, i: { unitPrice: number; quantity: number }) => s + i.unitPrice * i.quantity, 0);
       if (order.type === 'dine_in') {
         dineInCount++;
@@ -416,16 +339,6 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
       } else if (order.type === 'phone') {
         phoneCount++;
         phoneRevenue += checkout?.totalAmount ?? orderItemTotal;
-      } else if (order.type === 'delivery') {
-        deliveryOrderCount++;
-        const c = orderCheckoutMap.get(String(order._id)) as { totalAmount?: number } | undefined;
-        deliveryOrdersGoodsTotal += deliveryOrderGoodsTotalFromCheckoutEuro(
-          order as Parameters<typeof deliveryOrderGoodsTotalFromCheckoutEuro>[0],
-          c?.totalAmount,
-        );
-        deliveryFeesTotal += deliveryFeePortionEuro(
-          order as Parameters<typeof deliveryFeePortionEuro>[0],
-        );
       }
     }
 
@@ -435,7 +348,6 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
     for (const order of allOrders) {
       for (const item of order.items) {
         if ((item as unknown as { refunded?: boolean }).refunded) continue;
-        if ((item as { lineKind?: string }).lineKind === 'delivery_fee') continue;
         const key = item.itemName;
         const optExtra = ((item.selectedOptions || []) as { extraPrice?: number }[]).reduce((s, o) => s + (o.extraPrice || 0), 0);
         const existing = itemMap.get(key);
@@ -473,9 +385,6 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
       mixedCount,
       onlineTotal: Math.round((onlineTotal - onlineRefund) * 100) / 100,
       onlineCount,
-      memberCheckoutTotal: Math.round((memberCheckoutGross - memberCheckoutRefund) * 100) / 100,
-      memberCheckoutCount,
-      memberCreditPartialTotal: Math.round(memberCreditPartialTotal * 100) / 100,
       couponCount,
       couponTotalAmount: Math.round(couponTotalAmount * 100) / 100,
       bundleOfferCount,
@@ -488,9 +397,6 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
       takeoutRevenue: Math.round(takeoutRevenue * 100) / 100,
       phoneCount,
       phoneRevenue: Math.round(phoneRevenue * 100) / 100,
-      deliveryOrderCount,
-      deliveryOrdersGoodsTotal: Math.round(deliveryOrdersGoodsTotal * 100) / 100,
-      deliveryFeesTotal: Math.round(deliveryFeesTotal * 100) / 100,
       dineInScanCount,
       dineInCashierCount,
       takeoutScanCount: takeoutCount,
@@ -505,14 +411,14 @@ router.get('/detailed', ...requireAuthSameStore, requirePermission('report:view'
 });
 
 // GET /api/reports/vat-pdf?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD — VAT worksheet PDF (IE Food 13.5% / Drink 23%)
-router.get('/vat-pdf', ...requireAuthSameStore, requirePermission('report:view'), requireFeature(FeatureKeys.AdminReportsVatExportAction), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/vat-pdf', authMiddleware, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { startDate, endDate } = req.query;
     if (!startDate || !endDate || typeof startDate !== 'string' || typeof endDate !== 'string') {
       throw createAppError('VALIDATION_ERROR', 'startDate and endDate are required (YYYY-MM-DD)');
     }
 
-    const { byMonth, storeInfo } = await aggregateVatSalesByMonth(req.storeId!, startDate, endDate);
+    const { byMonth, storeInfo } = await aggregateVatSalesByMonth(startDate, endDate);
     const buf = await buildVatReportPdfBuffer(storeInfo, byMonth, `${startDate} - ${endDate}`);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="vat-report-${startDate}_${endDate}.pdf"`);
@@ -523,15 +429,13 @@ router.get('/vat-pdf', ...requireAuthSameStore, requirePermission('report:view')
 });
 
 // GET /api/reports/item-options?itemName=xxx&startDate=xxx&endDate=xxx
-// Returns option choice stats for a specific menu item (includes extraPrice === 0, e.g. combo sides)
-router.get('/item-options', ...requireAuthSameStore, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
+// Returns paid option stats for a specific menu item
+router.get('/item-options', authMiddleware, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { Order } = reportModels();
     const { itemName, startDate, endDate } = req.query;
     if (!itemName) throw createAppError('VALIDATION_ERROR', 'itemName is required');
 
     const filter: Record<string, unknown> = {
-      storeId: req.storeId,
       status: { $in: ['checked_out', 'completed', 'refunded'] },
       'items.itemName': itemName,
     };
@@ -556,27 +460,20 @@ router.get('/item-options', ...requireAuthSameStore, requirePermission('report:v
         let hasPaid = false;
         if (item.selectedOptions && item.selectedOptions.length > 0) {
           for (const opt of item.selectedOptions) {
-            const extra = Number(opt.extraPrice) || 0;
-            if (extra > 0) hasPaid = true;
-            const key = `${opt.groupName}|${opt.choiceName}|${extra}`;
-            if (!optionStats[key]) {
-              optionStats[key] = {
-                groupName: opt.groupName || '',
-                choiceName: opt.choiceName || '',
-                extraPrice: extra,
-                count: 0,
-                revenue: 0,
-              };
+            if (opt.extraPrice > 0) {
+              hasPaid = true;
+              const key = `${opt.groupName}|${opt.choiceName}|${opt.extraPrice}`;
+              if (!optionStats[key]) optionStats[key] = { groupName: opt.groupName || '', choiceName: opt.choiceName || '', extraPrice: opt.extraPrice, count: 0, revenue: 0 };
+              optionStats[key].count += item.quantity;
+              optionStats[key].revenue += opt.extraPrice * item.quantity;
             }
-            optionStats[key].count += item.quantity;
-            optionStats[key].revenue += extra * item.quantity;
           }
         }
         if (hasPaid) withPaidOptions += item.quantity;
       }
     }
 
-    const options = Object.values(optionStats).sort((a, b) => b.revenue - a.revenue || b.count - a.count);
+    const options = Object.values(optionStats).sort((a, b) => b.revenue - a.revenue);
     const totalOptionRevenue = options.reduce((s, o) => s + o.revenue, 0);
 
     res.json({ itemName, totalSold, withPaidOptions, totalOptionRevenue, options });
