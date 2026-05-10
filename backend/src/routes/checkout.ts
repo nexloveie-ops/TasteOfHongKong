@@ -216,17 +216,21 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
       });
 
       /**
-       * 顾客扫码自取 + 会员全额：与 Stripe 自取一致 — 先 paid_online、扣储值，不写 Checkout；
-       * 由收银 finalize / complete-online-paid 再生成 Checkout 并 checked_out 或 completed。
+       * 顾客扫码（外卖自提或堂食）+ 会员全额：与 Stripe 一致 — 先 paid_online、扣储值，不写 Checkout；
+       * 由收银 complete-online-paid 再生成 Checkout 并 completed（堂食/自提待打印小票、厨房出单）。
        * 送餐顾客会员全额仍走下方（与 Stripe 送餐一致：当场 Checkout + checked_out）。
        */
-      const isCustomerQrTakeoutFullMember =
-        order.type === 'takeout' &&
+      const isCustomerQrFullMemberPrepay =
+        (order.type === 'takeout' || order.type === 'dine_in') &&
         !staffMayDebitMemberWithoutPin(req) &&
         mp.paymentMethod === 'member' &&
         mp.memberCreditUsed > 0.001;
 
-      if (isCustomerQrTakeoutFullMember) {
+      if (isCustomerQrFullMemberPrepay) {
+        const walletNote =
+          order.type === 'takeout'
+            ? '外卖自提扫码储值支付（待收银收尾）'
+            : '堂食扫码储值支付（待收银收尾）';
         try {
           await debitMemberWallet({
             Member,
@@ -235,7 +239,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
             memberId: mp.memberId!,
             amountEuro: mp.memberCreditUsed,
             orderId: new mongoose.Types.ObjectId(orderId),
-            note: '外卖自提扫码储值支付（待收银收尾）',
+            note: walletNote,
           });
         } catch (e) {
           throw e;
@@ -267,7 +271,8 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
           ok: true,
           status: 'paid_online',
           orderId,
-          memberPrepaidTakeout: true,
+          memberPrepaidTakeout: order.type === 'takeout',
+          memberPrepaidDineIn: order.type === 'dine_in',
         });
         return;
       }
