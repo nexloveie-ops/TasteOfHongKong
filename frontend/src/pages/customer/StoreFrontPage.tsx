@@ -89,7 +89,8 @@ export default function StoreFrontPage() {
         display: 'flex',
         flexDirection: 'column',
         minHeight: '100%',
-        ...(showMenu ? { flex: 1, minHeight: 0, height: '100%', overflow: 'hidden' } : {}),
+        // Landing: flex-shrink 0 so this column is not squashed inside CustomerLayout’s flex outlet (else overflow:hidden clips and parent won’t scroll).
+        ...(showMenu ? { flex: 1, minHeight: 0, height: '100%', overflow: 'hidden' } : { flexShrink: 0 }),
       }}
     >
       {!showMenu ? (
