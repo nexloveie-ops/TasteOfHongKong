@@ -13,6 +13,8 @@ interface MenuItemCardProps {
   calories?: number;
   avgWaitMinutes?: number;
   photoUrl?: string;
+  /** First-screen tiles: browser may fetch sooner; others use lazy + lower contention. */
+  photoFetchPriority?: 'high' | 'low' | 'auto';
   arFileUrl?: string;
   isSoldOut?: boolean;
   allergenIcons?: string[];
@@ -24,13 +26,14 @@ interface MenuItemCardProps {
 
 export default function MenuItemCard({
   id, name, names, description, price, calories, avgWaitMinutes,
-  photoUrl, arFileUrl, isSoldOut, allergenIcons, optionGroups, quantity, onAdd, onDecrease,
+  photoUrl, photoFetchPriority = 'auto', arFileUrl, isSoldOut, allergenIcons, optionGroups, quantity, onAdd, onDecrease,
 }: MenuItemCardProps) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [isClamped, setIsClamped] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const [showPhoto, setShowPhoto] = useState(false);
+  const [photoLoaded, setPhotoLoaded] = useState(false);
   const descRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -39,6 +42,10 @@ export default function MenuItemCard({
       setIsClamped(el.scrollHeight > el.clientHeight + 1);
     }
   }, [description]);
+
+  useEffect(() => {
+    setPhotoLoaded(false);
+  }, [photoUrl]);
 
   const hasOptions = optionGroups && optionGroups.length > 0;
 
@@ -85,17 +92,53 @@ export default function MenuItemCard({
           }}>{t('customer.soldOut')}</span>
         )}
 
-        {/* Image */}
+        {/* Image — <img> + lazy so off-screen rows don’t download full photos; background-image loads everything eagerly */}
         <div
           onClick={photoUrl ? (e) => { e.stopPropagation(); setShowPhoto(true); } : undefined}
           style={{
-            width: 100, height: 100, borderRadius: 8, flexShrink: 0,
-            background: photoUrl ? `url(${photoUrl}) center/cover` : 'linear-gradient(135deg, #f5e6d0, #edd9c0)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 36, filter: isSoldOut ? 'grayscale(60%)' : 'none',
+            width: 100,
+            height: 100,
+            borderRadius: 8,
+            flexShrink: 0,
+            position: 'relative',
+            overflow: 'hidden',
+            background: 'linear-gradient(135deg, #f5e6d0, #edd9c0)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 36,
+            filter: isSoldOut ? 'grayscale(60%)' : 'none',
             cursor: photoUrl ? 'zoom-in' : undefined,
-          }}>
-          {!photoUrl && '🍽️'}
+          }}
+        >
+          {!photoUrl ? (
+            '🍽️'
+          ) : (
+            <>
+              {!photoLoaded ? <span aria-hidden className="menu-item-thumb-shimmer" /> : null}
+              <img
+                src={photoUrl}
+                alt=""
+                width={100}
+                height={100}
+                loading="lazy"
+                decoding="async"
+                fetchPriority={photoFetchPriority}
+                sizes="100px"
+                onLoad={() => setPhotoLoaded(true)}
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  objectPosition: 'center',
+                  opacity: photoLoaded ? 1 : 0,
+                  transition: 'opacity 0.2s ease-out',
+                }}
+              />
+            </>
+          )}
         </div>
 
         {/* Body */}
@@ -215,6 +258,9 @@ export default function MenuItemCard({
           <img
             src={photoUrl}
             alt={name}
+            loading="eager"
+            decoding="async"
+            fetchPriority="high"
             style={{
               maxWidth: '90vw', maxHeight: '85vh',
               borderRadius: 12, objectFit: 'contain',

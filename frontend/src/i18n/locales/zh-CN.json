@@ -110,7 +110,10 @@
     "storePortalOpenNow": "营业中",
     "storePortalClosedNow": "休息中",
     "storePortalCheckingHours": "查询营业时间…",
-    "storePortalMapEmbedTitle": "店铺位置地图"
+    "storePortalMapEmbedTitle": "店铺位置地图",
+    "storePortalOffersTitle": "门店优惠",
+    "storePortalOfferPriceLabel": "套餐价",
+    "storePortalOfferHint": "点餐时加入购物车即可享受组合价"
   },
   "cashier": {
     "title": "收银台",

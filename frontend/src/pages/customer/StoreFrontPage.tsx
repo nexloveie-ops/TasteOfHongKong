@@ -1,10 +1,12 @@
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useRestaurantConfig } from '../../hooks/useRestaurantConfig';
 import { useBusinessStatus } from '../../hooks/useBusinessStatus';
 import { useStoreSlug } from '../../context/StoreContext';
+import type { OfferData } from '../../utils/bundleMatcher';
+import { apiFetch } from '../../api/client';
 import MenuView from './MenuView';
 import BannerPlatformCredit from '../../components/customer/BannerPlatformCredit';
 
@@ -48,6 +50,20 @@ export default function StoreFrontPage() {
   const email = (config.restaurant_email || '').trim();
   const storeTitle = displayName || storeSlug;
   const slots = useMemo(() => parseHoursSlots(config.business_hours_slots), [config.business_hours_slots]);
+  const [offers, setOffers] = useState<OfferData[]>([]);
+
+  useEffect(() => {
+    apiFetch('/api/offers')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: unknown) => setOffers(Array.isArray(data) ? data : []))
+      .catch(() => setOffers([]));
+  }, []);
+
+  const offerTitle = (o: OfferData) => (lang.startsWith('zh') ? o.name : (o.nameEn || o.name));
+  const offerDesc = (o: OfferData) => {
+    const d = lang.startsWith('zh') ? o.description : (o.descriptionEn || o.description);
+    return (d || '').trim();
+  };
 
   const mapHref = address
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
@@ -83,13 +99,14 @@ export default function StoreFrontPage() {
     alignItems: 'flex-start',
   };
 
+  const titleFont = "'Noto Serif SC', serif";
+
   return (
     <div
       style={{
         display: 'flex',
         flexDirection: 'column',
         minHeight: '100%',
-        // Landing: flex-shrink 0 so this column is not squashed inside CustomerLayout’s flex outlet (else overflow:hidden clips and parent won’t scroll).
         ...(showMenu ? { flex: 1, minHeight: 0, height: '100%', overflow: 'hidden' } : { flexShrink: 0 }),
       }}
     >
@@ -106,12 +123,12 @@ export default function StoreFrontPage() {
             aria-hidden
             style={{
               position: 'absolute',
-              width: 220,
-              height: 220,
+              width: 260,
+              height: 260,
               borderRadius: '50%',
-              background: 'radial-gradient(circle, rgba(196,30,36,0.14) 0%, transparent 70%)',
-              top: -80,
-              right: -60,
+              background: 'radial-gradient(circle, rgba(196,30,36,0.12) 0%, transparent 70%)',
+              top: -100,
+              right: -80,
               pointerEvents: 'none',
             }}
           />
@@ -119,100 +136,353 @@ export default function StoreFrontPage() {
             aria-hidden
             style={{
               position: 'absolute',
-              width: 180,
-              height: 180,
+              width: 200,
+              height: 200,
               borderRadius: '50%',
-              background: 'radial-gradient(circle, rgba(212,168,83,0.2) 0%, transparent 68%)',
-              bottom: 40,
-              left: -70,
+              background: 'radial-gradient(circle, rgba(212,168,83,0.18) 0%, transparent 68%)',
+              bottom: 120,
+              left: -90,
               pointerEvents: 'none',
             }}
           />
 
-          <div style={{ position: 'relative', zIndex: 1, padding: '16px 14px 28px' }}>
-            {/* Hero card */}
+          <div style={{ position: 'relative', zIndex: 1, padding: '18px 14px 40px' }}>
+            {/* Brand hero */}
             <div
               style={{
                 position: 'relative',
-                borderRadius: 16,
-                padding: '18px 16px',
-                background: 'linear-gradient(145deg, rgba(255,255,255,0.97) 0%, rgba(255,252,248,0.98) 100%)',
-                border: '1px solid rgba(232,213,184,0.5)',
-                boxShadow: '0 8px 32px rgba(44,24,16,0.08), 0 1px 0 rgba(255,255,255,0.9) inset',
+                borderRadius: 20,
+                overflow: 'hidden',
+                background: 'linear-gradient(135deg, #8B1A1A 0%, #C41E24 50%, #D4342A 100%)',
+                boxShadow: '0 14px 44px rgba(196,30,36,0.32)',
+                padding: '48px 18px 26px',
               }}
             >
-              <BannerPlatformCredit variant="onLight" />
-
-              <div style={{ paddingRight: 'min(112px, 30vw)' }}>
-                <h1 style={{
-                  fontFamily: "'Noto Serif SC', serif",
-                  fontSize: 22,
-                  fontWeight: 700,
-                  margin: 0,
-                  padding: 0,
-                  color: 'var(--text-dark)',
-                  lineHeight: 1.25,
-                  width: '100%',
-                  ...(lang.startsWith('zh')
-                    ? { wordBreak: 'keep-all' as const }
-                    : { overflowWrap: 'break-word' as const }),
-                }}>
+              <BannerPlatformCredit variant="onGradient" />
+              <div style={{ position: 'relative', zIndex: 1, paddingRight: 'min(96px, 26vw)' }}>
+                <h1
+                  style={{
+                    fontFamily: titleFont,
+                    fontSize: 26,
+                    fontWeight: 700,
+                    margin: 0,
+                    color: '#fff',
+                    letterSpacing: lang.startsWith('zh') ? 3 : 0,
+                    lineHeight: 1.2,
+                    ...(lang.startsWith('zh')
+                      ? { wordBreak: 'keep-all' as const }
+                      : { overflowWrap: 'break-word' as const }),
+                  }}
+                >
                   {storeTitle}
                 </h1>
                 {displayNameOther ? (
-                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 6, lineHeight: 1.45 }}>{displayNameOther}</div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 300,
+                      letterSpacing: 5,
+                      color: '#F0D68A',
+                      marginTop: 8,
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {displayNameOther}
+                  </div>
                 ) : null}
-              </div>
-
-              <div style={{ paddingRight: 'min(112px, 30vw)', marginTop: 14 }}>
-                <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)', letterSpacing: 0.02 }}>
+                <p style={{ margin: '14px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.9)', lineHeight: 1.55 }}>
                   {t('customer.storePortalTagline')}
                 </p>
-                <div style={{ marginTop: 10 }}>
+                <div style={{ marginTop: 14, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px 14px' }}>
                   {hoursLoading ? (
-                    <span style={{
-                      display: 'inline-block',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      padding: '4px 10px',
-                      borderRadius: 20,
-                      background: 'rgba(0,0,0,0.06)',
-                      color: 'var(--text-secondary)',
-                    }}>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        padding: '6px 12px',
+                        borderRadius: 999,
+                        background: 'rgba(255,255,255,0.12)',
+                        color: '#F0D68A',
+                        border: '1px solid rgba(240,214,138,0.35)',
+                      }}
+                    >
                       {t('customer.storePortalCheckingHours')}
                     </span>
                   ) : (
-                    <span style={{
-                      display: 'inline-block',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      padding: '4px 10px',
-                      borderRadius: 20,
-                      background: isOpen ? 'rgba(46,125,50,0.12)' : 'rgba(196,30,36,0.1)',
-                      color: isOpen ? '#2E7D32' : 'var(--red-primary)',
-                      border: `1px solid ${isOpen ? 'rgba(46,125,50,0.35)' : 'rgba(196,30,36,0.25)'}`,
-                    }}>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        padding: '6px 12px',
+                        borderRadius: 999,
+                        background: isOpen ? 'rgba(46,125,50,0.28)' : 'rgba(0,0,0,0.22)',
+                        color: '#fff',
+                        border: `1px solid ${isOpen ? 'rgba(165,214,167,0.55)' : 'rgba(255,255,255,0.28)'}`,
+                      }}
+                    >
+                      <span
+                        aria-hidden
+                        style={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: '50%',
+                          background: isOpen ? '#C8E6C9' : '#FFCDD2',
+                          flexShrink: 0,
+                        }}
+                      />
                       {isOpen ? t('customer.storePortalOpenNow') : t('customer.storePortalClosedNow')}
                     </span>
                   )}
+                  {canMemberPortal ? (
+                    <Link
+                      to={`/${storeSlug}/customer/member`}
+                      style={{ fontSize: 12, fontWeight: 600, color: '#F0D68A', textDecoration: 'none' }}
+                    >
+                      {t('member.title')} →
+                    </Link>
+                  ) : null}
                 </div>
               </div>
             </div>
 
-            {/* Info grid */}
-            {(slots.length > 0 || phone || address || email) && (
-              <div style={{ marginTop: 14 }}>
-                <div style={{
-                  fontSize: 11,
+            {/* Order — overlaps hero */}
+            <div
+              style={{
+                marginTop: -16,
+                position: 'relative',
+                zIndex: 2,
+                borderRadius: 18,
+                padding: '20px 16px 18px',
+                background: 'linear-gradient(180deg, #FFFFFF 0%, #FFFBF7 100%)',
+                border: '1px solid rgba(232,213,184,0.65)',
+                boxShadow: '0 10px 32px rgba(44,24,16,0.11)',
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: titleFont,
+                  fontSize: 17,
                   fontWeight: 700,
-                  letterSpacing: 0.06,
-                  textTransform: 'uppercase',
-                  color: 'var(--text-light)',
-                  marginBottom: 10,
-                }}>
+                  color: 'var(--text-dark)',
+                  marginBottom: 14,
+                  letterSpacing: lang.startsWith('zh') ? 1 : 0,
+                }}
+              >
+                {t('customer.storePortalChooseTitle')}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {canDelivery ? (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={!isOpen || hoursLoading}
+                    onClick={() => setMode('delivery')}
+                    style={{
+                      width: '100%',
+                      padding: '15px 16px',
+                      fontSize: 16,
+                      fontWeight: 700,
+                      borderRadius: 14,
+                      textAlign: 'left',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'stretch',
+                      gap: 4,
+                      boxShadow: '0 6px 22px rgba(196,30,36,0.24)',
+                    }}
+                  >
+                    <span>🚚 {lang.startsWith('zh') ? '外卖送餐' : 'Delivery'}</span>
+                    <span style={{ fontSize: 12, fontWeight: 500, opacity: 0.92 }}>{t('customer.storePortalDeliveryHint')}</span>
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className={canDelivery ? 'btn btn-outline' : 'btn btn-primary'}
+                  disabled={!isOpen || hoursLoading}
+                  onClick={() => setMode('takeout')}
+                  style={{
+                    width: '100%',
+                    padding: '15px 16px',
+                    fontSize: 16,
+                    fontWeight: 700,
+                    borderRadius: 14,
+                    borderWidth: canDelivery ? 2 : undefined,
+                    borderColor: canDelivery ? 'rgba(74, 55, 40, 0.35)' : undefined,
+                    textAlign: 'left',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'stretch',
+                    gap: 4,
+                    background: canDelivery ? 'var(--bg-white)' : undefined,
+                    color: canDelivery ? 'var(--text-dark)' : undefined,
+                    boxShadow: canDelivery ? '0 2px 12px rgba(44, 24, 16, 0.07)' : undefined,
+                  }}
+                >
+                  <span style={{ color: canDelivery ? 'var(--text-dark)' : '#fff' }}>
+                    🥡 {lang.startsWith('zh') ? '到店自取' : 'Pickup'}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      lineHeight: 1.4,
+                      color: canDelivery ? 'var(--text-body)' : 'rgba(255,255,255,0.95)',
+                    }}
+                  >
+                    {t('customer.storePortalPickupHint')}
+                  </span>
+                </button>
+              </div>
+              {!isOpen && !hoursLoading ? (
+                <div
+                  style={{
+                    marginTop: 14,
+                    padding: '12px 14px',
+                    borderRadius: 12,
+                    background: 'rgba(196,30,36,0.06)',
+                    border: '1px solid rgba(196,30,36,0.15)',
+                    fontSize: 13,
+                    color: 'var(--text-secondary)',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {lang.startsWith('zh') ? '当前非营业时间，暂无法下单。' : 'Ordering is unavailable while closed.'}
+                </div>
+              ) : null}
+            </div>
+
+            {/* Offers from /api/offers */}
+            {offers.length > 0 ? (
+              <div style={{ marginTop: 26 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+                  <h2
+                    style={{
+                      fontFamily: titleFont,
+                      fontSize: 18,
+                      fontWeight: 700,
+                      margin: 0,
+                      color: 'var(--text-dark)',
+                      letterSpacing: lang.startsWith('zh') ? 2 : 0,
+                    }}
+                  >
+                    {t('customer.storePortalOffersTitle')}
+                  </h2>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-light)' }}>{offers.length}</span>
+                </div>
+                <p style={{ margin: '0 0 14px', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  {t('customer.storePortalOfferHint')}
+                </p>
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 12,
+                    overflowX: 'auto',
+                    paddingBottom: 8,
+                    marginLeft: -2,
+                    marginRight: -2,
+                    paddingLeft: 2,
+                    paddingRight: 2,
+                    WebkitOverflowScrolling: 'touch',
+                    scrollSnapType: 'x mandatory',
+                  }}
+                >
+                  {offers.map((offer) => (
+                    <div
+                      key={offer._id}
+                      style={{
+                        flex: '0 0 min(276px, 84vw)',
+                        scrollSnapAlign: 'start',
+                        borderRadius: 16,
+                        padding: '16px 14px 18px',
+                        background: 'linear-gradient(155deg, rgba(255,255,255,0.98) 0%, rgba(255,250,242,0.99) 100%)',
+                        border: '1px solid rgba(212,168,83,0.5)',
+                        boxShadow: '0 6px 22px rgba(139,26,26,0.09)',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          letterSpacing: 0.8,
+                          color: 'var(--red-primary)',
+                          textTransform: 'uppercase',
+                          marginBottom: 10,
+                        }}
+                      >
+                        🎁 {lang.startsWith('zh') ? '套餐优惠' : 'Bundle'}
+                      </div>
+                      <div
+                        style={{
+                          fontFamily: titleFont,
+                          fontSize: 16,
+                          fontWeight: 700,
+                          color: 'var(--text-dark)',
+                          lineHeight: 1.35,
+                          marginBottom: 8,
+                        }}
+                      >
+                        {offerTitle(offer)}
+                      </div>
+                      {offerDesc(offer) ? (
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: 'var(--text-secondary)',
+                            lineHeight: 1.45,
+                            display: '-webkit-box',
+                            WebkitLineClamp: 3,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {offerDesc(offer)}
+                        </div>
+                      ) : null}
+                      <div
+                        style={{
+                          marginTop: 14,
+                          paddingTop: 12,
+                          borderTop: '1px solid rgba(232,213,184,0.55)',
+                          display: 'flex',
+                          alignItems: 'baseline',
+                          justifyContent: 'space-between',
+                          gap: 8,
+                        }}
+                      >
+                        <span style={{ fontSize: 11, color: 'var(--text-light)', fontWeight: 600 }}>
+                          {t('customer.storePortalOfferPriceLabel')}
+                        </span>
+                        <span style={{ fontFamily: titleFont, fontSize: 21, fontWeight: 700, color: 'var(--red-primary)' }}>
+                          €{offer.bundlePrice.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {/* About / contact */}
+            {(slots.length > 0 || phone || address || email) && (
+              <div style={{ marginTop: 26 }}>
+                <div
+                  style={{
+                    fontFamily: titleFont,
+                    fontSize: 17,
+                    fontWeight: 700,
+                    color: 'var(--text-dark)',
+                    marginBottom: 14,
+                    letterSpacing: lang.startsWith('zh') ? 1 : 0,
+                  }}
+                >
                   {t('customer.storePortalAbout')}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {slots.length > 0 && (
                     <div style={infoCardStyle}>
                       <span style={{ fontSize: 18, lineHeight: 1 }} aria-hidden>🕐</span>
@@ -247,12 +517,14 @@ export default function StoreFrontPage() {
                         <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>
                           {lang.startsWith('zh') ? '邮箱' : 'Email'}
                         </span>
-                        <span style={{
-                          fontWeight: 600,
-                          fontSize: 14,
-                          color: 'var(--blue, #1565c0)',
-                          wordBreak: 'break-all' as const,
-                        }}>
+                        <span
+                          style={{
+                            fontWeight: 600,
+                            fontSize: 14,
+                            color: 'var(--blue, #1565c0)',
+                            wordBreak: 'break-all' as const,
+                          }}
+                        >
                           {email}
                         </span>
                       </div>
@@ -306,103 +578,6 @@ export default function StoreFrontPage() {
                 </div>
               </div>
             )}
-
-            {/* CTA */}
-            <div style={{ marginTop: 20 }}>
-              <div style={{
-                fontSize: 13,
-                fontWeight: 700,
-                color: 'var(--text-dark)',
-                marginBottom: 12,
-                fontFamily: "'Noto Serif SC', serif",
-              }}>
-                {t('customer.storePortalChooseTitle')}
-              </div>
-              {canMemberPortal ? (
-                <div style={{ textAlign: 'center', marginBottom: 10 }}>
-                  <Link to={`/${storeSlug}/customer/member`} style={{ fontSize: 13, color: 'var(--blue, #1565c0)', fontWeight: 600 }}>
-                    {t('member.title')}
-                  </Link>
-                </div>
-              ) : null}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {canDelivery ? (
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    disabled={!isOpen || hoursLoading}
-                    onClick={() => setMode('delivery')}
-                    style={{
-                      width: '100%',
-                      padding: '14px 16px',
-                      fontSize: 16,
-                      fontWeight: 700,
-                      borderRadius: 14,
-                      textAlign: 'left',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'stretch',
-                      gap: 4,
-                      boxShadow: '0 6px 20px rgba(196,30,36,0.22)',
-                    }}
-                  >
-                    <span>🚚 {lang.startsWith('zh') ? '外卖送餐' : 'Delivery'}</span>
-                    <span style={{ fontSize: 12, fontWeight: 500, opacity: 0.92 }}>{t('customer.storePortalDeliveryHint')}</span>
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className={canDelivery ? 'btn btn-outline' : 'btn btn-primary'}
-                  disabled={!isOpen || hoursLoading}
-                  onClick={() => setMode('takeout')}
-                  style={{
-                    width: '100%',
-                    padding: '14px 16px',
-                    fontSize: 16,
-                    fontWeight: 700,
-                    borderRadius: 14,
-                    borderWidth: canDelivery ? 2 : undefined,
-                    borderColor: canDelivery ? 'rgba(74, 55, 40, 0.35)' : undefined,
-                    textAlign: 'left',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'stretch',
-                    gap: 4,
-                    background: canDelivery ? 'var(--bg-white)' : undefined,
-                    color: canDelivery ? 'var(--text-dark)' : undefined,
-                    boxShadow: canDelivery ? '0 2px 10px rgba(44, 24, 16, 0.08)' : undefined,
-                  }}
-                >
-                  <span style={{ color: canDelivery ? 'var(--text-dark)' : '#fff' }}>
-                    🥡 {lang.startsWith('zh') ? '到店自取' : 'Pickup'}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      lineHeight: 1.4,
-                      color: canDelivery ? 'var(--text-body)' : 'rgba(255,255,255,0.95)',
-                    }}
-                  >
-                    {t('customer.storePortalPickupHint')}
-                  </span>
-                </button>
-              </div>
-              {!isOpen && !hoursLoading ? (
-                <div style={{
-                  marginTop: 14,
-                  padding: '12px 14px',
-                  borderRadius: 12,
-                  background: 'rgba(196,30,36,0.06)',
-                  border: '1px solid rgba(196,30,36,0.15)',
-                  fontSize: 13,
-                  color: 'var(--text-secondary)',
-                  lineHeight: 1.45,
-                }}>
-                  {lang.startsWith('zh') ? '当前非营业时间，暂无法下单。' : 'Ordering is unavailable while closed.'}
-                </div>
-              ) : null}
-            </div>
           </div>
         </div>
       ) : null}

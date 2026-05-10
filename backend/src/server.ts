@@ -72,7 +72,8 @@ if (USE_GCS) {
     }
   });
 } else {
-  app.use('/uploads', express.static(uploadsPath));
+  // Align with GCS branch: long cache (filenames are content-addressed by timestamp on upload).
+  app.use('/uploads', express.static(uploadsPath, { maxAge: '365d', immutable: true }));
 }
 
 const publicPath = path.join(__dirname, '..', 'public');

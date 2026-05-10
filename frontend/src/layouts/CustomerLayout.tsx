@@ -65,6 +65,9 @@ export default function CustomerLayout() {
     return p === `/${storeSlug}`;
   })();
 
+  /** Menu page shows store name in red banner — hide duplicate next to header logo */
+  const isCustomerMenuPage = location.pathname.includes('/customer/menu');
+
   const goToCart = () => {
     const p = new URLSearchParams(qs);
     if (onStorePortal) p.set('return', 'store');
@@ -142,6 +145,33 @@ export default function CustomerLayout() {
                 >
                   <img src={logoUrl} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
                 </button>
+              ) : isCustomerMenuPage ? (
+                <button
+                  type="button"
+                  onClick={goToStorePortal}
+                  title={t('customer.backToStoreHome', { defaultValue: '返回店铺主页' })}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    flexShrink: 0,
+                    padding: 0,
+                    margin: 0,
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: 'linear-gradient(135deg, var(--red-primary) 0%, #b71c1c 100%)',
+                    color: '#fff',
+                    fontWeight: 800,
+                    fontSize: 16,
+                    fontFamily: "'Noto Serif SC', serif",
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 2px 8px rgba(196,30,36,0.25)',
+                  }}
+                >
+                  {(displayName || storeSlug).slice(0, 1)}
+                </button>
               ) : (
                 <button
                   type="button"
@@ -156,7 +186,7 @@ export default function CustomerLayout() {
                   {displayName || storeSlug}
                 </button>
               )}
-              {logoUrl ? (
+              {logoUrl && !isCustomerMenuPage ? (
                 <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 16, color: 'var(--red-primary)' }}>
                   {displayName || storeSlug}
                 </span>
