@@ -197,8 +197,8 @@ export default function CustomerLayout() {
         </div>
       </div>
 
-      {/* Content */}
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      {/* Content — minHeight:0 so nested pages (e.g. menu) can own vertical scroll; hero hide/show listens on that inner scroller */}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
         <Outlet />
       </div>
 

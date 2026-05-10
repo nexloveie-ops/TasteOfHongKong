@@ -84,7 +84,14 @@ export default function StoreFrontPage() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: '100%',
+        ...(showMenu ? { flex: 1, minHeight: 0, height: '100%', overflow: 'hidden' } : {}),
+      }}
+    >
       {!showMenu ? (
         <div
           style={{

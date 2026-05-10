@@ -199,12 +199,12 @@ export default function MenuView({ storeFrontEmbed = false }: { storeFrontEmbed?
       return;
     }
 
-    // Hysteresis thresholds to avoid flicker from tiny scroll noise.
-    if (y <= 10) {
+    // Hysteresis: near top always show; scroll down hides; scroll up shows (slightly looser dy for touch/trackpad).
+    if (y <= 12) {
       if (heroHiddenRef.current) setHeroHidden(false);
-    } else if (y > 36 && dy > 6) {
+    } else if (y > 28 && dy > 2) {
       if (!heroHiddenRef.current) setHeroHidden(true);
-    } else if (dy < -10) {
+    } else if (dy < -4) {
       if (heroHiddenRef.current) setHeroHidden(false);
     }
 
@@ -250,7 +250,7 @@ export default function MenuView({ storeFrontEmbed = false }: { storeFrontEmbed?
   const showTitleBlock = !storeFrontEmbed;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
       {/* Hero — hides on scroll down, shows on scroll up; storefront embed skips branded title when parent already showed it */}
       <div style={{
         position: 'relative',
@@ -414,7 +414,7 @@ export default function MenuView({ storeFrontEmbed = false }: { storeFrontEmbed?
       </div>
 
       {/* Scrollable Content — all categories rendered continuously */}
-      <div ref={scrollContainerRef} onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      <div ref={scrollContainerRef} onScroll={handleScroll} style={{ flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
         {categories.map(cat => {
           const catItems = itemsByCategory.get(cat._id) || [];
           return (
