@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { Checkout } from '../models/Checkout';
-import { Order } from '../models/Order';
+import mongoose from 'mongoose';
+import { getModels } from '../getModels';
 import { authMiddleware, requirePermission } from '../middleware/auth';
 import { createAppError } from '../middleware/errorHandler';
 import { aggregateVatSalesByMonth } from '../utils/vatReportAggregation';
@@ -8,12 +8,28 @@ import { buildVatReportPdfBuffer } from '../utils/vatReportPdf';
 
 const router = Router();
 
+function reportModels() {
+  return getModels() as {
+    Order: mongoose.Model<any>;
+    Checkout: mongoose.Model<any>;
+  };
+}
+
+function requireStoreId(req: Request): mongoose.Types.ObjectId {
+  if (!req.storeId) {
+    throw createAppError('STORE_REQUIRED', '缺少店铺上下文（X-Store-Slug / storeSlug / DEFAULT_STORE_SLUG）');
+  }
+  return req.storeId;
+}
+
 // GET /api/reports/orders — Order history query (requires auth + report:view)
 router.get('/orders', authMiddleware, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const storeId = requireStoreId(req);
+    const { Order, Checkout } = reportModels();
     const { startDate, endDate, type, paymentMethod, source, status } = req.query;
 
-    const filter: Record<string, unknown> = {};
+    const filter: Record<string, unknown> = { storeId };
 
     // Align with GET /api/reports/detailed: never include *-hide statuses in reports drill-down.
     if (status === 'refunded') {
@@ -47,20 +63,23 @@ router.get('/orders', authMiddleware, requirePermission('report:view'), async (r
       filter.$or = [{ tableNumber: { $in: [0, null] } }, { seatNumber: { $in: [0, null] } }];
     }
 
-    const orders = await Order.find(filter).sort({ createdAt: -1 }).lean();
+    const orders = (await Order.find(filter).sort({ createdAt: -1 }).lean()) as any[];
 
     // Attach checkout info to each order
-    const orderIds = orders.map(o => o._id);
-    const checkouts = await Checkout.find({ orderIds: { $in: orderIds } }).lean();
+    const orderIds = orders.map((o) => o._id);
+    const checkouts =
+      orderIds.length > 0
+        ? await Checkout.find({ storeId, orderIds: { $in: orderIds } }).lean()
+        : [];
 
-    const orderCheckoutMap = new Map<string, typeof checkouts[0]>();
+    const orderCheckoutMap = new Map<string, (typeof checkouts)[0]>();
     for (const c of checkouts) {
-      for (const oid of c.orderIds) {
+      for (const oid of (c as { orderIds?: mongoose.Types.ObjectId[] }).orderIds || []) {
         orderCheckoutMap.set(oid.toString(), c);
       }
     }
 
-    let result = orders.map(order => {
+    let result = orders.map((order: any) => {
       const checkout = orderCheckoutMap.get(order._id.toString());
       return {
         ...order,
@@ -78,18 +97,23 @@ router.get('/orders', authMiddleware, requirePermission('report:view'), async (r
     });
 
     // Filter by payment method after joining with checkout
-    if (paymentMethod && ['cash', 'card', 'mixed', 'online'].includes(paymentMethod as string)) {
-      result = result.filter(r => r.checkout?.paymentMethod === paymentMethod);
+    if (paymentMethod && ['cash', 'card', 'mixed', 'online', 'member'].includes(paymentMethod as string)) {
+      result = result.filter((r: any) => r.checkout?.paymentMethod === paymentMethod);
     }
 
     // Filter by coupon usage
     if (req.query.hasCoupon === 'true') {
-      result = result.filter(r => r.checkout && (r.checkout as unknown as { couponAmount?: number }).couponAmount && (r.checkout as unknown as { couponAmount: number }).couponAmount > 0);
+      result = result.filter(
+        (r: any) =>
+          r.checkout &&
+          (r.checkout as unknown as { couponAmount?: number }).couponAmount &&
+          (r.checkout as unknown as { couponAmount: number }).couponAmount > 0,
+      );
     }
 
     // Filter by bundle usage
     if (req.query.hasBundle === 'true') {
-      result = result.filter(r => {
+      result = result.filter((r: any) => {
         const bundles = (r as unknown as { appliedBundles?: unknown[] }).appliedBundles;
         return bundles && bundles.length > 0;
       });
@@ -104,9 +128,11 @@ router.get('/orders', authMiddleware, requirePermission('report:view'), async (r
 // GET /api/reports/summary — Revenue summary (requires auth + report:view)
 router.get('/summary', authMiddleware, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const storeId = requireStoreId(req);
+    const { Checkout } = reportModels();
     const { startDate, endDate } = req.query;
 
-    const filter: Record<string, unknown> = {};
+    const filter: Record<string, unknown> = { storeId };
 
     if (startDate || endDate) {
       const dateFilter: Record<string, Date> = {};
@@ -119,7 +145,7 @@ router.get('/summary', authMiddleware, requirePermission('report:view'), async (
       filter.checkedOutAt = dateFilter;
     }
 
-    const checkouts = await Checkout.find(filter).lean();
+    const checkouts = (await Checkout.find(filter).lean()) as any[];
 
     let totalRevenue = 0;
     let cashTotal = 0;
@@ -152,6 +178,8 @@ router.get('/summary', authMiddleware, requirePermission('report:view'), async (
 // GET /api/reports/detailed — Detailed stats with order breakdown and top items (requires auth + report:view)
 router.get('/detailed', authMiddleware, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const storeId = requireStoreId(req);
+    const { Order, Checkout } = reportModels();
     const { startDate, endDate } = req.query;
 
     const dateFilter: Record<string, Date> = {};
@@ -164,20 +192,24 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
 
     // Fetch ALL orders in date range (including refunded, excluding hidden)
     const orderFilter: Record<string, unknown> = {
+      storeId,
       status: { $in: ['checked_out', 'completed', 'refunded'] },
     };
     if (startDate || endDate) {
       orderFilter.createdAt = dateFilter;
     }
 
-    const allOrders = await Order.find(orderFilter).lean();
+    const allOrders = (await Order.find(orderFilter).lean()) as any[];
 
     // Attach checkout info
-    const orderIds = allOrders.map(o => o._id);
-    const checkouts = await Checkout.find({ orderIds: { $in: orderIds } }).lean();
-    const orderCheckoutMap = new Map<string, typeof checkouts[0]>();
+    const orderIds = allOrders.map((o) => o._id);
+    const checkouts =
+      orderIds.length > 0
+        ? await Checkout.find({ storeId, orderIds: { $in: orderIds } }).lean()
+        : [];
+    const orderCheckoutMap = new Map<string, (typeof checkouts)[0]>();
     for (const c of checkouts) {
-      for (const oid of c.orderIds) {
+      for (const oid of (c as { orderIds?: mongoose.Types.ObjectId[] }).orderIds || []) {
         orderCheckoutMap.set(oid.toString(), c);
       }
     }
@@ -221,6 +253,8 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
             cardTotal += checkout.cardAmount || 0;
             grossCashAmount += checkout.cashAmount || 0;
             grossCardAmount += checkout.cardAmount || 0;
+          } else if (checkout.paymentMethod === 'member') {
+            // Stored-value checkout: no cash/card bucket for worksheet-style totals
           } else if (checkout.paymentMethod === 'online') {
             onlineTotal += checkout.totalAmount;
             onlineCount++;
@@ -312,7 +346,7 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
     const totalRevenue = grossRevenue - refundedAmount;
 
     // Order counts and revenue by type
-    const activeOrders = allOrders.filter(o => o.status !== 'refunded');
+    const activeOrders = allOrders.filter((o: any) => o.status !== 'refunded');
     let dineInCount = 0;
     let takeoutCount = 0;
     let phoneCount = 0;
@@ -413,12 +447,13 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
 // GET /api/reports/vat-pdf?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD — VAT worksheet PDF (IE Food 13.5% / Drink 23%)
 router.get('/vat-pdf', authMiddleware, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const storeId = requireStoreId(req);
     const { startDate, endDate } = req.query;
     if (!startDate || !endDate || typeof startDate !== 'string' || typeof endDate !== 'string') {
       throw createAppError('VALIDATION_ERROR', 'startDate and endDate are required (YYYY-MM-DD)');
     }
 
-    const { byMonth, storeInfo } = await aggregateVatSalesByMonth(startDate, endDate);
+    const { byMonth, storeInfo } = await aggregateVatSalesByMonth(storeId, startDate, endDate);
     const buf = await buildVatReportPdfBuffer(storeInfo, byMonth, `${startDate} - ${endDate}`);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="vat-report-${startDate}_${endDate}.pdf"`);
@@ -432,10 +467,13 @@ router.get('/vat-pdf', authMiddleware, requirePermission('report:view'), async (
 // Returns paid option stats for a specific menu item
 router.get('/item-options', authMiddleware, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const storeId = requireStoreId(req);
+    const { Order } = reportModels();
     const { itemName, startDate, endDate } = req.query;
     if (!itemName) throw createAppError('VALIDATION_ERROR', 'itemName is required');
 
     const filter: Record<string, unknown> = {
+      storeId,
       status: { $in: ['checked_out', 'completed', 'refunded'] },
       'items.itemName': itemName,
     };
@@ -446,7 +484,7 @@ router.get('/item-options', authMiddleware, requirePermission('report:view'), as
       filter.createdAt = dateFilter;
     }
 
-    const orders = await Order.find(filter).lean();
+    const orders = (await Order.find(filter).lean()) as any[];
 
     const optionStats: Record<string, { groupName: string; choiceName: string; extraPrice: number; count: number; revenue: number }> = {};
     let totalSold = 0;
