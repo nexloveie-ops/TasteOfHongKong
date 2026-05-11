@@ -212,7 +212,7 @@ async function main(): Promise<void> {
   console.log(`退款估算 refundedAmount: ${refundedAmount.toFixed(2)}`);
   console.log(`账本 net（gross - refund）: ${netLedger.toFixed(2)}`);
   console.log('');
-  console.log(`VAT 桶合计（与 detailed 有 start+end 时 totalRevenue 一致，不含 delivery_fee 行）: ${vatTotal.toFixed(2)}`);
+  console.log(`VAT 桶合计（vat-pdf 用，不含 delivery_fee 行；与净营业额账本可能不同）: ${vatTotal.toFixed(2)}`);
   console.log(`账本 net 与 VAT 桶差: ${(netLedger - vatTotal).toFixed(2)}`);
   console.log('');
   console.log(

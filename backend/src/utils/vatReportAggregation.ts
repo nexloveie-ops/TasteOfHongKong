@@ -100,8 +100,9 @@ export async function loadStoreInfoForVat(storeId: mongoose.Types.ObjectId): Pro
   };
 }
 
-function isHiddenOrderStatus(status: unknown): boolean {
-  return String(status ?? '').includes('-hide');
+/** 订单/行/菜品文档 status 字段含 hide（不区分大小写）则不计入 VAT 销售额 */
+function statusContainsHide(status: unknown): boolean {
+  return String(status ?? '').toLowerCase().includes('hide');
 }
 
 /** 嵌入式订单行往往没有 _id；若全部用 String(undefined) 会在 bundle Map 中冲突，导致 grandSum 极小、scale 爆表。 */
@@ -131,10 +132,13 @@ function itemToLineLike(
 }
 
 /**
- * VAT worksheet：与 GET /api/reports/detailed 同一套订单范围——按订单 createdAt（UTC 区间）且
+ * VAT worksheet（GET /api/reports/vat-pdf）：订单范围与 GET /api/reports/detailed 一致——按订单 createdAt（UTC 区间）且
  * status ∈ checked_out | completed | refunded。按月键使用订单 createdAt 的爱尔兰日历月。
+ * 注意：营业概览「净营业额」用结账账本 − 退款，不再用本函数桶合计，避免与支付方式净额重复体现退款。
  * 同一结账含多笔订单时，用「整单」做 bundle 分摊比例（与结账 totalAmount 一致），只把所选日期范围内订单的行计入 VAT 桶。
  * 送餐费行（delivery_fee）不计入 PDF / 桶合计——司机代收，非店铺 VAT 销售额。
+ * 退款行（items.refunded）不计入桶——不进负数行，与营业报表「退单仅展示」口径一致。
+ * status 含 hide 的订单整单跳过；行或关联 MenuItem 上若有 status 且含 hide，该行跳过。
  */
 export async function aggregateVatSalesByMonth(
   storeId: mongoose.Types.ObjectId,
@@ -257,21 +261,23 @@ export async function aggregateVatSalesByMonth(
 
     for (const { order, map } of perOrderMaps) {
       if (!inRangeIdSet.has(String((order as { _id: { toString(): string } })._id))) continue;
-      if (isHiddenOrderStatus((order as { status?: unknown }).status)) continue;
+      if (statusContainsHide((order as { status?: unknown }).status)) continue;
       const monthKey = irelandMonthKey(new Date((order as { createdAt?: Date }).createdAt || Date.now()));
       for (let lineIdx = 0; lineIdx < order.items.length; lineIdx++) {
         const item = order.items[lineIdx];
+        if ((item as { refunded?: boolean }).refunded) continue;
+        if (statusContainsHide((item as { status?: unknown }).status)) continue;
         const lineLike = itemToLineLike(item as Parameters<typeof itemToLineLike>[0], lineIdx);
         const raw = map.get(lineLike._id) ?? lineGrossEuro(lineLike);
         const amt = Math.round(raw * scale * 100) / 100;
-        const signed = (item as { refunded?: boolean }).refunded ? -amt : amt;
-        if (Math.abs(signed) < 1e-9) continue;
+        if (Math.abs(amt) < 1e-9) continue;
         if ((item as { lineKind?: string }).lineKind === 'delivery_fee') {
           // 送餐费：司机代收，不计入店铺 VAT  worksheet（仍参与上方 grandSum/scale，不改分摊）
           continue;
         }
         const mid = (item as { menuItemId?: unknown }).menuItemId?.toString();
         const mi = mid ? menuMap.get(mid) : undefined;
+        if (mi && statusContainsHide((mi as { status?: unknown }).status)) continue;
         const itemNameStr = String((item as { itemName?: string }).itemName || '');
         let drink: boolean;
         if (mi && (mi as { categoryId?: { toString(): string } }).categoryId) {
@@ -281,7 +287,7 @@ export async function aggregateVatSalesByMonth(
           // 无本店菜品关联（导入旧数据等）：用语义回退，避免全额计入 Food
           drink = isDrinkItemName(itemNameStr);
         }
-        bump(monthKey, drink ? 'drink' : 'food', signed);
+        bump(monthKey, drink ? 'drink' : 'food', amt);
       }
     }
   }

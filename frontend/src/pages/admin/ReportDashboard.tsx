@@ -78,7 +78,7 @@ interface ModalConfig {
 }
 
 /**
- * Same net amounts as GET /api/reports/detailed (excludes *-hide orders via /orders; refunds applied).
+ * Same net amounts as GET /api/reports/detailed (excludes *-hide via /orders; 净营业额=结账净值，退单区块为明细).
  * Use for modal header when filters match a dashboard summary card.
  */
 function getReportAlignedTotal(

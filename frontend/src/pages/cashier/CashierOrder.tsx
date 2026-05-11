@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { apiFetch } from '../../api/client';
 import OptionSelectModal, { type OptionGroup } from '../../components/customer/OptionSelectModal';
 import type { CartItemOption } from '../../context/CartContext';
 import ReceiptPrint from '../../components/cashier/ReceiptPrint';
@@ -67,10 +68,10 @@ export default function CashierOrder() {
 
   const fetchData = useCallback(async () => {
     const [catRes, itemRes, offersRes, couponsRes] = await Promise.all([
-      fetch(`/api/menu/categories?lang=${lang}`),
-      fetch('/api/menu/items'),
-      fetch('/api/offers'),
-      fetch('/api/coupons'),
+      apiFetch(`/api/menu/categories?lang=${encodeURIComponent(lang)}`),
+      apiFetch('/api/menu/items'),
+      apiFetch('/api/offers'),
+      apiFetch('/api/coupons'),
     ]);
     if (catRes.ok) {
       const cats: Category[] = await catRes.json();
@@ -198,7 +199,7 @@ export default function CashierOrder() {
       if (matchedBundles.length > 0) {
         orderBody.appliedBundles = matchedBundles.map(b => ({ offerId: b.offer._id, name: b.offer.name, nameEn: b.offer.nameEn, discount: b.savings }));
       }
-      const orderRes = await fetch('/api/orders', {
+      const orderRes = await apiFetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(orderBody),
@@ -208,7 +209,7 @@ export default function CashierOrder() {
 
       // Print receipt for phone order
       try {
-        const configRes = await fetch('/api/admin/config');
+        const configRes = await apiFetch('/api/admin/config');
         const cfg = configRes.ok ? await configRes.json() : {};
         const receiptData = {
           checkoutId: orderData._id,
@@ -281,7 +282,7 @@ export default function CashierOrder() {
         orderBody.appliedBundles = matchedBundles.map(b => ({ offerId: b.offer._id, name: b.offer.name, nameEn: b.offer.nameEn, discount: b.savings }));
       }
 
-      const orderRes = await fetch('/api/orders', {
+      const orderRes = await apiFetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(orderBody),
@@ -302,7 +303,7 @@ export default function CashierOrder() {
       else if (paymentMethod === 'card') checkoutBody.cardAmount = payAfterCoupon;
       else { checkoutBody.cashAmount = Number(mixedCash); checkoutBody.cardAmount = Number(mixedCard); }
 
-      const checkoutRes = await fetch(`/api/checkout/seat/${orderData._id}`, {
+      const checkoutRes = await apiFetch(`/api/checkout/seat/${orderData._id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(checkoutBody),
@@ -366,7 +367,7 @@ export default function CashierOrder() {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden', gap: 0 }}>
+    <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden', gap: 0 }}>
       {/* Left: Category Sidebar */}
       <div style={{ width: 110, flexShrink: 0, background: 'var(--bg-white)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflowY: 'auto', padding: '8px 0' }}>
         {categories.map(cat => {

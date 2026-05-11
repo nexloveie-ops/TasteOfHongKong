@@ -161,8 +161,8 @@ export default function CashierLayout() {
         <NavLink to="inventory" style={({ isActive }) => tabStyle(isActive)}>{t('admin.inventory', '库存')}</NavLink>
       </div>
 
-      {/* Content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+      {/* Content: minHeight 0 so nested flex pages (e.g. CashierOrder) get real height */}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: 16, overflow: 'auto' }}>
         <Outlet />
       </div>
       <div style={{ position: 'fixed', right: 16, bottom: 16, display: 'flex', flexDirection: 'column', gap: 8, zIndex: 1500 }}>

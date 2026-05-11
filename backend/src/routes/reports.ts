@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import { getModels } from '../getModels';
 import { authMiddleware, requirePermission } from '../middleware/auth';
 import { createAppError } from '../middleware/errorHandler';
-import { aggregateVatSalesByMonth, sumVatBucketTotals } from '../utils/vatReportAggregation';
+import { aggregateVatSalesByMonth } from '../utils/vatReportAggregation';
 import { buildVatReportPdfBuffer } from '../utils/vatReportPdf';
 import { checkoutCheckedOutFilterUtc, orderCreatedAtFilterUtc } from '../utils/reportDateRange';
 
@@ -352,20 +352,10 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
       else if (pm === 'member') memberRefund += amt;
     }
 
-    // Net revenue (checkout ledger): sum(checkout totalAmount once per checkout) − refundedAmount
-    let totalRevenue = grossRevenue - refundedAmount;
-
-    // Align 净营业额 with VAT PDF "Report Total Sale": same Food/Drink/Delivery buckets (refunds as negatives on lines).
-    // Fixes multi-order checkouts: ledger used to add full checkout.totalAmount when only some linked orders are in the date range.
-    if (startDate && endDate && typeof startDate === 'string' && typeof endDate === 'string') {
-      try {
-        const { byMonth } = await aggregateVatSalesByMonth(storeId, startDate, endDate);
-        totalRevenue = sumVatBucketTotals(byMonth);
-        grossRevenue = Math.round((totalRevenue + refundedAmount) * 100) / 100;
-      } catch {
-        /* keep ledger totals */
-      }
-    }
+    // 净营业额：结账账本净值 = 每结账 totalAmount 去重求和 − 本区间退款分摊。
+    // 与现金/刷卡/… 各行「毛额 − 退款」在全额退单场景下一致（例如刷卡 9.99 全退则净额 0，净营业额应为 0）。
+    // 退单区块仅作明细展示，不在此重复用 VAT 桶负行拉低净营业额（VAT 报表见 GET /reports/vat-pdf）。
+    const totalRevenue = grossRevenue - refundedAmount;
 
     // Order counts and revenue by type
     const activeOrders = allOrders.filter((o: any) => o.status !== 'refunded');

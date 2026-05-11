@@ -205,8 +205,9 @@ export default function UnifiedOrderCenter() {
       });
       if (res.ok) {
         const data = await res.json();
-        if (data?._id) await printCheckout(String(data._id), cashMeta);
-        await fetchAll();
+        setBusyId(null);
+        if (data?._id) void printCheckout(String(data._id), cashMeta).catch(() => {});
+        void fetchAll();
       }
     } finally {
       setBusyId(null);
@@ -244,8 +245,9 @@ export default function UnifiedOrderCenter() {
       });
       if (res.ok) {
         const data = await res.json();
-        if (data?._id) await printCheckout(String(data._id), cashMeta);
-        await fetchAll();
+        setBusyId(null);
+        if (data?._id) void printCheckout(String(data._id), cashMeta).catch(() => {});
+        void fetchAll();
       }
     } finally {
       setBusyId(null);
