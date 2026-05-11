@@ -3,10 +3,20 @@ import mongoose from 'mongoose';
 import { getModels } from '../getModels';
 import { authMiddleware, requirePermission } from '../middleware/auth';
 import { createAppError } from '../middleware/errorHandler';
-import { aggregateVatSalesByMonth } from '../utils/vatReportAggregation';
+import { aggregateVatSalesByMonth, sumVatBucketTotals } from '../utils/vatReportAggregation';
 import { buildVatReportPdfBuffer } from '../utils/vatReportPdf';
+import { checkoutCheckedOutFilterUtc, orderCreatedAtFilterUtc } from '../utils/reportDateRange';
 
 const router = Router();
+
+/** 后台订单明细列表含 hide；营业额类接口仍排除 *-hide（见 GET /detailed）。 */
+const ORDER_HISTORY_STATUSES = [
+  'checked_out',
+  'completed',
+  'refunded',
+  'checked_out-hide',
+  'completed-hide',
+] as const;
 
 function reportModels() {
   return getModels() as {
@@ -31,27 +41,18 @@ router.get('/orders', authMiddleware, requirePermission('report:view'), async (r
 
     const filter: Record<string, unknown> = { storeId };
 
-    // Align with GET /api/reports/detailed: never include *-hide statuses in reports drill-down.
     if (status === 'refunded') {
       // Orders that have ANY refunded items (partial or full)
-      filter.status = { $in: ['checked_out', 'completed', 'refunded'] };
+      filter.status = { $in: [...ORDER_HISTORY_STATUSES] };
       filter['items.refunded'] = true;
     } else {
-      filter.status = { $in: ['checked_out', 'completed', 'refunded'] };
+      filter.status = { $in: [...ORDER_HISTORY_STATUSES] };
     }
 
-    if (startDate || endDate) {
-      const dateFilter: Record<string, Date> = {};
-      if (startDate) {
-        dateFilter.$gte = new Date((startDate as string) + 'T00:00:00.000');
-      }
-      if (endDate) {
-        dateFilter.$lte = new Date((endDate as string) + 'T23:59:59.999');
-      }
-      filter.createdAt = dateFilter;
-    }
+    const createdUtc = orderCreatedAtFilterUtc(startDate as string | undefined, endDate as string | undefined);
+    if (createdUtc) filter.createdAt = createdUtc;
 
-    if (type && ['dine_in', 'takeout', 'phone'].includes(type as string)) {
+    if (type && ['dine_in', 'takeout', 'phone', 'delivery'].includes(type as string)) {
       filter.type = type;
     }
 
@@ -96,9 +97,29 @@ router.get('/orders', authMiddleware, requirePermission('report:view'), async (r
       };
     });
 
-    // Filter by payment method after joining with checkout
+    // Filter by payment method after joining with checkout.
+    // Align with GET /api/reports/detailed: "现金/刷卡"汇总含混合支付中的现金、刷卡部分，明细也应列出对应订单。
     if (paymentMethod && ['cash', 'card', 'mixed', 'online', 'member'].includes(paymentMethod as string)) {
-      result = result.filter((r: any) => r.checkout?.paymentMethod === paymentMethod);
+      const pm = paymentMethod as string;
+      if (pm === 'cash') {
+        result = result.filter((r: any) => {
+          const c = r.checkout;
+          if (!c) return false;
+          if (c.paymentMethod === 'cash') return true;
+          if (c.paymentMethod === 'mixed' && (Number(c.cashAmount) || 0) > 0) return true;
+          return false;
+        });
+      } else if (pm === 'card') {
+        result = result.filter((r: any) => {
+          const c = r.checkout;
+          if (!c) return false;
+          if (c.paymentMethod === 'card') return true;
+          if (c.paymentMethod === 'mixed' && (Number(c.cardAmount) || 0) > 0) return true;
+          return false;
+        });
+      } else {
+        result = result.filter((r: any) => r.checkout?.paymentMethod === pm);
+      }
     }
 
     // Filter by coupon usage
@@ -134,16 +155,8 @@ router.get('/summary', authMiddleware, requirePermission('report:view'), async (
 
     const filter: Record<string, unknown> = { storeId };
 
-    if (startDate || endDate) {
-      const dateFilter: Record<string, Date> = {};
-      if (startDate) {
-        dateFilter.$gte = new Date((startDate as string) + 'T00:00:00.000');
-      }
-      if (endDate) {
-        dateFilter.$lte = new Date((endDate as string) + 'T23:59:59.999');
-      }
-      filter.checkedOutAt = dateFilter;
-    }
+    const checkedUtc = checkoutCheckedOutFilterUtc(startDate as string | undefined, endDate as string | undefined);
+    if (checkedUtc) filter.checkedOutAt = checkedUtc;
 
     const checkouts = (await Checkout.find(filter).lean()) as any[];
 
@@ -182,22 +195,14 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
     const { Order, Checkout } = reportModels();
     const { startDate, endDate } = req.query;
 
-    const dateFilter: Record<string, Date> = {};
-    if (startDate) {
-      dateFilter.$gte = new Date((startDate as string) + 'T00:00:00.000');
-    }
-    if (endDate) {
-      dateFilter.$lte = new Date((endDate as string) + 'T23:59:59.999');
-    }
+    const createdUtc = orderCreatedAtFilterUtc(startDate as string | undefined, endDate as string | undefined);
 
     // Fetch ALL orders in date range (including refunded, excluding hidden)
     const orderFilter: Record<string, unknown> = {
       storeId,
       status: { $in: ['checked_out', 'completed', 'refunded'] },
     };
-    if (startDate || endDate) {
-      orderFilter.createdAt = dateFilter;
-    }
+    if (createdUtc) orderFilter.createdAt = createdUtc;
 
     const allOrders = (await Order.find(orderFilter).lean()) as any[];
 
@@ -224,6 +229,8 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
     let mixedCount = 0;
     let onlineTotal = 0;
     let onlineCount = 0;
+    let memberTotal = 0;
+    let memberCount = 0;
     let couponCount = 0;
     let couponTotalAmount = 0;
     let grossCashAmount = 0;
@@ -254,7 +261,8 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
             grossCashAmount += checkout.cashAmount || 0;
             grossCardAmount += checkout.cardAmount || 0;
           } else if (checkout.paymentMethod === 'member') {
-            // Stored-value checkout: no cash/card bucket for worksheet-style totals
+            memberTotal += checkout.totalAmount;
+            memberCount++;
           } else if (checkout.paymentMethod === 'online') {
             onlineTotal += checkout.totalAmount;
             onlineCount++;
@@ -291,6 +299,7 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
     let cardRefund = 0;
     let mixedRefund = 0;
     let onlineRefund = 0;
+    let memberRefund = 0;
     for (const order of allOrders) {
       const checkout = orderCheckoutMap.get(order._id.toString());
       const pm = checkout?.paymentMethod;
@@ -340,21 +349,37 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
         mixedRefund += amt;
       }
       else if (pm === 'online') onlineRefund += amt;
+      else if (pm === 'member') memberRefund += amt;
     }
 
-    // Net revenue = gross - refunded
-    const totalRevenue = grossRevenue - refundedAmount;
+    // Net revenue (checkout ledger): sum(checkout totalAmount once per checkout) − refundedAmount
+    let totalRevenue = grossRevenue - refundedAmount;
+
+    // Align 净营业额 with VAT PDF "Report Total Sale": same Food/Drink/Delivery buckets (refunds as negatives on lines).
+    // Fixes multi-order checkouts: ledger used to add full checkout.totalAmount when only some linked orders are in the date range.
+    if (startDate && endDate && typeof startDate === 'string' && typeof endDate === 'string') {
+      try {
+        const { byMonth } = await aggregateVatSalesByMonth(storeId, startDate, endDate);
+        totalRevenue = sumVatBucketTotals(byMonth);
+        grossRevenue = Math.round((totalRevenue + refundedAmount) * 100) / 100;
+      } catch {
+        /* keep ledger totals */
+      }
+    }
 
     // Order counts and revenue by type
     const activeOrders = allOrders.filter((o: any) => o.status !== 'refunded');
     let dineInCount = 0;
     let takeoutCount = 0;
     let phoneCount = 0;
+    let deliveryCount = 0;
+    let otherTypeCount = 0;
     let dineInScanCount = 0;
     let dineInCashierCount = 0;
     let dineInRevenue = 0;
     let takeoutRevenue = 0;
     let phoneRevenue = 0;
+    let deliveryRevenue = 0;
 
     for (const order of activeOrders) {
       const checkout = orderCheckoutMap.get(order._id.toString());
@@ -373,8 +398,34 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
       } else if (order.type === 'phone') {
         phoneCount++;
         phoneRevenue += checkout?.totalAmount ?? orderItemTotal;
+      } else if (order.type === 'delivery') {
+        deliveryCount++;
+        deliveryRevenue += checkout?.totalAmount ?? orderItemTotal;
+      } else {
+        otherTypeCount++;
       }
     }
+
+    /** 送餐费合计（订单 delivery_fee 行或 deliveryFeeEuro；司机代收，不计店铺收入口径提示用） */
+    let deliveryDriverFeeTotal = 0;
+    for (const order of activeOrders) {
+      if ((order as { type?: string }).type !== 'delivery') continue;
+      let feeFromLines = 0;
+      for (const item of (order as { items?: unknown[] }).items || []) {
+        const it = item as { refunded?: boolean; lineKind?: string; unitPrice: number; quantity: number; selectedOptions?: { extraPrice?: number }[] };
+        if (it.refunded) continue;
+        if (it.lineKind === 'delivery_fee') {
+          const optExtra = (it.selectedOptions || []).reduce((s: number, o: { extraPrice?: number }) => s + (o.extraPrice || 0), 0);
+          feeFromLines += (it.unitPrice + optExtra) * it.quantity;
+        }
+      }
+      if (feeFromLines > 0.001) {
+        deliveryDriverFeeTotal += feeFromLines;
+      } else {
+        deliveryDriverFeeTotal += Number((order as { deliveryFeeEuro?: number }).deliveryFeeEuro) || 0;
+      }
+    }
+    deliveryDriverFeeTotal = Math.round(deliveryDriverFeeTotal * 100) / 100;
 
     // Top items aggregation (only non-refunded items)
     const itemMap = new Map<string, { itemName: string; itemNameEn: string; quantity: number; revenue: number }>();
@@ -419,6 +470,8 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
       mixedCount,
       onlineTotal: Math.round((onlineTotal - onlineRefund) * 100) / 100,
       onlineCount,
+      memberTotal: Math.round((memberTotal - memberRefund) * 100) / 100,
+      memberCount,
       couponCount,
       couponTotalAmount: Math.round(couponTotalAmount * 100) / 100,
       bundleOfferCount,
@@ -431,6 +484,10 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
       takeoutRevenue: Math.round(takeoutRevenue * 100) / 100,
       phoneCount,
       phoneRevenue: Math.round(phoneRevenue * 100) / 100,
+      deliveryCount,
+      deliveryRevenue: Math.round(deliveryRevenue * 100) / 100,
+      deliveryDriverFeeTotal,
+      otherTypeCount,
       dineInScanCount,
       dineInCashierCount,
       takeoutScanCount: takeoutCount,
@@ -477,12 +534,8 @@ router.get('/item-options', authMiddleware, requirePermission('report:view'), as
       status: { $in: ['checked_out', 'completed', 'refunded'] },
       'items.itemName': itemName,
     };
-    if (startDate || endDate) {
-      const dateFilter: Record<string, Date> = {};
-      if (startDate) dateFilter.$gte = new Date((startDate as string) + 'T00:00:00.000');
-      if (endDate) dateFilter.$lte = new Date((endDate as string) + 'T23:59:59.999');
-      filter.createdAt = dateFilter;
-    }
+    const createdUtc = orderCreatedAtFilterUtc(startDate as string | undefined, endDate as string | undefined);
+    if (createdUtc) filter.createdAt = createdUtc;
 
     const orders = (await Order.find(filter).lean()) as any[];
 

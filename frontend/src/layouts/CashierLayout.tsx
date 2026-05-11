@@ -100,6 +100,9 @@ export default function CashierLayout() {
       // Card (net of refunds)
       html += `<div class="row" style="font-size:16px"><span>Card</span><span>€${(stats.cardTotal ?? 0).toFixed(2)}</span></div>`;
 
+      // Member wallet (stored value; net of refunds)
+      html += `<div class="row" style="font-size:16px"><span>Member</span><span>€${(stats.memberTotal ?? 0).toFixed(2)}</span></div>`;
+
       // Footer
       html += `<div class="divider"></div>`;
       html += `<div class="center" style="font-size:12px;margin-top:4px">Printed by ${user?.username || ''} at ${timeStr}</div>`;

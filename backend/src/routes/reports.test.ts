@@ -214,7 +214,7 @@ describe('GET /api/reports/orders', () => {
     expect(res.status).toBe(401);
   });
 
-  it('should exclude checked_out-hide and completed-hide (matches /reports/detailed scope)', async () => {
+  it('should include checked_out-hide in GET /reports/orders (admin order list; /detailed still excludes hide)', async () => {
     await createAndCheckoutOrder('dine_in', 30, 'cash');
     const o = await Order.findOne({ status: 'checked_out' });
     expect(o).not.toBeNull();
@@ -225,7 +225,8 @@ describe('GET /api/reports/orders', () => {
       .set('Authorization', `Bearer ${ownerToken}`);
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(0);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].status).toBe('checked_out-hide');
   });
 });
 

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../../context/AuthContext';
+import { apiFetch } from '../../api/client';
 
 interface OrderItem { _id: string; quantity: number; unitPrice: number; itemName: string; }
 interface HistoryOrder {
@@ -11,7 +11,6 @@ interface HistoryOrder {
 }
 export default function OrderHistory() {
   const { t } = useTranslation();
-  const { token } = useAuth();
   const [orders, setOrders] = useState<HistoryOrder[]>([]);
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -42,28 +41,28 @@ export default function OrderHistory() {
       params.set('startDate', startDate);
       params.set('endDate', endDate);
       if (typeFilter) params.set('paymentMethod', typeFilter);
-      const res = await fetch(`/api/reports/orders?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await apiFetch(`/api/reports/orders?${params}`);
       if (res.ok) {
         const data: HistoryOrder[] = await res.json();
-        // Use API results as-is: same scope as /api/reports/orders (checked_out, completed, refunded; no *-hide).
+        // GET /api/reports/orders includes *-hide statuses for admin review (reports summary/detailed still exclude hide).
         setOrders(data);
       }
     } catch { /* ignore */ }
     finally { setLoading(false); }
-  }, [token, startDate, endDate, typeFilter]);
+  }, [startDate, endDate, typeFilter]);
 
   const toggleHide = useCallback(async (orderId: string) => {
     try {
-      const res = await fetch(`/api/orders/${orderId}/toggle-hide`, {
+      const res = await apiFetch(`/api/orders/${orderId}/toggle-hide`, {
         method: 'PUT',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
       });
       if (res.ok) {
         const updated: HistoryOrder = await res.json();
         setOrders(prev => prev.map(o => o._id === orderId ? { ...o, status: updated.status } : o));
       }
     } catch { /* ignore */ }
-  }, [token]);
+  }, []);
 
   const orderTotal = (o: HistoryOrder) => o.checkout?.totalAmount ?? o.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
 

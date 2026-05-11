@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { getModels } from '../getModels';
+import { orderCreatedAtFilterUtc } from './reportDateRange';
 import { bundleAdjustedLineTotals, lineGrossEuro, type LineLikeForBundle } from './bundleLineAllocation';
 
 export const FOOD_VAT_RATE = 0.135;
@@ -8,6 +9,15 @@ export const DRINK_VAT_RATE = 0.23;
 export const DELIVERY_VAT_RATE = FOOD_VAT_RATE;
 
 export type MonthSalesBuckets = { foodGross: number; drinkGross: number; deliveryGross: number };
+
+/** Sum of VAT worksheet buckets (= PDF Report Total Sale, same date filter). */
+export function sumVatBucketTotals(byMonth: Map<string, MonthSalesBuckets>): number {
+  let v = 0;
+  for (const b of byMonth.values()) {
+    v += b.foodGross + b.drinkGross + (b.deliveryGross ?? 0);
+  }
+  return Math.round(v * 100) / 100;
+}
 
 export function irelandMonthKey(d: Date): string {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Dublin', year: 'numeric', month: '2-digit' }).formatToParts(d);
@@ -23,6 +33,40 @@ export function isDrinkCategory(cat: { translations?: { name?: string }[] } | nu
     if (n.includes('drink') || n.includes('饮料')) return true;
   }
   return false;
+}
+
+/**
+ * 当订单行无法关联到本店 MenuItem（例如历史导入、跨库 menuItemId）时，用语义关键词粗分饮料，
+ * 避免整单全额落入 Food 桶导致 VAT PDF 与真实比例严重偏离。（仅为辅助，仍以分类为准。）
+ */
+export function isDrinkItemName(itemName: string): boolean {
+  const s = itemName.trim();
+  if (!s) return false;
+  const lower = s.toLowerCase();
+  const keywordsEn = [
+    'drink',
+    'juice',
+    'tea',
+    'coffee',
+    'coke',
+    'cola',
+    'sprite',
+    'beer',
+    'wine',
+    'smoothie',
+    'latte',
+    'cappuccino',
+    'espresso',
+    'milkshake',
+    'soda',
+    'water',
+    'bob',
+    'bubble',
+    'soft drink',
+  ];
+  if (keywordsEn.some((k) => lower.includes(k))) return true;
+  const keywordsZh = ['饮料', '奶茶', '果汁', '可乐', '矿泉水', '啤酒', '红酒', '汽水', '咖啡', '英式奶茶', '柠檬茶', '豆浆'];
+  return keywordsZh.some((k) => s.includes(k));
 }
 
 export interface StoreInfoForVat {
@@ -60,15 +104,25 @@ function isHiddenOrderStatus(status: unknown): boolean {
   return String(status ?? '').includes('-hide');
 }
 
-function itemToLineLike(item: {
-  _id: unknown;
-  quantity: number;
-  unitPrice: number;
-  selectedOptions?: { extraPrice?: number }[];
-  lineKind?: string;
-}): LineLikeForBundle {
+/** 嵌入式订单行往往没有 _id；若全部用 String(undefined) 会在 bundle Map 中冲突，导致 grandSum 极小、scale 爆表。 */
+function stableOrderLineKey(item: { _id?: unknown }, lineIndex: number): string {
+  const raw = item._id != null ? String(item._id) : '';
+  if (raw && raw !== 'undefined') return raw;
+  return `line-${lineIndex}`;
+}
+
+function itemToLineLike(
+  item: {
+    _id?: unknown;
+    quantity: number;
+    unitPrice: number;
+    selectedOptions?: { extraPrice?: number }[];
+    lineKind?: string;
+  },
+  lineIndex: number,
+): LineLikeForBundle {
   return {
-    _id: String(item._id),
+    _id: stableOrderLineKey(item, lineIndex),
     quantity: item.quantity,
     unitPrice: item.unitPrice,
     selectedOptions: item.selectedOptions as { extraPrice?: number }[] | undefined,
@@ -76,6 +130,12 @@ function itemToLineLike(item: {
   };
 }
 
+/**
+ * VAT worksheet：与 GET /api/reports/detailed 同一套订单范围——按订单 createdAt（UTC 区间）且
+ * status ∈ checked_out | completed | refunded。按月键使用订单 createdAt 的爱尔兰日历月。
+ * 同一结账含多笔订单时，用「整单」做 bundle 分摊比例（与结账 totalAmount 一致），只把所选日期范围内订单的行计入 VAT 桶。
+ * 送餐费行（delivery_fee）不计入 PDF / 桶合计——司机代收，非店铺 VAT 销售额。
+ */
 export async function aggregateVatSalesByMonth(
   storeId: mongoose.Types.ObjectId,
   startDate: string,
@@ -87,32 +147,55 @@ export async function aggregateVatSalesByMonth(
     MenuItem: mongoose.Model<any>;
     MenuCategory: mongoose.Model<any>;
   };
-  const start = new Date(startDate + 'T00:00:00.000Z');
-  const end = new Date(endDate + 'T23:59:59.999Z');
+  const createdAt = orderCreatedAtFilterUtc(startDate, endDate);
+  if (!createdAt) {
+    return { byMonth: new Map<string, MonthSalesBuckets>(), storeInfo: await loadStoreInfoForVat(storeId) };
+  }
 
-  const checkouts = await Checkout.find({
+  const ordersInRange = (await Order.find({
     storeId,
-    checkedOutAt: { $gte: start, $lte: end },
-  }).lean();
+    status: { $in: ['checked_out', 'completed', 'refunded'] },
+    createdAt,
+  }).lean()) as unknown as Record<string, unknown>[];
 
   const storeInfo = await loadStoreInfoForVat(storeId);
   const byMonth = new Map<string, MonthSalesBuckets>();
+
+  if (ordersInRange.length === 0) {
+    return { byMonth, storeInfo };
+  }
+
+  const inRangeIdSet = new Set(ordersInRange.map((o) => String((o as { _id: unknown })._id)));
+  const orderOidList = [...inRangeIdSet]
+    .filter((id) => mongoose.isValidObjectId(id))
+    .map((id) => new mongoose.Types.ObjectId(id));
+
+  const checkouts = await Checkout.find({
+    storeId,
+    orderIds: { $in: orderOidList },
+  }).lean();
 
   if (checkouts.length === 0) {
     return { byMonth, storeInfo };
   }
 
-  const rawOrderIds = [...new Set(checkouts.flatMap((c) => (c.orderIds || []).map((id: mongoose.Types.ObjectId) => id.toString())))];
-  const orderIds = rawOrderIds.filter((id) => mongoose.isValidObjectId(id));
-  const orders =
-    orderIds.length > 0
+  const allRefOrderIds = [
+    ...new Set(
+      checkouts.flatMap((c) =>
+        (c.orderIds || []).map((id: mongoose.Types.ObjectId) => id.toString()),
+      ),
+    ),
+  ].filter((id) => mongoose.isValidObjectId(id));
+
+  const allOrdersForCheckouts =
+    allRefOrderIds.length > 0
       ? await Order.find({
           storeId,
-          _id: { $in: orderIds.map((id) => new mongoose.Types.ObjectId(id)) },
+          _id: { $in: allRefOrderIds.map((id) => new mongoose.Types.ObjectId(id)) },
         }).lean()
       : [];
 
-  const rawMenuIds = (orders as any[]).flatMap((o: { items: { menuItemId?: unknown }[] }) =>
+  const rawMenuIds = (allOrdersForCheckouts as any[]).flatMap((o: { items: { menuItemId?: unknown }[] }) =>
     o.items.map((i: { menuItemId?: unknown }) => i.menuItemId?.toString()).filter(Boolean),
   ) as string[];
   const allMenuItemIds = [...new Set(rawMenuIds.filter((id) => mongoose.isValidObjectId(id)))];
@@ -141,31 +224,30 @@ export async function aggregateVatSalesByMonth(
       : [];
   const catMap = new Map((categories as any[]).map((c) => [String(c._id), c]));
 
-  const orderById = new Map((orders as any[]).map((o) => [String(o._id), o]));
+  const orderById = new Map((allOrdersForCheckouts as any[]).map((o) => [String(o._id), o]));
 
-  function bump(monthKey: string, bucket: 'food' | 'drink' | 'delivery', delta: number) {
+  function bump(monthKey: string, bucket: 'food' | 'drink', delta: number) {
     if (!byMonth.has(monthKey)) byMonth.set(monthKey, { foodGross: 0, drinkGross: 0, deliveryGross: 0 });
     const b = byMonth.get(monthKey)!;
     if (bucket === 'drink') b.drinkGross += delta;
-    else if (bucket === 'delivery') b.deliveryGross += delta;
     else b.foodGross += delta;
   }
 
   for (const c of checkouts) {
-    const ordersHere = (c.orderIds || [])
+    const ordersFull = (c.orderIds || [])
       .map((oid: mongoose.Types.ObjectId) => orderById.get(oid.toString()))
-      .filter((o: unknown): o is (typeof orders)[0] => !!o);
+      .filter((o: unknown): o is (typeof allOrdersForCheckouts)[number] => !!o);
 
-    if (ordersHere.length === 0) continue;
-
-    const monthKey = irelandMonthKey(new Date(c.checkedOutAt || Date.now()));
+    if (ordersFull.length === 0) continue;
 
     type BundleDoc = { discount: number }[];
     let grandSum = 0;
-    const perOrderMaps: { order: (typeof orders)[0]; map: Map<string, number> }[] = [];
-    for (const order of ordersHere) {
+    const perOrderMaps: { order: (typeof allOrdersForCheckouts)[number]; map: Map<string, number> }[] = [];
+    for (const order of ordersFull) {
       const applied = (order as unknown as { appliedBundles?: BundleDoc }).appliedBundles;
-      const items = order.items.map((it: Parameters<typeof itemToLineLike>[0]) => itemToLineLike(it));
+      const items = order.items.map((it: Parameters<typeof itemToLineLike>[0], idx: number) =>
+        itemToLineLike(it, idx),
+      );
       const m = bundleAdjustedLineTotals(items, applied);
       perOrderMaps.push({ order, map: m });
       for (const v of m.values()) grandSum += v;
@@ -174,24 +256,31 @@ export async function aggregateVatSalesByMonth(
     const scale = grandSum > 0 ? c.totalAmount / grandSum : 0;
 
     for (const { order, map } of perOrderMaps) {
-      if (isHiddenOrderStatus(order.status)) continue;
-      for (const item of order.items) {
-        const id = String((item as { _id: { toString(): string } })._id);
-        const raw = map.get(id) ?? lineGrossEuro(itemToLineLike(item as Parameters<typeof itemToLineLike>[0]));
+      if (!inRangeIdSet.has(String((order as { _id: { toString(): string } })._id))) continue;
+      if (isHiddenOrderStatus((order as { status?: unknown }).status)) continue;
+      const monthKey = irelandMonthKey(new Date((order as { createdAt?: Date }).createdAt || Date.now()));
+      for (let lineIdx = 0; lineIdx < order.items.length; lineIdx++) {
+        const item = order.items[lineIdx];
+        const lineLike = itemToLineLike(item as Parameters<typeof itemToLineLike>[0], lineIdx);
+        const raw = map.get(lineLike._id) ?? lineGrossEuro(lineLike);
         const amt = Math.round(raw * scale * 100) / 100;
         const signed = (item as { refunded?: boolean }).refunded ? -amt : amt;
         if (Math.abs(signed) < 1e-9) continue;
         if ((item as { lineKind?: string }).lineKind === 'delivery_fee') {
-          bump(monthKey, 'delivery', signed);
+          // 送餐费：司机代收，不计入店铺 VAT  worksheet（仍参与上方 grandSum/scale，不改分摊）
           continue;
         }
         const mid = (item as { menuItemId?: unknown }).menuItemId?.toString();
         const mi = mid ? menuMap.get(mid) : undefined;
-        const cat =
-          mi && (mi as { categoryId?: { toString(): string } }).categoryId
-            ? catMap.get((mi as { categoryId: { toString(): string } }).categoryId.toString())
-            : undefined;
-        const drink = isDrinkCategory(cat);
+        const itemNameStr = String((item as { itemName?: string }).itemName || '');
+        let drink: boolean;
+        if (mi && (mi as { categoryId?: { toString(): string } }).categoryId) {
+          const cat = catMap.get((mi as { categoryId: { toString(): string } }).categoryId.toString());
+          drink = isDrinkCategory(cat);
+        } else {
+          // 无本店菜品关联（导入旧数据等）：用语义回退，避免全额计入 Food
+          drink = isDrinkItemName(itemNameStr);
+        }
         bump(monthKey, drink ? 'drink' : 'food', signed);
       }
     }
