@@ -133,7 +133,7 @@ function itemToLineLike(
 
 /**
  * VAT worksheet（GET /api/reports/vat-pdf）：订单范围与 GET /api/reports/detailed 一致——按订单 createdAt（UTC 区间）且
- * status ∈ checked_out | completed | refunded。按月键使用订单 createdAt 的爱尔兰日历月。
+ * status ∈ checked_out | completed | refunded，并排除 status 含 hide 的订单。按月键使用订单 createdAt 的爱尔兰日历月。
  * 注意：营业概览「净营业额」用结账账本 − 退款，不再用本函数桶合计，避免与支付方式净额重复体现退款。
  * 同一结账含多笔订单时，用「整单」做 bundle 分摊比例（与结账 totalAmount 一致），只把所选日期范围内订单的行计入 VAT 桶。
  * 送餐费行（delivery_fee）不计入 PDF / 桶合计——司机代收，非店铺 VAT 销售额。
@@ -156,11 +156,14 @@ export async function aggregateVatSalesByMonth(
     return { byMonth: new Map<string, MonthSalesBuckets>(), storeInfo: await loadStoreInfoForVat(storeId) };
   }
 
-  const ordersInRange = (await Order.find({
+  const ordersInRangeRaw = (await Order.find({
     storeId,
     status: { $in: ['checked_out', 'completed', 'refunded'] },
     createdAt,
   }).lean()) as unknown as Record<string, unknown>[];
+  const ordersInRange = ordersInRangeRaw.filter(
+    (o) => !statusContainsHide((o as { status?: unknown }).status),
+  );
 
   const storeInfo = await loadStoreInfoForVat(storeId);
   const byMonth = new Map<string, MonthSalesBuckets>();

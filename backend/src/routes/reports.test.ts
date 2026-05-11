@@ -214,7 +214,7 @@ describe('GET /api/reports/orders', () => {
     expect(res.status).toBe(401);
   });
 
-  it('should include checked_out-hide in GET /reports/orders (admin order list; /detailed still excludes hide)', async () => {
+  it('should exclude checked_out-hide from GET /reports/orders by default (营业报表钻取口径)', async () => {
     await createAndCheckoutOrder('dine_in', 30, 'cash');
     const o = await Order.findOne({ status: 'checked_out' });
     expect(o).not.toBeNull();
@@ -222,6 +222,20 @@ describe('GET /api/reports/orders', () => {
 
     const res = await request(app)
       .get('/api/reports/orders')
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(0);
+  });
+
+  it('should include checked_out-hide when includeHiddenOrders=1 (订单历史)', async () => {
+    await createAndCheckoutOrder('dine_in', 30, 'cash');
+    const o = await Order.findOne({ status: 'checked_out' });
+    expect(o).not.toBeNull();
+    await Order.findByIdAndUpdate(o!._id, { status: 'checked_out-hide' });
+
+    const res = await request(app)
+      .get('/api/reports/orders?includeHiddenOrders=1')
       .set('Authorization', `Bearer ${ownerToken}`);
 
     expect(res.status).toBe(200);

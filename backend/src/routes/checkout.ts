@@ -22,6 +22,23 @@ function round2Euro(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/** 重印小票 / 搜索：不展示 status 含 hide 的订单（与营业报表一致） */
+function statusContainsHide(status: unknown): boolean {
+  return String(status ?? '').toLowerCase().includes('hide');
+}
+
+/** 任一侧订单为 hide 则整笔结账不展示（避免一单多订单时仍出现 hide 金额） */
+function checkoutTouchesHiddenOrder(
+  c: Record<string, unknown>,
+  orderById: Map<string, { status?: unknown }>,
+): boolean {
+  for (const oid of (c.orderIds || []) as mongoose.Types.ObjectId[]) {
+    const o = orderById.get(oid.toString());
+    if (o && statusContainsHide(o.status)) return true;
+  }
+  return false;
+}
+
 async function assertMemberWalletFeatureIfNeeded(req: Request): Promise<void> {
   const body = req.body as Record<string, unknown>;
   const pm = String(body.paymentMethod || '');
@@ -452,8 +469,6 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
         'completed',
         'refunded',
         'paid_online',
-        'checked_out-hide',
-        'completed-hide',
       ] as const;
 
       const mapCheckoutToResult = (c: Record<string, unknown>, orderDocs: Record<string, unknown>[]) => {
@@ -566,6 +581,7 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
           $or: numberOr,
         };
         orders = (await Order.find(orderFilter).sort({ createdAt: -1 }).lean()) as Record<string, unknown>[];
+        orders = orders.filter((o) => !statusContainsHide(o.status));
         if (orders.length === 0) {
           res.json([]);
           return;
@@ -574,6 +590,23 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
         checkouts = (await Checkout.find({ storeId: req.storeId, orderIds: { $in: orderIds } })
           .sort({ checkedOutAt: -1 })
           .lean()) as Record<string, unknown>[];
+        const allCoIds = new Set<string>();
+        for (const c of checkouts) {
+          for (const cid of (c.orderIds || []) as mongoose.Types.ObjectId[]) {
+            allCoIds.add(cid.toString());
+          }
+        }
+        const ordersForCheckoutFilter =
+          allCoIds.size === 0
+            ? []
+            : ((await Order.find({
+                storeId: req.storeId,
+                _id: { $in: [...allCoIds].map((id) => new mongoose.Types.ObjectId(id)) },
+              })
+                .select({ status: 1 })
+                .lean()) as Record<string, unknown>[]);
+        const orderByIdNum = new Map(ordersForCheckoutFilter.map((o) => [String(o._id), o]));
+        checkouts = checkouts.filter((c) => !checkoutTouchesHiddenOrder(c, orderByIdNum));
         const covered = new Set<string>();
         for (const c of checkouts) {
           for (const cid of c.orderIds as mongoose.Types.ObjectId[]) {
@@ -613,7 +646,9 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
               _id: { $in: orderObjectIds },
             }).lean()) as Record<string, unknown>[]);
 
-      const fromCheckouts = checkouts.map((c) => mapCheckoutToResult(c, ordersFromCheckouts));
+      const orderByIdDay = new Map(ordersFromCheckouts.map((o) => [String(o._id), o]));
+      const checkoutsVisible = checkouts.filter((c) => !checkoutTouchesHiddenOrder(c, orderByIdDay));
+      const fromCheckouts = checkoutsVisible.map((c) => mapCheckoutToResult(c, ordersFromCheckouts));
 
       /** 任意 Checkout 已关联的订单不再生成虚拟小票，避免与真实结账重复 */
       const orderIdsInAnyCheckout = (await Checkout.distinct('orderIds', {
@@ -640,8 +675,9 @@ export function createCheckoutRouter(io: SocketIOServer): Router {
       })
         .sort({ createdAt: -1 })
         .lean()) as Record<string, unknown>[];
+      const orphanOrdersVisible = orphanOrders.filter((o) => !statusContainsHide(o.status));
 
-      const fromOrphansOnly = orphanOrders.map(syntheticReceiptFromOrder);
+      const fromOrphansOnly = orphanOrdersVisible.map(syntheticReceiptFromOrder);
       const mergedDay = [...fromCheckouts, ...fromOrphansOnly];
       mergedDay.sort(
         (a, b) =>

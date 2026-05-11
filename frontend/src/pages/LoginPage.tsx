@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useRestaurantConfig } from '../hooks/useRestaurantConfig';
 
 export default function LoginPage() {
-  const { login, user, isAuthenticated } = useAuth();
+  const { login, user, isAuthenticated, isStoreStaffSessionReady } = useAuth();
   const storeSlug = useStoreSlug();
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -19,11 +19,10 @@ export default function LoginPage() {
   const logoUrl = config.restaurant_logo?.trim();
 
   useEffect(() => {
-    if (isAuthenticated && user) {
-      const isAdmin = user.role === 'owner' || user.role === 'platform_owner';
-      navigate(isAdmin ? '../admin' : '../cashier', { replace: true, relative: 'path' });
-    }
-  }, [isAuthenticated, user, navigate]);
+    if (!isAuthenticated || !user || !isStoreStaffSessionReady) return;
+    const isAdmin = user.role === 'owner' || user.role === 'platform_owner';
+    navigate(isAdmin ? '../admin' : '../cashier', { replace: true, relative: 'path' });
+  }, [isAuthenticated, user, isStoreStaffSessionReady, navigate]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();

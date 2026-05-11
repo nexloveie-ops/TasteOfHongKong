@@ -4,9 +4,77 @@ type TokenGetter = () => string | null;
 let slugGetter: SlugGetter = () => '';
 let tokenGetter: TokenGetter = () => null;
 
+/** 店员 JWT 失效或与店铺不匹配时由 Auth 层注册：清会话并跳转登录 */
+let onStaffSessionInvalid: (() => void) | null = null;
+
+/** 平台管理员会话失效时跳转 /adlg */
+let onPlatformSessionInvalid: (() => void) | null = null;
+
 export function configureApiClient(getSlug: SlugGetter, getToken: TokenGetter): void {
   slugGetter = getSlug;
   tokenGetter = getToken;
+}
+
+export function setStaffSessionInvalidHandler(fn: (() => void) | null): void {
+  onStaffSessionInvalid = fn;
+}
+
+export function setPlatformSessionInvalidHandler(fn: (() => void) | null): void {
+  onPlatformSessionInvalid = fn;
+}
+
+export function getConfiguredStoreSlug(): string {
+  return slugGetter() || '';
+}
+
+function parseApiErrorPayload(text: string): { code?: string; message?: string } {
+  try {
+    const j = JSON.parse(text) as { error?: { code?: string; message?: string } };
+    return { code: j?.error?.code, message: j?.error?.message };
+  } catch {
+    return {};
+  }
+}
+
+/** 仅对白名单错误登出，避免把「套餐未开通」等业务 403 当成掉线 */
+function shouldInvalidateStaffSession(status: number, code: string | undefined, message: string): boolean {
+  const msg = message || '';
+  if (status === 401 && code === 'UNAUTHORIZED') return true;
+  if (status === 403 && code === 'STORE_INACTIVE') return true;
+  if (status === 403 && code === 'FORBIDDEN') {
+    if (
+      msg === 'Insufficient permissions' ||
+      msg === '令牌与店铺不匹配' ||
+      msg === '缺少店铺上下文' ||
+      msg === '仅平台管理员可访问'
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function shouldInvalidatePlatformSession(status: number, code: string | undefined, message: string): boolean {
+  const msg = message || '';
+  if (status === 401 && code === 'UNAUTHORIZED') return true;
+  if (status === 403 && code === 'FORBIDDEN' && msg === '仅平台管理员可访问') return true;
+  return false;
+}
+
+async function triggerIfStaffAuthFailed(res: Response, hadStaffToken: boolean): Promise<void> {
+  if (!hadStaffToken || res.ok || !onStaffSessionInvalid) return;
+  if (res.status !== 401 && res.status !== 403) return;
+  const { code, message } = parseApiErrorPayload(await res.clone().text());
+  if (!shouldInvalidateStaffSession(res.status, code, message ?? '')) return;
+  onStaffSessionInvalid();
+}
+
+async function triggerIfPlatformAuthFailed(res: Response, hadToken: boolean): Promise<void> {
+  if (!hadToken || res.ok || !onPlatformSessionInvalid) return;
+  if (res.status !== 401 && res.status !== 403) return;
+  const { code, message } = parseApiErrorPayload(await res.clone().text());
+  if (!shouldInvalidatePlatformSession(res.status, code, message ?? '')) return;
+  onPlatformSessionInvalid();
 }
 
 /** 与 `VITE_API_ORIGIN` 一致：开发时若 Vite 代理异常，可设为 `http://127.0.0.1:8080` 直连后端 */
@@ -65,14 +133,19 @@ export function apiFetch(input: RequestInfo | URL, init?: StoreApiFetchInit): Pr
   const slug = slugGetter();
   if (slug) headers.set('X-Store-Slug', slug);
   const token = tokenGetter();
-  if (token && !omitStaffToken) headers.set('Authorization', `Bearer ${token}`);
-  return fetch(resolved, { ...restInit, headers });
+  const sendStaffToken = !!(token && !omitStaffToken);
+  if (sendStaffToken) headers.set('Authorization', `Bearer ${token}`);
+  return fetch(resolved, { ...restInit, headers }).then(async (res) => {
+    await triggerIfStaffAuthFailed(res, sendStaffToken);
+    return res;
+  });
 }
 
 /** `/api/platform/*`：只带 Token，不带店铺头 */
 export function platformApiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers);
   const token = tokenGetter();
+  const hadToken = !!token;
   if (token) headers.set('Authorization', `Bearer ${token}`);
   const resolved =
     typeof input === 'string' && input.startsWith('/api')
@@ -80,7 +153,10 @@ export function platformApiFetch(input: RequestInfo | URL, init?: RequestInit): 
       : input instanceof URL && input.pathname.startsWith('/api') && getApiOrigin()
         ? new URL(`${input.pathname}${input.search}${input.hash}`, getApiOrigin())
         : input;
-  return fetch(resolved, { ...init, headers });
+  return fetch(resolved, { ...init, headers }).then(async (res) => {
+    await triggerIfPlatformAuthFailed(res, hadToken);
+    return res;
+  });
 }
 
 /** 为会员接口附加 `storeSlug` 查询参数（相对 `/api/...` 或绝对 API URL） */

@@ -8,11 +8,27 @@ interface User {
   storeId?: string | null;
 }
 
+function readInitialStoreStaffGateReady(): boolean {
+  const t = localStorage.getItem('auth_token');
+  if (!t) return true;
+  const saved = localStorage.getItem('auth_user');
+  if (!saved) return true;
+  try {
+    const u = JSON.parse(saved) as { role?: string };
+    if (u?.role === 'platform_owner') return true;
+  } catch {
+    return true;
+  }
+  return false;
+}
+
 interface AuthContextValue {
   user: User | null;
   token: string | null;
   features: string[];
   hasFeature: (key: string) => boolean;
+  /** 店内账号：已通过 /api/admin/features 校验令牌与店铺；此前勿渲染收银/后台壳子以免闪屏 */
+  isStoreStaffSessionReady: boolean;
   login: (username: string, password: string, storeSlug: string) => Promise<void>;
   platformLogin: (username: string, password: string) => Promise<void>;
   logout: () => void;
@@ -48,6 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const saved = localStorage.getItem('auth_features');
     return saved ? JSON.parse(saved) : [];
   });
+  const [storeStaffGateReady, setStoreStaffGateReady] = useState(readInitialStoreStaffGateReady);
 
   useEffect(() => {
     if (token) localStorage.setItem('auth_token', token);
@@ -63,26 +80,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('auth_features', JSON.stringify(features));
   }, [features]);
 
-  const fetchFeatures = useCallback(async () => {
+  const loadStoreStaffFeatures = useCallback(async () => {
     const res = await apiFetch('/api/admin/features');
-    if (!res.ok) {
+    if (res.ok) {
+      const data = await res.json().catch(() => ({ features: [] }));
+      setFeatures(Array.isArray(data?.features) ? data.features : []);
+    } else {
       setFeatures([]);
-      return;
     }
-    const data = await res.json().catch(() => ({ features: [] }));
-    setFeatures(Array.isArray(data?.features) ? data.features : []);
+    setStoreStaffGateReady(true);
   }, []);
 
   useEffect(() => {
-    if (!token || !user || user.role === 'platform_owner') return;
-    void fetchFeatures();
-  }, [fetchFeatures, token, user]);
+    if (!token || !user) {
+      setFeatures([]);
+      setStoreStaffGateReady(true);
+      return;
+    }
+    if (user.role === 'platform_owner') {
+      setFeatures([]);
+      setStoreStaffGateReady(true);
+      return;
+    }
+    setStoreStaffGateReady(false);
+    void loadStoreStaffFeatures();
+  }, [token, user, loadStoreStaffFeatures]);
 
   const login = useCallback(async (username: string, password: string, storeSlug: string) => {
     const res = await apiFetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password, slug: storeSlug }),
+      omitStaffToken: true,
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -90,8 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const data = await res.json();
     applyAuthPayload(data, setToken, setUser);
-    await fetchFeatures();
-  }, [fetchFeatures]);
+  }, []);
 
   const platformLogin = useCallback(async (username: string, password: string) => {
     const res = await fetch('/api/auth/login', {
@@ -110,12 +138,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     applyAuthPayload(data, setToken, setUser);
     setFeatures([]);
+    setStoreStaffGateReady(true);
   }, []);
 
   const logout = useCallback(() => {
     setToken(null);
     setUser(null);
     setFeatures([]);
+    setStoreStaffGateReady(true);
   }, []);
 
   return (
@@ -125,6 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token,
         features,
         hasFeature: (key: string) => features.includes(key),
+        isStoreStaffSessionReady: storeStaffGateReady,
         login,
         logout,
         platformLogin,

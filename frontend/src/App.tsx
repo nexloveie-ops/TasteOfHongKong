@@ -1,5 +1,7 @@
-import { BrowserRouter, Routes, Route, Navigate, useParams, Outlet } from 'react-router-dom';
+import { useEffect, useLayoutEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useParams, Outlet, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { setStaffSessionInvalidHandler, setPlatformSessionInvalidHandler, getConfiguredStoreSlug } from './api/client';
 import { StoreRouteShell } from './context/StoreContext';
 import { CartProvider } from './context/CartContext';
 import PlatformLayout from './layouts/PlatformLayout';
@@ -51,19 +53,54 @@ function StoreUnknownRoute() {
   return <Navigate to={`/${storeSlug}`} replace />;
 }
 
+/** 无店员权限：清本地会话再进登录页，避免仍带 token 被 Login 自动跳走 */
+function LogoutThenStoreLogin({ storeSlug }: { storeSlug: string }) {
+  const { logout } = useAuth();
+  useLayoutEffect(() => {
+    logout();
+  }, [logout]);
+  return <Navigate to={`/${storeSlug}/login`} replace />;
+}
+
+function SessionInvalidationBridge() {
+  const navigate = useNavigate();
+  const { logout } = useAuth();
+  useEffect(() => {
+    setStaffSessionInvalidHandler(() => {
+      const slug = getConfiguredStoreSlug();
+      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      logout();
+      if (!slug || path.includes(`/${slug}/login`)) return;
+      navigate(`/${slug}/login`, { replace: true });
+    });
+    setPlatformSessionInvalidHandler(() => {
+      logout();
+      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      if (path !== '/adlg') navigate('/adlg', { replace: true });
+    });
+    return () => {
+      setStaffSessionInvalidHandler(null);
+      setPlatformSessionInvalidHandler(null);
+    };
+  }, [logout, navigate]);
+  return null;
+}
+
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user, isStoreStaffSessionReady } = useAuth();
   const { storeSlug } = useParams<{ storeSlug: string }>();
   if (!isAuthenticated) return <Navigate to={`/${storeSlug}/login`} replace />;
+  if (user?.role !== 'platform_owner' && !isStoreStaffSessionReady) return null;
   return <>{children}</>;
 }
 
 function RequireOwner({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, user } = useAuth();
-  const { storeSlug } = useParams<{ storeSlug: string }>();
+  const { isAuthenticated, user, isStoreStaffSessionReady } = useAuth();
+  const { storeSlug = '' } = useParams<{ storeSlug: string }>();
   if (!isAuthenticated) return <Navigate to={`/${storeSlug}/login`} replace />;
+  if (user?.role !== 'platform_owner' && !isStoreStaffSessionReady) return null;
   if (user?.role !== 'owner' && user?.role !== 'platform_owner') {
-    return <Navigate to={`/${storeSlug}/cashier`} replace />;
+    return <LogoutThenStoreLogin storeSlug={storeSlug} />;
   }
   return <>{children}</>;
 }
@@ -77,10 +114,12 @@ function RequirePlatformAuth({ children }: { children: React.ReactNode }) {
 }
 
 function RequireFeature({ featureKey, children }: { featureKey: string; children: React.ReactNode }) {
-  const { hasFeature } = useAuth();
-  const { storeSlug } = useParams<{ storeSlug: string }>();
-  if (!hasFeature(featureKey)) {
-    return <Navigate to={`/${storeSlug}/admin`} replace />;
+  const { hasFeature, isAuthenticated, user, isStoreStaffSessionReady } = useAuth();
+  const { storeSlug = '' } = useParams<{ storeSlug: string }>();
+  if (!isAuthenticated) return <Navigate to={`/${storeSlug}/login`} replace />;
+  if (user?.role !== 'platform_owner' && !isStoreStaffSessionReady) return null;
+  if (user?.role !== 'platform_owner' && !hasFeature(featureKey)) {
+    return <LogoutThenStoreLogin storeSlug={storeSlug} />;
   }
   return <>{children}</>;
 }
@@ -89,6 +128,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <SessionInvalidationBridge />
         <Routes>
           <Route path="/" element={<PortalHome />} />
           <Route path="/adlg" element={<PlatformLoginPage />} />

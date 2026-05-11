@@ -9,14 +9,11 @@ import { checkoutCheckedOutFilterUtc, orderCreatedAtFilterUtc } from '../utils/r
 
 const router = Router();
 
-/** 后台订单明细列表含 hide；营业额类接口仍排除 *-hide（见 GET /detailed）。 */
-const ORDER_HISTORY_STATUSES = [
-  'checked_out',
-  'completed',
-  'refunded',
-  'checked_out-hide',
-  'completed-hide',
-] as const;
+/** 营业报表 / 汇总 / VAT / 默认钻取：仅这些状态，且再经 statusContainsHide 过滤（防枚举外带 hide 字样的值） */
+const REPORT_STATS_ORDER_STATUSES = ['checked_out', 'completed', 'refunded'] as const;
+
+/** 订单历史页 ?includeHiddenOrders=1 时额外包含 */
+const ORDER_HISTORY_EXTRA_HIDE_STATUSES = ['checked_out-hide', 'completed-hide'] as const;
 
 function reportModels() {
   return getModels() as {
@@ -32,21 +29,58 @@ function requireStoreId(req: Request): mongoose.Types.ObjectId {
   return req.storeId;
 }
 
-// GET /api/reports/orders — Order history query (requires auth + report:view)
+/** status 含 hide（不区分大小写）的订单不计入营业报表、汇总、VAT；订单历史可 ?includeHiddenOrders=1 查看 */
+function statusContainsHide(status: unknown): boolean {
+  return String(status ?? '').toLowerCase().includes('hide');
+}
+
+/** 若结账所关联的任一订单为 hide，则该结账不参与报表金额（与「隐藏单不统计」一致） */
+async function checkoutIdsToSkipWhenLinkedOrderHidden(
+  storeId: mongoose.Types.ObjectId,
+  checkouts: { _id: unknown; orderIds?: mongoose.Types.ObjectId[] }[],
+  Order: mongoose.Model<any>,
+): Promise<Set<string>> {
+  const skip = new Set<string>();
+  if (checkouts.length === 0) return skip;
+  const oidStrs = [
+    ...new Set(checkouts.flatMap((c) => (c.orderIds || []).map((id) => id.toString()))),
+  ].filter((id) => mongoose.isValidObjectId(id));
+  if (oidStrs.length === 0) return skip;
+  const rows = (await Order.find({
+    storeId,
+    _id: { $in: oidStrs.map((id) => new mongoose.Types.ObjectId(id)) },
+  })
+    .select('_id status')
+    .lean()) as { _id: mongoose.Types.ObjectId; status?: string }[];
+  const stById = new Map(rows.map((r) => [r._id.toString(), r.status]));
+  for (const c of checkouts) {
+    const anyHide = (c.orderIds || []).some((oid) => statusContainsHide(stById.get(oid.toString())));
+    if (anyHide) skip.add(String(c._id));
+  }
+  return skip;
+}
+
+// GET /api/reports/orders — 默认不含 hide（与营业报表一致）；订单历史传 includeHiddenOrders=1
 router.get('/orders', authMiddleware, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const storeId = requireStoreId(req);
     const { Order, Checkout } = reportModels();
     const { startDate, endDate, type, paymentMethod, source, status } = req.query;
 
+    const includeHidden =
+      req.query.includeHiddenOrders === 'true' || req.query.includeHiddenOrders === '1';
+    const statusList = includeHidden
+      ? [...REPORT_STATS_ORDER_STATUSES, ...ORDER_HISTORY_EXTRA_HIDE_STATUSES]
+      : [...REPORT_STATS_ORDER_STATUSES];
+
     const filter: Record<string, unknown> = { storeId };
 
     if (status === 'refunded') {
       // Orders that have ANY refunded items (partial or full)
-      filter.status = { $in: [...ORDER_HISTORY_STATUSES] };
+      filter.status = { $in: statusList };
       filter['items.refunded'] = true;
     } else {
-      filter.status = { $in: [...ORDER_HISTORY_STATUSES] };
+      filter.status = { $in: statusList };
     }
 
     const createdUtc = orderCreatedAtFilterUtc(startDate as string | undefined, endDate as string | undefined);
@@ -150,7 +184,7 @@ router.get('/orders', authMiddleware, requirePermission('report:view'), async (r
 router.get('/summary', authMiddleware, requirePermission('report:view'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const storeId = requireStoreId(req);
-    const { Checkout } = reportModels();
+    const { Checkout, Order } = reportModels();
     const { startDate, endDate } = req.query;
 
     const filter: Record<string, unknown> = { storeId };
@@ -159,6 +193,7 @@ router.get('/summary', authMiddleware, requirePermission('report:view'), async (
     if (checkedUtc) filter.checkedOutAt = checkedUtc;
 
     const checkouts = (await Checkout.find(filter).lean()) as any[];
+    const skipCheckoutIds = await checkoutIdsToSkipWhenLinkedOrderHidden(storeId, checkouts, Order);
 
     let totalRevenue = 0;
     let cashTotal = 0;
@@ -166,6 +201,7 @@ router.get('/summary', authMiddleware, requirePermission('report:view'), async (
     let mixedTotal = 0;
 
     for (const c of checkouts) {
+      if (skipCheckoutIds.has(String(c._id))) continue;
       totalRevenue += c.totalAmount;
       if (c.paymentMethod === 'cash') {
         cashTotal += c.totalAmount;
@@ -176,9 +212,10 @@ router.get('/summary', authMiddleware, requirePermission('report:view'), async (
       }
     }
 
+    const counted = checkouts.filter((c) => !skipCheckoutIds.has(String(c._id)));
     res.json({
       totalRevenue,
-      orderCount: checkouts.length,
+      orderCount: counted.length,
       cashTotal,
       cardTotal,
       mixedTotal,
@@ -200,11 +237,12 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
     // Fetch ALL orders in date range (including refunded, excluding hidden)
     const orderFilter: Record<string, unknown> = {
       storeId,
-      status: { $in: ['checked_out', 'completed', 'refunded'] },
+      status: { $in: [...REPORT_STATS_ORDER_STATUSES] },
     };
     if (createdUtc) orderFilter.createdAt = createdUtc;
 
-    const allOrders = (await Order.find(orderFilter).lean()) as any[];
+    const allOrdersRaw = (await Order.find(orderFilter).lean()) as any[];
+    let allOrders = allOrdersRaw.filter((o) => !statusContainsHide(o.status));
 
     // Attach checkout info
     const orderIds = allOrders.map((o) => o._id);
@@ -212,12 +250,20 @@ router.get('/detailed', authMiddleware, requirePermission('report:view'), async 
       orderIds.length > 0
         ? await Checkout.find({ storeId, orderIds: { $in: orderIds } }).lean()
         : [];
+    const skipCheckoutIds = await checkoutIdsToSkipWhenLinkedOrderHidden(storeId, checkouts, Order);
     const orderCheckoutMap = new Map<string, (typeof checkouts)[0]>();
     for (const c of checkouts) {
       for (const oid of (c as { orderIds?: mongoose.Types.ObjectId[] }).orderIds || []) {
         orderCheckoutMap.set(oid.toString(), c);
       }
     }
+
+    // 与 hide 单共用结账时：整笔结账不参与报表（避免漏排除 hide 金额）
+    allOrders = allOrders.filter((o) => {
+      const co = orderCheckoutMap.get(o._id.toString());
+      if (!co) return true;
+      return !skipCheckoutIds.has(String((co as { _id: { toString(): string } })._id));
+    });
 
     // Calculate revenue from checkout amounts, then subtract refunded items
     let grossRevenue = 0;
@@ -521,13 +567,14 @@ router.get('/item-options', authMiddleware, requirePermission('report:view'), as
 
     const filter: Record<string, unknown> = {
       storeId,
-      status: { $in: ['checked_out', 'completed', 'refunded'] },
+      status: { $in: [...REPORT_STATS_ORDER_STATUSES] },
       'items.itemName': itemName,
     };
     const createdUtc = orderCreatedAtFilterUtc(startDate as string | undefined, endDate as string | undefined);
     if (createdUtc) filter.createdAt = createdUtc;
 
-    const orders = (await Order.find(filter).lean()) as any[];
+    const ordersRaw = (await Order.find(filter).lean()) as any[];
+    const orders = ordersRaw.filter((o) => !statusContainsHide(o.status));
 
     const optionStats: Record<string, { groupName: string; choiceName: string; extraPrice: number; count: number; revenue: number }> = {};
     let totalSold = 0;

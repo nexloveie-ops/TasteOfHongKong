@@ -40,11 +40,12 @@ export default function OrderHistory() {
       const params = new URLSearchParams();
       params.set('startDate', startDate);
       params.set('endDate', endDate);
+      params.set('includeHiddenOrders', '1');
       if (typeFilter) params.set('paymentMethod', typeFilter);
       const res = await apiFetch(`/api/reports/orders?${params}`);
       if (res.ok) {
         const data: HistoryOrder[] = await res.json();
-        // GET /api/reports/orders includes *-hide statuses for admin review (reports summary/detailed still exclude hide).
+        // includeHiddenOrders=1：订单历史含 hide；营业报表钻取默认不含 hide。
         setOrders(data);
       }
     } catch { /* ignore */ }
